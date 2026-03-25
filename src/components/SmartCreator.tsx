@@ -653,23 +653,23 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
               </div>
             </div>
 
-            <div className="mb-5">
-              <p className="text-xs font-semibold text-gray-700 mb-2">Instructions:</p>
+            <div className="mb-5 bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-xs font-bold text-blue-900 mb-2 uppercase tracking-wide">How to use</p>
               {formModal.provider === "jotform" ? (
-                <ol className="text-xs text-gray-600 space-y-1.5 list-decimal list-inside">
-                  <li>Click the button below to open JotForm</li>
-                  <li>Create a new <strong>blank form</strong></li>
-                  <li>Click the <strong>AI co-pilot button (✨)</strong> in the form builder</li>
-                  <li><strong>Paste</strong> the questions from your clipboard</li>
-                  <li>The AI will automatically create all the form fields</li>
+                <ol className="text-xs text-blue-800 space-y-2 list-none">
+                  <li className="flex gap-2"><span className="bg-blue-200 text-blue-900 rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px] font-bold">1</span> Click the button below to open JotForm</li>
+                  <li className="flex gap-2"><span className="bg-blue-200 text-blue-900 rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px] font-bold">2</span> Create a new <strong>blank form</strong></li>
+                  <li className="flex gap-2"><span className="bg-blue-200 text-blue-900 rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px] font-bold">3</span> Click the <strong>AI co-pilot button (✨)</strong> in the form builder</li>
+                  <li className="flex gap-2"><span className="bg-blue-200 text-blue-900 rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px] font-bold">4</span> <strong>Paste</strong> the questions from your clipboard</li>
+                  <li className="flex gap-2"><span className="bg-blue-200 text-blue-900 rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px] font-bold">5</span> The AI will automatically create all the form fields</li>
                 </ol>
               ) : (
-                <ol className="text-xs text-gray-600 space-y-1.5 list-decimal list-inside">
-                  <li>Click the button below to open Google Forms</li>
-                  <li>A new form will be created titled <strong>&quot;{formModal.title}&quot;</strong></li>
-                  <li>Click <strong>&quot;Help me create a form&quot; (✨)</strong></li>
-                  <li><strong>Paste</strong> the questions from your clipboard</li>
-                  <li>Google will auto-generate all form fields</li>
+                <ol className="text-xs text-blue-800 space-y-2 list-none">
+                  <li className="flex gap-2"><span className="bg-blue-200 text-blue-900 rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px] font-bold">1</span> Click the button below to open Google Forms</li>
+                  <li className="flex gap-2"><span className="bg-blue-200 text-blue-900 rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px] font-bold">2</span> A new form will be created titled <strong>&quot;{formModal.title}&quot;</strong></li>
+                  <li className="flex gap-2"><span className="bg-blue-200 text-blue-900 rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px] font-bold">3</span> Click <strong>&quot;Help me create a form&quot; (✨)</strong></li>
+                  <li className="flex gap-2"><span className="bg-blue-200 text-blue-900 rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px] font-bold">4</span> <strong>Paste</strong> the questions from your clipboard</li>
+                  <li className="flex gap-2"><span className="bg-blue-200 text-blue-900 rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px] font-bold">5</span> Google will auto-generate all form fields</li>
                 </ol>
               )}
             </div>
