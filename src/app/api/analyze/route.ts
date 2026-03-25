@@ -95,9 +95,9 @@ export async function POST(request: Request) {
     const anthropic = new Anthropic();
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 4096,
+      max_tokens: 8192,
       system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: `Analyze these casting documents:\n\n${allTexts.join("\n\n")}` }],
+      messages: [{ role: "user", content: `Analyze these casting documents and return ONLY valid JSON (no markdown, no backticks, no explanation — just the JSON object):\n\n${allTexts.join("\n\n")}` }],
     });
 
     const text = response.content[0].type === "text" ? response.content[0].text : "";

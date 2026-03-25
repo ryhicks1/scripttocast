@@ -1,6 +1,62 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Upload, Copy, Check, ChevronDown, ChevronRight, FileDown, RotateCcw, Sparkles, Download } from "lucide-react";
+
+const PROGRESS_STEPS = [
+  { pct: 5, msg: "Uploading documents..." },
+  { pct: 15, msg: "Extracting text from PDFs..." },
+  { pct: 25, msg: "Reading script content..." },
+  { pct: 35, msg: "Identifying characters and roles..." },
+  { pct: 50, msg: "Analyzing dialogue and scene structure..." },
+  { pct: 60, msg: "Extracting self-tape instructions..." },
+  { pct: 70, msg: "Generating job form questions..." },
+  { pct: 80, msg: "Mapping characters to script pages..." },
+  { pct: 90, msg: "Finalizing role descriptions..." },
+  { pct: 95, msg: "Almost done..." },
+];
+
+function AnalyzingProgress() {
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    const intervals = [800, 2000, 2500, 3000, 4000, 3500, 3000, 3000, 4000, 5000];
+    let timeout: NodeJS.Timeout;
+    function advance(i: number) {
+      if (i < PROGRESS_STEPS.length - 1) {
+        timeout = setTimeout(() => { setStep(i + 1); advance(i + 1); }, intervals[i] || 3000);
+      }
+    }
+    advance(0);
+    return () => clearTimeout(timeout);
+  }, []);
+
+  const { pct, msg } = PROGRESS_STEPS[step];
+  return (
+    <div className="py-12 px-4 max-w-md mx-auto">
+      <div className="mb-6">
+        <div className="flex justify-between text-[10px] text-gray-400 mb-1.5">
+          <span>{msg}</span>
+          <span>{pct}%</span>
+        </div>
+        <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-gray-800 rounded-full transition-all duration-1000 ease-out"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        {PROGRESS_STEPS.slice(0, step + 1).map((s, i) => (
+          <div key={i} className="flex items-center gap-2 text-xs">
+            <span className={i < step ? "text-green-500" : "text-gray-400"}>
+              {i < step ? "✓" : "○"}
+            </span>
+            <span className={i < step ? "text-gray-400" : "text-gray-700"}>{s.msg}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 interface Role { name: string; description: string; ageRange?: string; gender?: string; speaking: boolean; characteristics?: string[]; pageNumbers?: number[]; }
 interface SelfTapeInstruction { roleName: string; videos: { label: string; description: string }[]; photos: string[]; filmingNotes: string[]; }
@@ -322,13 +378,7 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
   );
 
   // ========== ANALYZING ==========
-  if (stage === "analyzing") return (
-    <div className="text-center py-16">
-      <div className="w-8 h-8 border-2 border-gray-200 border-t-gray-900 rounded-full animate-spin mx-auto mb-4" />
-      <p className="text-gray-700 font-medium">Analyzing your documents...</p>
-      <p className="text-gray-400 text-xs mt-1">Usually takes 10-30 seconds</p>
-    </div>
-  );
+  if (stage === "analyzing") return <AnalyzingProgress />;
 
   // ========== RESULTS ==========
   if (!result) return null;
