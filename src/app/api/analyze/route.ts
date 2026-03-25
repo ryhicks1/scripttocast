@@ -20,17 +20,34 @@ Extract ALL of the following:
    - photos: ["1 x close-up", "1 x full body"] etc
    - filmingNotes: ["Landscape only", "Eyeline off-camera"] etc
 
-4. FORM QUESTIONS per role (project-specific questions like availability, comfort with X):
+4. FORM QUESTIONS per role (project-specific questions + industry-standard questions):
    - [{type: "text"/"radio"/"textarea"/"checkbox", label: question text, options: ["Yes","No"] if applicable, required: boolean}]
 
 CRITICAL RULES:
-- You MUST populate ALL 4 sections (project, roles, selfTapeInstructions, formQuestions) — never return empty arrays if there is any relevant content
+- You MUST populate ALL 4 sections (project, roles, selfTapeInstructions, formQuestions) — never return empty arrays
 - Include ALL roles including background/extras (mark non-speaking)
-- selfTapeInstructions: Look for ANY mention of audition videos, slates, scenes to record, photo requirements, filming tips. Even if just one doc has these, extract them. Include filming notes like "shoot in landscape" or "avoid shadows"
-- formQuestions: Look for ANY questions asked of the talent — availability questions, comfort questions ("are you happy to do X?"), experience questions. Extract them as form fields
+- selfTapeInstructions: Look for ANY mention of audition videos, slates, scenes to record, photo requirements, filming tips. Even if just one doc has these, extract them
 - If a document contains step-by-step self-tape instructions, extract EVERY step with its full description
-- ALWAYS include at least general self-tape instructions if the project type suggests talent will need to self-tape (commercials, film, TV always need self-tapes)
-- ALWAYS include at least basic form questions (availability for dates, relevant experience, conflicts with competitors)
+- ALWAYS include at least general self-tape instructions (slate + scene) for any project type
+- formQuestions: Extract project-specific questions AND add standard industry questions
+
+FOR COMMERCIALS, ALWAYS include these standard form questions:
+- "Do you have any competitive commercials currently on air?" (radio: Yes/No, required)
+- "Have you appeared in any competitive commercials in the last 2 years?" (radio: Yes/No, required)
+- "Please list any current brand conflicts" (textarea, required)
+- "Are you available for the fitting date?" (radio: Yes/No, required)
+- "Are you available for all shoot dates?" (radio: Yes/No, required)
+- "Do you have a valid passport?" (radio: Yes/No)
+- "Are you a permanent resident or citizen?" (radio: Yes/No)
+- "Do you have any visible tattoos?" (radio: Yes/No)
+- "What is your clothing size?" (text)
+Plus any product-specific questions (e.g. "Are you comfortable eating/drinking the product on camera?")
+
+FOR FILM/TV, include:
+- "Are you available for all production dates?" (radio: Yes/No, required)
+- "Do you have any scheduling conflicts during the production period?" (textarea)
+- "List any relevant experience" (textarea)
+- "Do you have a valid driver's license?" (radio: Yes/No)
 
 Return ONLY valid JSON matching this schema:
 {

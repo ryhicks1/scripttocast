@@ -109,6 +109,69 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
     a.download = `${p.name.replace(/[^a-zA-Z0-9]+/g, "_")}_Report.txt`; a.click();
   }
 
+  function copyCNProjectScript() {
+    if (!result) return;
+    const p = result.project;
+    const typeMap: Record<string, string> = {
+      commercial: "26", film: "51", feature_film: "51", tv_series: "28", short_film: "50",
+      music_video: "17", web_series: "27", theatre: "11", vertical_short: "428",
+    };
+    const typeVal = typeMap[p.type] || "";
+    const script = `// Script To Cast — Auto-fill CN Project
+(function(){
+  const inputs = document.querySelectorAll('input[type="text"]');
+  const selects = document.querySelectorAll('select');
+  function fill(el, val) {
+    if (!el || !val) return;
+    const s = Object.getOwnPropertyDescriptor(el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, 'value')?.set;
+    if (s) { s.call(el, val); } else { el.value = val; }
+    el.dispatchEvent(new Event('input', {bubbles:true}));
+    el.dispatchEvent(new Event('change', {bubbles:true}));
+  }
+  if (inputs[0]) fill(inputs[0], ${JSON.stringify(p.name)});
+  if (selects[0] && ${JSON.stringify(typeVal)}) { selects[0].value = ${JSON.stringify(typeVal)}; selects[0].dispatchEvent(new Event('change',{bubbles:true})); }
+  if (selects[2]) { selects[2].value = "2"; selects[2].dispatchEvent(new Event('change',{bubbles:true})); }
+  if (inputs[1]) fill(inputs[1], "TBD");
+  console.log("✅ Project filled: ${p.name.replace(/"/g, '')}");
+})();`;
+    copyText(script, "cn-project");
+  }
+
+  function copyCNRoleScript(roleIndex: number) {
+    if (!result || !result.roles[roleIndex]) return;
+    const r = result.roles[roleIndex];
+    const script = `// Script To Cast — Auto-fill CN Role: ${r.name}
+(function(){
+  function fill(el, val) {
+    if (!el || !val) return;
+    const s = Object.getOwnPropertyDescriptor(el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, 'value')?.set;
+    if (s) { s.call(el, val); } else { el.value = val; }
+    el.dispatchEvent(new Event('input', {bubbles:true}));
+    el.dispatchEvent(new Event('change', {bubbles:true}));
+  }
+  const inputs = document.querySelectorAll('input[type="text"]');
+  const textareas = document.querySelectorAll('textarea');
+  // Try to fill role name
+  for (const inp of inputs) {
+    const lbl = (inp.getAttribute('aria-label')||inp.placeholder||'').toLowerCase();
+    if (lbl.includes('role') || lbl.includes('character') || lbl.includes('name')) {
+      fill(inp, ${JSON.stringify(r.name)});
+      break;
+    }
+  }
+  // Try to fill description
+  for (const ta of textareas) {
+    const lbl = (ta.getAttribute('aria-label')||ta.placeholder||'').toLowerCase();
+    if (lbl.includes('desc') || lbl.includes('note') || lbl.includes('detail')) {
+      fill(ta, ${JSON.stringify(r.description)});
+      break;
+    }
+  }
+  console.log("✅ Role filled: ${r.name.replace(/"/g, '')}");
+})();`;
+    copyText(script, `cn-role-${roleIndex}`);
+  }
+
   function reset() { setStage("upload"); setFiles([]); setResult(null); setDoneRoles(new Set()); setError(""); }
   function toggleSection(k: keyof typeof sections) { setSections(p => ({ ...p, [k]: !p[k] })); }
 
@@ -284,7 +347,18 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
                 <div key={i} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-semibold text-gray-900">{fq.roleName}</span>
-                    <CopyBtn text={fq.questions.map(q => q.label).join("\n")} id={`fq-${i}`} label="Copy All" />
+                    <CopyBtn text={fq.questions.map(q => {
+                      let line = q.label;
+                      if (q.type === "radio" && q.options?.length) line += ` [${q.options.join(" / ")}]`;
+                      if (q.required) line += " *";
+                      return line;
+                    }).join("\n")} id={`fq-${i}`} label="Copy All" />
+                    <CopyBtn text={JSON.stringify(fq.questions.map(q => ({
+                      type: q.type === "radio" ? "control_radio" : q.type === "textarea" ? "control_textarea" : q.type === "checkbox" ? "control_checkbox" : "control_textbox",
+                      text: q.label,
+                      required: q.required ? "Yes" : "No",
+                      ...(q.options?.length ? { options: q.options.join("|") } : {}),
+                    })), null, 2)} id={`fq-${i}-json`} label="JotForm JSON" />
                   </div>
                   {fq.questions.map((q, j) => (
                     <div key={j} className="flex items-center gap-2 mb-1">
@@ -299,6 +373,31 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
           )}
         </div>
       )}
+
+      {/* CN Fill Script */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Casting Networks Auto-Fill</h3>
+        <p className="text-[11px] text-gray-500 mb-3">
+          Copy this script, go to the CN &quot;Create Project&quot; page, open your browser console (F12 → Console), and paste it. It will fill in the project details automatically.
+        </p>
+        <div className="flex gap-2">
+          <button onClick={() => copyCNProjectScript()} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white rounded-lg text-xs font-medium hover:bg-gray-800">
+            <Copy size={12} /> {copied === "cn-project" ? "Copied!" : "Copy Project Script"}
+          </button>
+          <button onClick={() => copyCNRoleScript(0)} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-200">
+            <Copy size={12} /> {copied?.startsWith("cn-role") ? "Copied!" : "Copy Role Script"}
+          </button>
+        </div>
+        {result.roles.length > 1 && (
+          <div className="mt-2 flex gap-1 flex-wrap">
+            {result.roles.map((r, i) => (
+              <button key={i} onClick={() => copyCNRoleScript(i)} className={`text-[10px] px-2 py-0.5 rounded ${copied === `cn-role-${i}` ? "bg-green-50 text-green-600" : "bg-gray-50 text-gray-500 hover:bg-gray-100"}`}>
+                {r.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Bottom bar */}
       <div className="sticky bottom-0 bg-white/90 backdrop-blur border-t border-gray-200 py-3 flex items-center gap-2 flex-wrap">
