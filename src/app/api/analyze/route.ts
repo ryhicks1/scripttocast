@@ -82,33 +82,17 @@ export async function POST(request: Request) {
       const buffer = Buffer.from(await file.arrayBuffer());
 
       if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
-        // Short docs (≤10 pages, likely commercials) — use text extraction (faster, cheaper)
-        // Longer scripts — send PDF directly to Claude for reliable visual reading
-        const { getDocumentProxy } = await import("unpdf");
-        const pdf = await getDocumentProxy(new Uint8Array(buffer));
-        const pageCount = pdf.numPages;
-
-        if (pageCount <= 10) {
-          let text = "";
-          for (let i = 1; i <= pageCount; i++) {
-            const page = await pdf.getPage(i);
-            const content = await page.getTextContent();
-            const pageText = (content.items as any[]).map((item: any) => item.str || "").join(" ").trim();
-            text += `[PAGE ${i}]\n${pageText}\n\n`;
-          }
-          textParts.push(`=== ${file.name} ===\n${text}`);
-        } else {
-          const base64 = buffer.toString("base64");
-          contentBlocks.push({
-            type: "document",
-            source: {
-              type: "base64",
-              media_type: "application/pdf",
-              data: base64,
-            },
-          } as any);
-          textParts.push(`=== ${file.name} (PDF document attached above — ${pageCount} pages) ===`);
-        }
+        // Always send PDFs directly to Claude for visual reading — most accurate and consistent
+        const base64 = buffer.toString("base64");
+        contentBlocks.push({
+          type: "document",
+          source: {
+            type: "base64",
+            media_type: "application/pdf",
+            data: base64,
+          },
+        } as any);
+        textParts.push(`=== ${file.name} (PDF document attached above) ===`);
       } else {
         textParts.push(`=== ${file.name} ===\n${buffer.toString("utf-8")}`);
       }
