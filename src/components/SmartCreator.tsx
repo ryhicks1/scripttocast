@@ -185,16 +185,22 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
       const formData = new FormData();
       formData.append("script", scriptFile);
       formData.append("roleName", role.name);
-      formData.append("pageNumbers", JSON.stringify([])); // auto-detect
+      formData.append("pageNumbers", JSON.stringify(role.pageNumbers || [])); // from AI analysis
 
       const res = await fetch("/api/generate-sides", { method: "POST", body: formData });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error || "Failed to generate sides");
+
+      const contentType = res.headers.get("content-type") || "";
+      if (!res.ok || contentType.includes("json")) {
+        const data = await res.json().catch(() => ({ error: `Status ${res.status}` }));
+        setError(`Sides for "${role.name}": ${data.error || "Failed to generate"}`);
         return;
       }
 
       const blob = await res.blob();
+      if (blob.size < 100) {
+        setError(`Sides for "${role.name}": Generated PDF was empty — character may not appear in the script`);
+        return;
+      }
       const url = URL.createObjectURL(blob);
       setSidesUrls(p => ({ ...p, [roleIndex]: url }));
     } catch {
@@ -208,6 +214,54 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
     if (!result) return;
     for (let i = 0; i < result.roles.length; i++) {
       if (!sidesUrls[i]) await generateSides(i);
+    }
+  }
+
+  async function createFormLink(provider: "jotform" | "google", roleName: string, questions: any[]) {
+    if (provider === "google") {
+      // Open Google Forms with pre-filled title + copy questions to clipboard
+      const title = `${roleName} — ${result?.project.name || "Project"}`;
+      const url = `https://docs.google.com/forms/create?title=${encodeURIComponent(title)}`;
+      const questionList = [
+        "Add these questions to your form:",
+        "",
+        "Full Name (required)",
+        "Email Address (required)",
+        "Phone Number",
+        "City and State",
+        "Your Agent/Manager",
+        "",
+        ...questions.map(q => {
+          let line = q.label;
+          if (q.type === "radio" && q.options?.length) line += ` [${q.options.join(" / ")}]`;
+          if (q.required) line += " (required)";
+          return line;
+        }),
+      ].join("\n");
+      await navigator.clipboard.writeText(questionList);
+      window.open(url, "_blank");
+      setCopied("form-google");
+      setTimeout(() => setCopied(null), 3000);
+    } else {
+      // JotForm: copy the form structure as formatted questions + open JotForm
+      const questionList = [
+        "Full Name (required)",
+        "Email Address (required)",
+        "Phone Number",
+        "City and State",
+        "Your Agent/Manager",
+        "",
+        ...questions.map(q => {
+          let line = q.label;
+          if (q.type === "radio" && q.options?.length) line += ` — Options: ${q.options.join(", ")}`;
+          if (q.required) line += " (required)";
+          return line;
+        }),
+      ].join("\n");
+      await navigator.clipboard.writeText(questionList);
+      window.open("https://www.jotform.com/build", "_blank");
+      setCopied("form-jotform");
+      setTimeout(() => setCopied(null), 3000);
     }
   }
 
@@ -426,18 +480,26 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
                 <div key={i} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-semibold text-gray-900">{fq.roleName}</span>
-                    <CopyBtn text={fq.questions.map(q => {
-                      let line = q.label;
-                      if (q.type === "radio" && q.options?.length) line += ` [${q.options.join(" / ")}]`;
-                      if (q.required) line += " *";
-                      return line;
-                    }).join("\n")} id={`fq-${i}`} label="Copy All" />
-                    <CopyBtn text={JSON.stringify(fq.questions.map(q => ({
-                      type: q.type === "radio" ? "control_radio" : q.type === "textarea" ? "control_textarea" : q.type === "checkbox" ? "control_checkbox" : "control_textbox",
-                      text: q.label,
-                      required: q.required ? "Yes" : "No",
-                      ...(q.options?.length ? { options: q.options.join("|") } : {}),
-                    })), null, 2)} id={`fq-${i}-json`} label="JotForm JSON" />
+                    <div className="flex gap-1">
+                      <CopyBtn text={fq.questions.map(q => {
+                        let line = q.label;
+                        if (q.type === "radio" && q.options?.length) line += ` [${q.options.join(" / ")}]`;
+                        if (q.required) line += " *";
+                        return line;
+                      }).join("\n")} id={`fq-${i}`} label="Copy All" />
+                      <button
+                        onClick={() => createFormLink("jotform", fq.roleName, fq.questions)}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-orange-50 text-orange-700 hover:bg-orange-100"
+                      >
+                        JotForm
+                      </button>
+                      <button
+                        onClick={() => createFormLink("google", fq.roleName, fq.questions)}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 hover:bg-blue-100"
+                      >
+                        Google Forms
+                      </button>
+                    </div>
                   </div>
                   {fq.questions.map((q, j) => (
                     <div key={j} className="flex items-center gap-2 mb-1">

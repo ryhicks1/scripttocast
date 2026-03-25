@@ -8,12 +8,13 @@ Extract ALL of the following:
 1. PROJECT: name, brand/client, type (commercial/film/tv_series/short_film/music_video/web_series/theatre/vertical_short), location, deadline (YYYY-MM-DD if available), director, castingDirector, productionDates (as written)
 
 2. ROLES: Every character including non-speaking/background:
-   - name: exact name as written
+   - name: exact name as written (use the character name, not the actor)
    - description: 2-3 detailed sentences for casting (age, traits, physicality, personality)
    - ageRange: e.g. "25-35" or null
    - gender: "Male"/"Female"/"Any" or null
    - speaking: boolean
    - characteristics: string array of key traits
+   - pageNumbers: array of page numbers (1-indexed) where this character has dialogue or appears in the script. Use the [PAGE X] markers in the text. This is CRITICAL for generating sides.
 
 3. SELF-TAPE INSTRUCTIONS per role (if documents contain audition instructions):
    - videos: [{label: "SLATE"/"SCENE 1"/etc, description: exact instructions}]
@@ -52,7 +53,7 @@ FOR FILM/TV, include:
 Return ONLY valid JSON matching this schema:
 {
   "project": { "name": string, "brand": string, "type": string, "location": string|null, "deadline": string|null, "director": string|null, "castingDirector": string|null, "productionDates": string|null },
-  "roles": [{ "name": string, "description": string, "ageRange": string|null, "gender": string|null, "speaking": boolean, "characteristics": string[] }],
+  "roles": [{ "name": string, "description": string, "ageRange": string|null, "gender": string|null, "speaking": boolean, "characteristics": string[], "pageNumbers": number[] }],
   "selfTapeInstructions": [{ "roleName": string, "videos": [{"label": string, "description": string}], "photos": string[], "filmingNotes": string[] }],
   "formQuestions": [{ "roleName": string, "questions": [{"type": string, "label": string, "options": string[]|null, "required": boolean}] }]
 }`;
@@ -64,6 +65,8 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
+    // Add page markers so AI can identify which pages characters appear on
+    text += `[PAGE ${i}]\n`;
     text += (content.items as any[]).map(item => item.str || "").join(" ") + "\n\n";
   }
   return text;
