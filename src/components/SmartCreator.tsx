@@ -402,9 +402,24 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
             {sections.roles ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
           </button>
           {files.some(f => f.name.toLowerCase().endsWith('.pdf')) && (
-            <button onClick={generateAllSides} className="text-[10px] px-3 py-1 bg-gray-900 text-white rounded-lg hover:bg-gray-800">
-              Generate All Sides
-            </button>
+            <div className="flex gap-2">
+              <button onClick={generateAllSides} className="text-[10px] px-3 py-1 bg-gray-900 text-white rounded-lg hover:bg-gray-800">
+                Generate All Sides
+              </button>
+              {Object.keys(sidesUrls).length > 0 && (
+                <button onClick={() => {
+                  Object.entries(sidesUrls).forEach(([idx, url]) => {
+                    const r = result!.roles[Number(idx)];
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `Sides_${r.name.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
+                    a.click();
+                  });
+                }} className="text-[10px] px-3 py-1 bg-green-50 text-green-700 rounded-lg hover:bg-green-100">
+                  <FileDown size={10} className="inline mr-1" />Download All ({Object.keys(sidesUrls).length})
+                </button>
+              )}
+            </div>
           )}
         </div>
         {sections.roles && (
