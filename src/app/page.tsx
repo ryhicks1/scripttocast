@@ -32,19 +32,18 @@ export default async function Home() {
         </div>
       </nav>
 
-      {/* Hero — simple and clean */}
-      <section className="max-w-2xl mx-auto text-center pt-16 pb-12 px-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-3">
-          Set up your casting project in 60 seconds
-        </h1>
-        <p className="text-gray-500 text-base mb-8">
-          Upload scripts and self-tape briefs. AI extracts roles, instructions, and form questions — ready to copy into Casting Networks.
-        </p>
-        <a href="#tool" className="text-sm text-gray-900 font-medium hover:underline">Try it free ↓</a>
+      {/* Tool FIRST */}
+      <section id="tool" className="bg-white border-b border-gray-200 py-12">
+        <div className="max-w-3xl mx-auto px-6">
+          <h2 className="text-2xl font-bold text-gray-900 text-center mb-2">Set up your casting project in 60 seconds</h2>
+          <p className="text-gray-500 text-sm text-center mb-8">Upload scripts and self-tape briefs. AI extracts roles, instructions, and form questions.</p>
+          <SmartCreator isLoggedIn={isLoggedIn} />
+        </div>
       </section>
 
-      {/* How it works — 3 simple steps */}
-      <section className="max-w-3xl mx-auto px-6 pb-16">
+      {/* How it works */}
+      <section className="max-w-3xl mx-auto px-6 py-16">
+        <p className="text-center text-xs text-gray-400 uppercase tracking-wider mb-8 font-medium">How it works</p>
         <div className="grid grid-cols-3 gap-8 text-center">
           {[
             { icon: <Upload size={20} />, title: "Upload", desc: "Scripts, self-tape docs, job briefs" },
@@ -61,7 +60,7 @@ export default async function Home() {
       </section>
 
       {/* What you get */}
-      <section className="bg-white border-y border-gray-200 py-12">
+      <section className="bg-gray-50 border-y border-gray-200 py-12">
         <div className="max-w-3xl mx-auto px-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
             {[
@@ -71,7 +70,7 @@ export default async function Home() {
               { icon: <ListChecks size={18} />, label: "Form questions" },
             ].map(f => (
               <div key={f.label}>
-                <div className="w-9 h-9 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center mx-auto mb-2 text-gray-500">{f.icon}</div>
+                <div className="w-9 h-9 rounded-lg bg-white border border-gray-200 flex items-center justify-center mx-auto mb-2 text-gray-500">{f.icon}</div>
                 <p className="text-xs text-gray-600 font-medium">{f.label}</p>
               </div>
             ))}
@@ -112,16 +111,6 @@ export default async function Home() {
             <p className="text-xs text-gray-500"><strong className="text-gray-700">SLATE:</strong> Mid-shot to camera. Name, agent, height, availability.</p>
             <p className="text-xs text-gray-500"><strong className="text-gray-700">SCENE:</strong> React to tasting the cola for the first time. Keep it natural.</p>
           </div>
-          <div className="text-center pt-1">
-            <a href="#tool" className="text-xs text-gray-900 font-medium hover:underline">Try it yourself ↓</a>
-          </div>
-        </div>
-      </section>
-
-      {/* Tool */}
-      <section id="tool" className="bg-white border-t border-gray-200 py-12">
-        <div className="max-w-3xl mx-auto px-6">
-          <SmartCreator isLoggedIn={isLoggedIn} />
         </div>
       </section>
 
