@@ -19,6 +19,8 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
   const [error, setError] = useState("");
   const [result, setResult] = useState<AnalysisResult | null>(initialResult || null);
   const [doneRoles, setDoneRoles] = useState<Set<number>>(new Set());
+  const [sidesUrls, setSidesUrls] = useState<Record<number, string>>({});
+  const [generatingSides, setGeneratingSides] = useState<Record<number, boolean>>({});
   const [copied, setCopied] = useState<string | null>(null);
   const [sections, setSections] = useState({ roles: true, instructions: true, forms: true });
   const fileRef = useRef<HTMLInputElement>(null);
@@ -172,7 +174,44 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
     copyText(script, `cn-role-${roleIndex}`);
   }
 
-  function reset() { setStage("upload"); setFiles([]); setResult(null); setDoneRoles(new Set()); setError(""); }
+  async function generateSides(roleIndex: number) {
+    if (!result) return;
+    const role = result.roles[roleIndex];
+    const scriptFile = files.find(f => f.name.toLowerCase().endsWith('.pdf'));
+    if (!scriptFile) { setError("No PDF script file found. Upload a script PDF to generate sides."); return; }
+
+    setGeneratingSides(p => ({ ...p, [roleIndex]: true }));
+    try {
+      const formData = new FormData();
+      formData.append("script", scriptFile);
+      formData.append("roleName", role.name);
+      formData.append("pageNumbers", JSON.stringify([])); // auto-detect
+
+      const res = await fetch("/api/generate-sides", { method: "POST", body: formData });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Failed to generate sides");
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      setSidesUrls(p => ({ ...p, [roleIndex]: url }));
+    } catch {
+      setError("Failed to generate sides");
+    } finally {
+      setGeneratingSides(p => ({ ...p, [roleIndex]: false }));
+    }
+  }
+
+  async function generateAllSides() {
+    if (!result) return;
+    for (let i = 0; i < result.roles.length; i++) {
+      if (!sidesUrls[i]) await generateSides(i);
+    }
+  }
+
+  function reset() { setStage("upload"); setFiles([]); setResult(null); setDoneRoles(new Set()); setSidesUrls({}); setGeneratingSides({}); setError(""); }
   function toggleSection(k: keyof typeof sections) { setSections(p => ({ ...p, [k]: !p[k] })); }
 
   // ========== UPLOAD ==========
@@ -296,6 +335,45 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
         )}
       </div>
 
+      {/* Sides */}
+      {result.roles.length > 0 && files.some(f => f.name.toLowerCase().endsWith('.pdf')) && (
+        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Sides (Script Pages Per Role)</h3>
+            <button onClick={generateAllSides} className="text-[10px] px-3 py-1 bg-gray-900 text-white rounded-lg hover:bg-gray-800">
+              Generate All Sides
+            </button>
+          </div>
+          <p className="text-[10px] text-gray-400 mb-3">Extracts the script pages where each character appears. Download or drag into CN.</p>
+          <div className="space-y-2">
+            {result.roles.map((r, i) => (
+              <div key={i} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
+                <span className="text-xs text-gray-700">{r.name}</span>
+                <div className="flex items-center gap-2">
+                  {sidesUrls[i] ? (
+                    <a
+                      href={sidesUrls[i]}
+                      download={`Sides_${r.name.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`}
+                      draggable="true"
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-green-50 text-green-700 rounded text-[10px] font-medium hover:bg-green-100 cursor-grab"
+                      title="Download or drag to CN"
+                    >
+                      <FileDown size={10} /> Sides PDF — drag to CN ↗
+                    </a>
+                  ) : generatingSides[i] ? (
+                    <span className="text-[10px] text-gray-400">Generating...</span>
+                  ) : (
+                    <button onClick={() => generateSides(i)} className="text-[10px] px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200">
+                      Generate
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Self-Tape Instructions */}
       {result.selfTapeInstructions?.length > 0 && (
         <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
@@ -415,9 +493,10 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
               <div className="mt-1.5 ml-2 space-y-1.5">
                 {[
                   { label: "Role Name", value: r.name },
-                  { label: "Description", value: r.description },
                   { label: "Age Range", value: r.ageRange },
                   { label: "Gender", value: r.gender },
+                  { label: "Ethnicity", value: r.characteristics?.find((c: string) => /ethni|race|background|asian|african|latin|caucas|indigenous|pacific/i.test(c)) || null },
+                  { label: "Description", value: r.description },
                 ].filter(f => f.value).map((f, j) => (
                   <div key={j} className="flex items-center justify-between bg-white border border-gray-100 rounded-lg px-3 py-1.5">
                     <div className="flex items-center gap-2">
