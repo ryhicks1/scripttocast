@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import DashboardClient from "./DashboardClient";
+import LogoutButton from "@/components/LogoutButton";
 
 export default async function Dashboard() {
   const supabase = await createClient();
@@ -21,6 +22,7 @@ export default async function Dashboard() {
         <div className="flex items-center gap-4 text-sm">
           <Link href="/#tool" className="text-[#00BFA5] text-xs font-semibold bg-[#00BFA5]/10 px-3 py-1.5 rounded-lg hover:bg-[#00BFA5]/20">+ New Analysis</Link>
           <span className="text-[#8B8D93]">{user.email}</span>
+          <LogoutButton />
         </div>
       </nav>
 

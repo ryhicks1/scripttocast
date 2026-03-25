@@ -123,7 +123,11 @@ export default async function Home() {
         </section>
       )}
 
-      <footer className="text-center text-xs text-gray-400 py-6">Script To Cast</footer>
+      <footer className="text-center text-xs text-gray-400 py-6 space-x-4">
+        <span>Script To Cast</span>
+        <Link href="/privacy" className="hover:text-gray-600 transition">Privacy</Link>
+        <Link href="/terms" className="hover:text-gray-600 transition">Terms</Link>
+      </footer>
     </div>
   );
 }
