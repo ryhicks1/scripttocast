@@ -1,10 +1,25 @@
 import { NextResponse } from "next/server";
 import jsPDF from "jspdf";
+import { createClient as createServerClient } from "@/lib/supabase/server";
+import { getUserBranding, textColorForBg } from "@/lib/branding";
 
 export async function POST(request: Request) {
   try {
     const data = await request.json();
     const { roleName, projectName, brand, location, productionDates, videos, photos, filmingNotes } = data;
+
+    // Get user branding if logged in
+    let userId: string | null = null;
+    try {
+      const supabase = await createServerClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) userId = user.id;
+    } catch {}
+
+    const branding = userId ? await getUserBranding(userId) : null;
+    const brandRgb = branding?.brandColorRgb || [0, 0, 0];
+    const barTextRgb = branding ? textColorForBg(brandRgb) : [255, 255, 255] as [number, number, number];
+    const companyName = branding?.companyName || "Script To Cast";
 
     const doc = new jsPDF({ unit: "mm", format: "a4" });
     const w = doc.internal.pageSize.getWidth();
@@ -12,15 +27,42 @@ export async function POST(request: Request) {
     let y = 0;
 
     // Header bar
-    doc.setFillColor(0, 0, 0);
+    if (branding) {
+      doc.setFillColor(brandRgb[0], brandRgb[1], brandRgb[2]);
+    } else {
+      doc.setFillColor(0, 0, 0);
+    }
     doc.rect(0, 0, w, 20, "F");
-    doc.setTextColor(201, 168, 76);
+
+    let headerX = m;
+    if (branding?.logoBase64) {
+      try {
+        const fmt = branding.logoFormat === "png" ? "PNG" : "JPEG";
+        doc.addImage(branding.logoBase64, fmt, m, 2, 16, 16);
+        headerX = m + 20;
+      } catch {
+        // Logo embed failed, continue without
+      }
+    }
+
+    doc.setTextColor(barTextRgb[0], barTextRgb[1], barTextRgb[2]);
     doc.setFontSize(16);
     doc.setFont("helvetica", "bold");
-    doc.text("Script To Cast", m, 13);
+    doc.text(companyName, headerX, 13);
+
+    // Optional header text below
+    if (branding?.headerText) {
+      y = 24;
+      doc.setTextColor(100);
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.text(branding.headerText, m, y);
+      y += 6;
+    } else {
+      y = 28;
+    }
 
     // Job info table
-    y = 28;
     doc.setFillColor(240, 240, 240);
     doc.rect(m, y, w - m * 2, 6, "F");
     doc.setTextColor(0);
@@ -48,29 +90,33 @@ export async function POST(request: Request) {
     }
     y += 5;
 
-    // Step 1: Online Talent Form
-    doc.setFillColor(0, 0, 0);
-    doc.rect(m, y, w - m * 2, 6, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.text("Step 1: Online Talent Form", m + 2, y + 4.5);
-    y += 10;
-    doc.setTextColor(0);
+    // Section bar helper
+    function sectionBar(title: string) {
+      if (branding) {
+        doc.setFillColor(brandRgb[0], brandRgb[1], brandRgb[2]);
+        doc.rect(m, y, w - m * 2, 6, "F");
+        doc.setTextColor(barTextRgb[0], barTextRgb[1], barTextRgb[2]);
+      } else {
+        doc.setFillColor(0, 0, 0);
+        doc.rect(m, y, w - m * 2, 6, "F");
+        doc.setTextColor(255, 255, 255);
+      }
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text(title, m + 2, y + 4.5);
+      y += 10;
+      doc.setTextColor(0);
+    }
+
+    // Step 1
+    sectionBar("Step 1: Online Talent Form");
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.text("Please complete the Online Talent Form. Submissions cannot be accepted without a completed form.", m, y);
     y += 8;
 
-    // Step 2: Record Audition Videos
-    doc.setFillColor(0, 0, 0);
-    doc.rect(m, y, w - m * 2, 6, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFont("helvetica", "bold");
-    doc.text("Step 2: Record Audition Videos", m + 2, y + 4.5);
-    y += 10;
-    doc.setTextColor(0);
-
+    // Step 2
+    sectionBar("Step 2: Record Audition Videos");
     for (let i = 0; i < (videos || []).length; i++) {
       const v = videos[i];
       doc.setFont("helvetica", "bold");
@@ -84,15 +130,9 @@ export async function POST(request: Request) {
       if (y > 270) { doc.addPage(); y = 15; }
     }
 
-    // Step 3: Photos
+    // Step 3
     if (photos?.length) {
-      doc.setFillColor(0, 0, 0);
-      doc.rect(m, y, w - m * 2, 6, "F");
-      doc.setTextColor(255, 255, 255);
-      doc.setFont("helvetica", "bold");
-      doc.text("Step 3: Photos", m + 2, y + 4.5);
-      y += 10;
-      doc.setTextColor(0);
+      sectionBar("Step 3: Photos");
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
       photos.forEach((p: string, i: number) => {
@@ -105,13 +145,7 @@ export async function POST(request: Request) {
     // Filming Notes
     if (filmingNotes?.length) {
       if (y > 240) { doc.addPage(); y = 15; }
-      doc.setFillColor(0, 0, 0);
-      doc.rect(m, y, w - m * 2, 6, "F");
-      doc.setTextColor(255, 255, 255);
-      doc.setFont("helvetica", "bold");
-      doc.text("Filming Notes", m + 2, y + 4.5);
-      y += 10;
-      doc.setTextColor(0);
+      sectionBar("Filming Notes");
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
       filmingNotes.forEach((n: string, i: number) => {
@@ -124,7 +158,23 @@ export async function POST(request: Request) {
     // Footer
     doc.setTextColor(150);
     doc.setFontSize(7);
-    doc.text("Generated by Script To Cast — scripttocast.com", m, 290);
+    const footerParts: string[] = [];
+    if (branding) {
+      if (branding.companyName !== "Script To Cast") footerParts.push(branding.companyName);
+      if (branding.contactEmail) footerParts.push(branding.contactEmail);
+      if (branding.contactPhone) footerParts.push(branding.contactPhone);
+      if (branding.contactWebsite) footerParts.push(branding.contactWebsite);
+    }
+    const footerLine1 = footerParts.length > 0
+      ? footerParts.join("  |  ")
+      : "Generated by Script To Cast — scripttocast.com";
+    doc.text(footerLine1, m, 286);
+
+    if (branding?.footerText) {
+      doc.text(branding.footerText, m, 290);
+    } else if (footerParts.length > 0) {
+      doc.text("Generated by Script To Cast — scripttocast.com", m, 290);
+    }
 
     const buffer = new Uint8Array(doc.output("arraybuffer"));
     return new NextResponse(buffer as any, {

@@ -103,6 +103,22 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
     setFiles(prev => [...prev, ...newFiles.filter(f => /\.(pdf|docx?)$/i.test(f.name))]);
   }
 
+  async function saveProject(analysisResult: AnalysisResult): Promise<string | null> {
+    try {
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: analysisResult.project.name,
+          data: analysisResult,
+        }),
+      });
+      if (!res.ok) return null;
+      const { id } = await res.json();
+      return id;
+    } catch { return null; }
+  }
+
   async function analyze() {
     if (!files.length) return;
     setStage("analyzing");
@@ -113,7 +129,11 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
       formData.append("options", JSON.stringify(opts));
       const res = await fetch("/api/analyze", { method: "POST", body: formData });
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Analysis failed"); }
-      const data = await res.json();
+      const data: AnalysisResult = await res.json();
+      if (isLoggedIn) {
+        const projectId = await saveProject(data);
+        if (projectId) data.projectId = projectId;
+      }
       setResult(data);
       setStage("results");
     } catch (err: any) { setError(err.message); setStage("upload"); }
@@ -629,6 +649,14 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
         </button>
         {!isLoggedIn && (
           <a href="/signup" className="ml-auto text-xs text-gray-500 hover:text-gray-900 font-medium">Save this project →</a>
+        )}
+        {isLoggedIn && !result.projectId && (
+          <button onClick={async () => {
+            const id = await saveProject(result);
+            if (id) setResult({ ...result, projectId: id });
+          }} className="ml-auto flex items-center gap-1 text-xs text-[#00BFA5] font-medium hover:underline">
+            <Download size={12} /> Save to Dashboard
+          </button>
         )}
         {isLoggedIn && result.projectId && (
           <span className="ml-auto text-xs text-green-600 flex items-center gap-1"><Check size={12} /> Saved</span>

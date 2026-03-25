@@ -20,11 +20,12 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
 
   return (
     <div>
-      <nav className="border-b border-[#1E2128] px-6 py-3 flex items-center justify-between">
-        <Link href="/" className="text-[#C9A84C] font-bold text-lg">Script To Cast</Link>
+      <nav className="border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+        <Link href="/" className="text-[#00BFA5] font-bold text-lg">Script To Cast</Link>
         <div className="flex items-center gap-4 text-sm">
-          <Link href="/dashboard" className="text-[#8B8D93] hover:text-[#E8E3D8]">← Dashboard</Link>
-          <span className="text-[#8B8D93]">{user.email}</span>
+          <Link href="/dashboard" className="text-gray-500 hover:text-gray-900 text-xs">← Dashboard</Link>
+          <Link href="/settings" className="text-gray-400 text-xs hover:text-gray-600">Settings</Link>
+          <span className="text-gray-400 text-xs">{user.email}</span>
         </div>
       </nav>
 

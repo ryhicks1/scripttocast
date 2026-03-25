@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { createClient as createServerClient } from "@/lib/supabase/server";
+import { getUserBranding } from "@/lib/branding";
 
 export async function POST(request: Request) {
   try {
@@ -10,7 +12,19 @@ export async function POST(request: Request) {
       questions: { type: string; label: string; options?: string[]; required?: boolean }[];
     };
 
-    const title = `${roleName} — ${projectName}`;
+    let companyName: string | null = null;
+    try {
+      const supabase = await createServerClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const branding = await getUserBranding(user.id);
+        if (branding.companyName !== "Script To Cast") companyName = branding.companyName;
+      }
+    } catch {}
+
+    const title = companyName
+      ? `${roleName} — ${projectName} | ${companyName}`
+      : `${roleName} — ${projectName}`;
 
     if (provider === "jotform") {
       // JotForm Prefill URL — generates a URL that creates a form in the user's account
