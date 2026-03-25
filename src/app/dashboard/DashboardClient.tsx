@@ -23,9 +23,9 @@ export default function DashboardClient({ projects: initialProjects }: { project
   if (!projects.length) {
     return (
       <div className="text-center py-20">
-        <Film className="mx-auto mb-4 text-[#2A2D35]" size={48} />
-        <p className="text-[#8B8D93]">No projects yet</p>
-        <Link href="/#tool" className="text-[#C9A84C] text-sm hover:underline mt-2 inline-block">Analyze your first script →</Link>
+        <Film className="mx-auto mb-4 text-gray-300" size={48} />
+        <p className="text-gray-400">No projects yet</p>
+        <Link href="/#tool" className="text-[#00BFA5] text-sm hover:underline mt-2 inline-block">Analyze your first script →</Link>
       </div>
     );
   }
@@ -36,16 +36,16 @@ export default function DashboardClient({ projects: initialProjects }: { project
         const roleCount = p.data?.roles?.length || 0;
         const date = new Date(p.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
         return (
-          <div key={p.id} className="bg-[#13151A] border border-[#1E2128] rounded-xl p-4 flex items-center justify-between hover:border-[#2A2D35] transition">
+          <div key={p.id} className="bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between hover:border-gray-300 transition shadow-sm">
             <div className="flex-1 min-w-0">
-              <Link href={`/dashboard/${p.id}`} className="text-sm font-semibold hover:text-[#C9A84C] transition">{p.name}</Link>
-              <p className="text-xs text-[#8B8D93] mt-0.5">{roleCount} roles · {date}</p>
+              <Link href={`/dashboard/${p.id}`} className="text-sm font-semibold text-gray-900 hover:text-[#00BFA5] transition">{p.name}</Link>
+              <p className="text-xs text-gray-400 mt-0.5">{roleCount} roles · {date}</p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <button onClick={() => handleDelete(p.id, p.name)} className="text-[#8B8D93] hover:text-red-400 p-1" title="Delete">
+              <button onClick={() => handleDelete(p.id, p.name)} className="text-gray-300 hover:text-red-400 p-1" title="Delete">
                 <Trash2 size={14} />
               </button>
-              <Link href={`/dashboard/${p.id}`} className="text-[#8B8D93] hover:text-[#E8E3D8] p-1">
+              <Link href={`/dashboard/${p.id}`} className="text-gray-300 hover:text-gray-600 p-1">
                 <ChevronRight size={14} />
               </Link>
             </div>
