@@ -293,18 +293,33 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
     ].join("\n");
 
     await navigator.clipboard.writeText(allQuestions);
-
-    if (provider === "google") {
-      // Google Forms pre-filled URL with title
-      window.open(`https://docs.google.com/forms/create?title=${encodeURIComponent(title)}`, "_blank");
-    } else {
-      // JotForm — open the builder. Questions are on clipboard ready to paste.
-      window.open("https://www.jotform.com/build", "_blank");
-    }
-
-    alert(`Questions copied to clipboard!\n\nPaste them into the ${provider === "google" ? "Google" : "Jot"} Forms builder to quickly add each question.`);
     setCopied(`form-${provider}`);
-    setTimeout(() => setCopied(null), 3000);
+    setTimeout(() => setCopied(null), 5000);
+
+    if (provider === "jotform") {
+      // Show instructions FIRST, then open JotForm
+      const proceed = confirm(
+        `✅ Questions copied to clipboard!\n\nInstructions for JotForm:\n\n` +
+        `1. Click OK to open JotForm\n` +
+        `2. Create a new blank form\n` +
+        `3. Click the AI button (✨) in the form builder\n` +
+        `4. Paste the questions from your clipboard\n` +
+        `5. The AI co-pilot will create all the fields for you\n\n` +
+        `Alternatively, add each question manually using the "Add Element" button.`
+      );
+      if (proceed) window.open("https://www.jotform.com/build", "_blank");
+    } else {
+      const proceed = confirm(
+        `✅ Questions copied to clipboard!\n\nInstructions for Google Forms:\n\n` +
+        `1. Click OK to open Google Forms\n` +
+        `2. A new form will be created with the title "${title}"\n` +
+        `3. Click the ✨ "Help me create a form" AI button\n` +
+        `4. Paste the questions from your clipboard\n` +
+        `5. Google will auto-generate the form fields\n\n` +
+        `Alternatively, add each question manually.`
+      );
+      if (proceed) window.open(`https://docs.google.com/forms/create?title=${encodeURIComponent(title)}`, "_blank");
+    }
   }
 
   function reset() { setStage("upload"); setFiles([]); setResult(null); setDoneRoles(new Set()); setSidesUrls({}); setGeneratingSides({}); setError(""); }
