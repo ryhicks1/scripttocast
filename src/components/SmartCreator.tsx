@@ -79,6 +79,7 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
   const [generatingSides, setGeneratingSides] = useState<Record<number, boolean>>({});
   const [copied, setCopied] = useState<string | null>(null);
   const [sections, setSections] = useState({ roles: true, instructions: true, forms: true });
+  const [formModal, setFormModal] = useState<{ provider: "jotform" | "google"; questions: string; title: string; url: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [opts, setOpts] = useState({ project: true, roles: true, instructions: true, forms: true, cnAutoFill: true });
 
@@ -276,50 +277,29 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
   async function createFormLink(provider: "jotform" | "google", roleName: string, questions: any[]) {
     const title = `${roleName} — ${result?.project.name || "Project"}`;
     const allQuestions = [
-      "STANDARD FIELDS:",
+      "Create a casting application form with these fields:",
+      "",
       "1. Full Name (required)",
       "2. Email Address (required)",
       "3. Phone Number",
       "4. City and State",
       "5. Your Agent/Manager",
       "",
-      "CUSTOM QUESTIONS:",
       ...questions.map((q, i) => {
         let line = `${i + 6}. ${q.label}`;
-        if (q.type === "radio" && q.options?.length) line += `\n   Options: ${q.options.join(", ")}`;
+        if (q.type === "radio" && q.options?.length) line += ` — Options: ${q.options.join(", ")}`;
         if (q.required) line += " (REQUIRED)";
         return line;
       }),
     ].join("\n");
 
     await navigator.clipboard.writeText(allQuestions);
-    setCopied(`form-${provider}`);
-    setTimeout(() => setCopied(null), 5000);
 
-    if (provider === "jotform") {
-      // Show instructions FIRST, then open JotForm
-      const proceed = confirm(
-        `✅ Questions copied to clipboard!\n\nInstructions for JotForm:\n\n` +
-        `1. Click OK to open JotForm\n` +
-        `2. Create a new blank form\n` +
-        `3. Click the AI button (✨) in the form builder\n` +
-        `4. Paste the questions from your clipboard\n` +
-        `5. The AI co-pilot will create all the fields for you\n\n` +
-        `Alternatively, add each question manually using the "Add Element" button.`
-      );
-      if (proceed) window.open("https://www.jotform.com/build", "_blank");
-    } else {
-      const proceed = confirm(
-        `✅ Questions copied to clipboard!\n\nInstructions for Google Forms:\n\n` +
-        `1. Click OK to open Google Forms\n` +
-        `2. A new form will be created with the title "${title}"\n` +
-        `3. Click the ✨ "Help me create a form" AI button\n` +
-        `4. Paste the questions from your clipboard\n` +
-        `5. Google will auto-generate the form fields\n\n` +
-        `Alternatively, add each question manually.`
-      );
-      if (proceed) window.open(`https://docs.google.com/forms/create?title=${encodeURIComponent(title)}`, "_blank");
-    }
+    const url = provider === "jotform"
+      ? "https://www.jotform.com/build"
+      : `https://docs.google.com/forms/create?title=${encodeURIComponent(title)}`;
+
+    setFormModal({ provider, questions: allQuestions, title, url });
   }
 
   function reset() { setStage("upload"); setFiles([]); setResult(null); setDoneRoles(new Set()); setSidesUrls({}); setGeneratingSides({}); setError(""); }
@@ -654,6 +634,69 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
           <span className="ml-auto text-xs text-green-600 flex items-center gap-1"><Check size={12} /> Saved</span>
         )}
       </div>
+
+      {/* Form Creation Modal */}
+      {formModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setFormModal(null)}>
+          <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-gray-900">
+                Create {formModal.provider === "jotform" ? "JotForm" : "Google Form"}
+              </h3>
+              <button onClick={() => setFormModal(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+
+            <div className="mb-4">
+              <p className="text-xs text-green-600 font-medium mb-2">✅ Questions copied to clipboard</p>
+              <div className="bg-gray-50 rounded-lg p-3 max-h-48 overflow-y-auto border border-gray-200">
+                <pre className="text-[11px] text-gray-600 whitespace-pre-wrap font-mono">{formModal.questions}</pre>
+              </div>
+            </div>
+
+            <div className="mb-5">
+              <p className="text-xs font-semibold text-gray-700 mb-2">Instructions:</p>
+              {formModal.provider === "jotform" ? (
+                <ol className="text-xs text-gray-600 space-y-1.5 list-decimal list-inside">
+                  <li>Click the button below to open JotForm</li>
+                  <li>Create a new <strong>blank form</strong></li>
+                  <li>Click the <strong>AI co-pilot button (✨)</strong> in the form builder</li>
+                  <li><strong>Paste</strong> the questions from your clipboard</li>
+                  <li>The AI will automatically create all the form fields</li>
+                </ol>
+              ) : (
+                <ol className="text-xs text-gray-600 space-y-1.5 list-decimal list-inside">
+                  <li>Click the button below to open Google Forms</li>
+                  <li>A new form will be created titled <strong>&quot;{formModal.title}&quot;</strong></li>
+                  <li>Click <strong>&quot;Help me create a form&quot; (✨)</strong></li>
+                  <li><strong>Paste</strong> the questions from your clipboard</li>
+                  <li>Google will auto-generate all form fields</li>
+                </ol>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <a
+                href={formModal.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 text-center py-2.5 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition"
+              >
+                Open {formModal.provider === "jotform" ? "JotForm" : "Google Forms"} →
+              </a>
+              <button
+                onClick={async () => {
+                  await navigator.clipboard.writeText(formModal.questions);
+                  setCopied("form-recopy");
+                  setTimeout(() => setCopied(null), 2000);
+                }}
+                className="px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition"
+              >
+                {copied === "form-recopy" ? "✓ Copied" : "Re-copy"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
