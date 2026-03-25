@@ -23,11 +23,14 @@ Extract ALL of the following:
 4. FORM QUESTIONS per role (project-specific questions like availability, comfort with X):
    - [{type: "text"/"radio"/"textarea"/"checkbox", label: question text, options: ["Yes","No"] if applicable, required: boolean}]
 
-Rules:
+CRITICAL RULES:
+- You MUST populate ALL 4 sections (project, roles, selfTapeInstructions, formQuestions) — never return empty arrays if there is any relevant content
 - Include ALL roles including background/extras (mark non-speaking)
-- Extract exact self-tape instructions, don't summarize
-- Identify role-specific form questions from the documents
-- Be thorough — casting directors need specifics
+- selfTapeInstructions: Look for ANY mention of audition videos, slates, scenes to record, photo requirements, filming tips. Even if just one doc has these, extract them. Include filming notes like "shoot in landscape" or "avoid shadows"
+- formQuestions: Look for ANY questions asked of the talent — availability questions, comfort questions ("are you happy to do X?"), experience questions. Extract them as form fields
+- If a document contains step-by-step self-tape instructions, extract EVERY step with its full description
+- ALWAYS include at least general self-tape instructions if the project type suggests talent will need to self-tape (commercials, film, TV always need self-tapes)
+- ALWAYS include at least basic form questions (availability for dates, relevant experience, conflicts with competitors)
 
 Return ONLY valid JSON matching this schema:
 {
