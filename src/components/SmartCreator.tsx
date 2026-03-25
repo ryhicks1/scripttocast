@@ -2,7 +2,7 @@
 import { useState, useRef } from "react";
 import { Upload, Copy, Check, ChevronDown, ChevronRight, FileDown, RotateCcw, Sparkles, Download } from "lucide-react";
 
-interface Role { name: string; description: string; ageRange?: string; gender?: string; speaking: boolean; characteristics?: string[]; }
+interface Role { name: string; description: string; ageRange?: string; gender?: string; speaking: boolean; characteristics?: string[]; pageNumbers?: number[]; }
 interface SelfTapeInstruction { roleName: string; videos: { label: string; description: string }[]; photos: string[]; filmingNotes: string[]; }
 interface FormQuestion { roleName: string; questions: { type: string; label: string; options?: string[]; required: boolean }[]; }
 interface AnalysisResult {
