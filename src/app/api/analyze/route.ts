@@ -64,25 +64,6 @@ Return ONLY valid JSON matching this schema:
   "formQuestions": [{ "roleName": string, "questions": [{"type": string, "label": string, "options": string[]|null, "required": boolean}] }]
 }`;
 
-async function extractPdfText(buffer: Buffer): Promise<{ text: string; hasContent: boolean }> {
-  try {
-    const { getDocumentProxy } = await import("unpdf");
-    const pdf = await getDocumentProxy(new Uint8Array(buffer));
-    let text = "";
-    let totalChars = 0;
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      const pageText = (content.items as any[]).map(item => item.str || "").join(" ").trim();
-      text += `[PAGE ${i}]\n${pageText}\n\n`;
-      totalChars += pageText.length;
-    }
-    return { text, hasContent: totalChars > 100 };
-  } catch {
-    return { text: "", hasContent: false };
-  }
-}
-
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
@@ -92,7 +73,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No files provided" }, { status: 400 });
     }
 
-    // Build content blocks for Claude — use native PDF reading when text extraction fails
+    // Build content blocks — always send PDFs directly to Claude for visual reading
+    // This ensures consistent, reliable extraction regardless of PDF encoding
     const contentBlocks: Anthropic.Messages.ContentBlockParam[] = [];
     const textParts: string[] = [];
 
@@ -100,25 +82,16 @@ export async function POST(request: Request) {
       const buffer = Buffer.from(await file.arrayBuffer());
 
       if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
-        // Try text extraction first
-        const { text, hasContent } = await extractPdfText(buffer);
-
-        if (hasContent) {
-          // Text extraction worked — use it (cheaper, includes page markers)
-          textParts.push(`=== ${file.name} ===\n${text}`);
-        } else {
-          // Text extraction failed — send PDF directly to Claude for visual reading
-          const base64 = buffer.toString("base64");
-          contentBlocks.push({
-            type: "document",
-            source: {
-              type: "base64",
-              media_type: "application/pdf",
-              data: base64,
-            },
-          } as any);
-          textParts.push(`=== ${file.name} (sent as PDF document above) ===`);
-        }
+        const base64 = buffer.toString("base64");
+        contentBlocks.push({
+          type: "document",
+          source: {
+            type: "base64",
+            media_type: "application/pdf",
+            data: base64,
+          },
+        } as any);
+        textParts.push(`=== ${file.name} (PDF document attached above) ===`);
       } else {
         textParts.push(`=== ${file.name} ===\n${buffer.toString("utf-8")}`);
       }
