@@ -3,44 +3,70 @@ import { useState, useRef, useEffect } from "react";
 import { Upload, Copy, Check, ChevronDown, ChevronRight, FileDown, RotateCcw, Sparkles, Download } from "lucide-react";
 
 const PROGRESS_STEPS = [
-  { pct: 5, msg: "Uploading documents..." },
-  { pct: 15, msg: "Extracting text from PDFs..." },
-  { pct: 25, msg: "Reading script content..." },
-  { pct: 35, msg: "Identifying characters and roles..." },
-  { pct: 50, msg: "Analyzing dialogue and scene structure..." },
-  { pct: 60, msg: "Extracting self-tape instructions..." },
-  { pct: 70, msg: "Generating job form questions..." },
-  { pct: 80, msg: "Mapping characters to script pages..." },
-  { pct: 90, msg: "Finalizing role descriptions..." },
-  { pct: 95, msg: "Almost done..." },
+  { pct: 3, msg: "Uploading documents..." },
+  { pct: 8, msg: "Reading PDF pages..." },
+  { pct: 14, msg: "Scanning script formatting..." },
+  { pct: 22, msg: "Identifying characters and roles..." },
+  { pct: 30, msg: "Analyzing dialogue patterns..." },
+  { pct: 38, msg: "Mapping character appearances..." },
+  { pct: 46, msg: "Building character descriptions..." },
+  { pct: 54, msg: "Tracking page numbers for sides..." },
+  { pct: 62, msg: "Extracting self-tape instructions..." },
+  { pct: 68, msg: "Generating job form questions..." },
+  { pct: 74, msg: "Cross-referencing scene structure..." },
+  { pct: 80, msg: "Refining role breakdowns..." },
+  { pct: 85, msg: "Validating character data..." },
+  { pct: 89, msg: "Finalizing casting breakdown..." },
+  { pct: 92, msg: "Preparing results..." },
+  { pct: 95, msg: "Almost there..." },
 ];
 
 function AnalyzingProgress() {
   const [step, setStep] = useState(0);
+  const [smoothPct, setSmoothPct] = useState(0);
+
   useEffect(() => {
-    const intervals = [800, 2000, 2500, 3000, 4000, 3500, 3000, 3000, 4000, 5000];
+    // Spread steps across ~90s with gradual slowdown toward the end
+    const intervals = [
+      1200, 3000, 4000, 5000, 6000, 6000, 6500, 6500,
+      7000, 5500, 5000, 5500, 5000, 5000, 6000, 8000,
+    ];
     let timeout: NodeJS.Timeout;
     function advance(i: number) {
       if (i < PROGRESS_STEPS.length - 1) {
-        timeout = setTimeout(() => { setStep(i + 1); advance(i + 1); }, intervals[i] || 3000);
+        timeout = setTimeout(() => { setStep(i + 1); advance(i + 1); }, intervals[i] || 6000);
       }
     }
     advance(0);
     return () => clearTimeout(timeout);
   }, []);
 
-  const { pct, msg } = PROGRESS_STEPS[step];
+  // Smooth percentage creep between steps — never sits still
+  useEffect(() => {
+    const target = PROGRESS_STEPS[step].pct;
+    const interval = setInterval(() => {
+      setSmoothPct(prev => {
+        if (prev >= target) return target;
+        // Creep by 0.3-0.5% every tick
+        return Math.min(target, prev + 0.3 + Math.random() * 0.2);
+      });
+    }, 400);
+    return () => clearInterval(interval);
+  }, [step]);
+
+  const { msg } = PROGRESS_STEPS[step];
+  const displayPct = Math.round(smoothPct);
   return (
     <div className="py-12 px-4 max-w-md mx-auto">
       <div className="mb-6">
         <div className="flex justify-between text-[10px] text-gray-400 mb-1.5">
           <span>{msg}</span>
-          <span>{pct}%</span>
+          <span>{displayPct}%</span>
         </div>
         <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
           <div
-            className="h-full bg-gray-800 rounded-full transition-all duration-1000 ease-out"
-            style={{ width: `${pct}%` }}
+            className="h-full bg-gray-800 rounded-full transition-all duration-500 ease-out"
+            style={{ width: `${smoothPct}%` }}
           />
         </div>
       </div>
