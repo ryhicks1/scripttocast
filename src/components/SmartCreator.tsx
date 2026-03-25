@@ -22,7 +22,7 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
   const [copied, setCopied] = useState<string | null>(null);
   const [sections, setSections] = useState({ roles: true, instructions: true, forms: true });
   const fileRef = useRef<HTMLInputElement>(null);
-  const [opts, setOpts] = useState({ project: true, roles: true, instructions: true, forms: true });
+  const [opts, setOpts] = useState({ project: true, roles: true, instructions: true, forms: true, cnAutoFill: true });
 
   function copyText(text: string, key: string) {
     navigator.clipboard.writeText(text);
@@ -212,6 +212,7 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
           { key: "roles" as const, label: "Roles (including non-speaking)" },
           { key: "instructions" as const, label: "Self-Tape Instructions" },
           { key: "forms" as const, label: "Job Form Questions" },
+          { key: "cnAutoFill" as const, label: "Casting Networks Auto-Fill Scripts" },
         ].map(o => (
           <label key={o.key} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
             <input type="checkbox" checked={opts[o.key]} onChange={() => setOpts(p => ({ ...p, [o.key]: !p[o.key] }))} className="accent-gray-900 w-4 h-4" />
@@ -374,30 +375,70 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
         </div>
       )}
 
-      {/* CN Fill Script */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Casting Networks Auto-Fill</h3>
-        <p className="text-[11px] text-gray-500 mb-3">
-          Copy this script, go to the CN &quot;Create Project&quot; page, open your browser console (F12 → Console), and paste it. It will fill in the project details automatically.
-        </p>
-        <div className="flex gap-2">
-          <button onClick={() => copyCNProjectScript()} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white rounded-lg text-xs font-medium hover:bg-gray-800">
-            <Copy size={12} /> {copied === "cn-project" ? "Copied!" : "Copy Project Script"}
-          </button>
-          <button onClick={() => copyCNRoleScript(0)} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-200">
-            <Copy size={12} /> {copied?.startsWith("cn-role") ? "Copied!" : "Copy Role Script"}
-          </button>
-        </div>
-        {result.roles.length > 1 && (
-          <div className="mt-2 flex gap-1 flex-wrap">
-            {result.roles.map((r, i) => (
-              <button key={i} onClick={() => copyCNRoleScript(i)} className={`text-[10px] px-2 py-0.5 rounded ${copied === `cn-role-${i}` ? "bg-green-50 text-green-600" : "bg-gray-50 text-gray-500 hover:bg-gray-100"}`}>
-                {r.name}
-              </button>
+      {/* CN Quick-Paste Guide */}
+      {opts.cnAutoFill && <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Casting Networks — Quick Paste Guide</h3>
+        <p className="text-[11px] text-gray-500 mb-4">Open CN in another tab. Click each copy button, switch to CN, paste into the matching field.</p>
+
+        {/* Project fields */}
+        <div className="mb-4">
+          <p className="text-[10px] font-semibold text-gray-400 uppercase mb-2">Step 1: Create Project on CN</p>
+          <div className="space-y-1.5">
+            {[
+              { label: "Project Name", value: p.name },
+              { label: "Brand / Client", value: p.brand },
+              { label: "Type", value: p.type },
+              { label: "Location", value: p.location },
+              { label: "Director", value: p.director },
+              { label: "Production Dates", value: p.productionDates },
+            ].filter(f => f.value).map((f, i) => (
+              <div key={i} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-gray-400 w-28 shrink-0">{f.label}</span>
+                  <span className="text-xs text-gray-700 truncate">{f.value}</span>
+                </div>
+                <CopyBtn text={f.value!} id={`cn-p-${i}`} />
+              </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+
+        {/* Per-role fields */}
+        <div>
+          <p className="text-[10px] font-semibold text-gray-400 uppercase mb-2">Step 2: Add Roles (one at a time)</p>
+          {result.roles.map((r, i) => (
+            <details key={i} className={`mb-2 ${doneRoles.has(i) ? "opacity-40" : ""}`}>
+              <summary className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-100 text-xs text-gray-700 font-medium">
+                <span>{r.name} {r.speaking ? "" : <span className="text-[9px] text-gray-400 ml-1">(non-speaking)</span>}</span>
+                <span className="text-[10px] text-gray-400">{doneRoles.has(i) ? "✓ Done" : "Click to expand"}</span>
+              </summary>
+              <div className="mt-1.5 ml-2 space-y-1.5">
+                {[
+                  { label: "Role Name", value: r.name },
+                  { label: "Description", value: r.description },
+                  { label: "Age Range", value: r.ageRange },
+                  { label: "Gender", value: r.gender },
+                ].filter(f => f.value).map((f, j) => (
+                  <div key={j} className="flex items-center justify-between bg-white border border-gray-100 rounded-lg px-3 py-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-gray-400 w-24 shrink-0">{f.label}</span>
+                      <span className="text-[11px] text-gray-600 line-clamp-2">{f.value}</span>
+                    </div>
+                    <CopyBtn text={f.value!} id={`cn-r-${i}-${j}`} />
+                  </div>
+                ))}
+                <button onClick={() => toggleDone(i)} className="text-[10px] text-gray-400 hover:text-gray-600 mt-1">
+                  {doneRoles.has(i) ? "↩ Mark as not done" : "✓ Mark as done"}
+                </button>
+              </div>
+            </details>
+          ))}
+        </div>
+
+        <div className="mt-3 pt-3 border-t border-gray-100 text-[10px] text-gray-400 text-center">
+          {doneRoles.size}/{result.roles.length} roles completed on CN
+        </div>
+      </div>}
 
       {/* Bottom bar */}
       <div className="sticky bottom-0 bg-white/90 backdrop-blur border-t border-gray-200 py-3 flex items-center gap-2 flex-wrap">
