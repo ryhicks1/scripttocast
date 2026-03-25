@@ -17,9 +17,9 @@ export default async function Dashboard() {
   return (
     <div>
       <nav className="border-b border-[#1E2128] px-6 py-3 flex items-center justify-between">
-        <Link href="/" className="text-[#C9A84C] font-bold text-lg">Script To Cast</Link>
+        <Link href="/" className="text-[#00BFA5] font-bold text-lg">Script To Cast</Link>
         <div className="flex items-center gap-4 text-sm">
-          <Link href="/#tool" className="text-[#C9A84C] text-xs font-semibold bg-[#C9A84C]/10 px-3 py-1.5 rounded-lg hover:bg-[#C9A84C]/20">+ New Analysis</Link>
+          <Link href="/#tool" className="text-[#00BFA5] text-xs font-semibold bg-[#00BFA5]/10 px-3 py-1.5 rounded-lg hover:bg-[#00BFA5]/20">+ New Analysis</Link>
           <span className="text-[#8B8D93]">{user.email}</span>
         </div>
       </nav>
