@@ -81,7 +81,7 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
   const [sections, setSections] = useState({ roles: true, instructions: true, forms: true });
   const [formModal, setFormModal] = useState<{ provider: "jotform" | "google"; questions: string; title: string; url: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [opts, setOpts] = useState({ project: true, roles: true, instructions: true, forms: true, cnAutoFill: true });
+  const [opts, setOpts] = useState({ project: true, roles: true, instructions: true, forms: true, sides: true, cnAutoFill: true });
 
   function copyText(text: string, key: string) {
     navigator.clipboard.writeText(text);
@@ -356,12 +356,13 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
       )}
 
       <div className="space-y-2 mb-6">
-        <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">What should we extract?</p>
+        <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">What should we create?</p>
         {[
           { key: "project" as const, label: "Project Details" },
           { key: "roles" as const, label: "Roles (including non-speaking)" },
           { key: "instructions" as const, label: "Self-Tape Instructions" },
           { key: "forms" as const, label: "Job Form Questions" },
+          { key: "sides" as const, label: "Sides for each role" },
         ].map(o => (
           <label key={o.key} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
             <input type="checkbox" checked={opts[o.key]} onChange={() => setOpts(p => ({ ...p, [o.key]: !p[o.key] }))} className="accent-gray-900 w-4 h-4" />

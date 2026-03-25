@@ -9,11 +9,14 @@ Extract ALL of the following:
 
 2. ROLES: Every character including non-speaking/background:
    - name: exact name as written (use the character name, not the actor)
-   - description: 2-3 detailed sentences for casting (age, traits, physicality, personality)
+   - description: Write as a PROFESSIONAL CASTING BREAKDOWN in exactly 3 concise sentences, written for agents and actors. Think like a casting director writing for Breakdown Services or Casting Networks.
+     FOR FILM/TV: Focus on the character's role in the story, key personality traits and emotional qualities, and the type of actor being sought. Include accents, special skills, or physical requirements only if critical.
+     FOR COMMERCIALS: Focus on physical traits, energy, look, and castable attributes (e.g. "warm and approachable", "edgy and confident", "wholesome family type"). Less about story relationships, more about the vibe and type.
+     NEVER use generic words like "ordinary" or "normal". Be vivid and specific.
    - ageRange: e.g. "25-35" or null
-   - gender: "Male"/"Female"/"Any" or null
+   - gender: "Male"/"Female"/"Any"/"Non-binary" or null
    - speaking: boolean
-   - characteristics: string array of key traits
+   - characteristics: string array of castable traits (e.g. ["authoritative", "weathered", "imposing physical presence", "Italian-American accent", "capable of quiet menace and genuine warmth"])
    - pageNumbers: array of page numbers (1-indexed) where this character has dialogue or appears in the script. Use the [PAGE X] markers in the text. This is CRITICAL for generating sides.
 
 3. SELF-TAPE INSTRUCTIONS per role (if documents contain audition instructions):
