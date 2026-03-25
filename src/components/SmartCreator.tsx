@@ -274,51 +274,37 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
   }
 
   async function createFormLink(provider: "jotform" | "google", roleName: string, questions: any[]) {
+    const title = `${roleName} — ${result?.project.name || "Project"}`;
+    const allQuestions = [
+      "STANDARD FIELDS:",
+      "1. Full Name (required)",
+      "2. Email Address (required)",
+      "3. Phone Number",
+      "4. City and State",
+      "5. Your Agent/Manager",
+      "",
+      "CUSTOM QUESTIONS:",
+      ...questions.map((q, i) => {
+        let line = `${i + 6}. ${q.label}`;
+        if (q.type === "radio" && q.options?.length) line += `\n   Options: ${q.options.join(", ")}`;
+        if (q.required) line += " (REQUIRED)";
+        return line;
+      }),
+    ].join("\n");
+
+    await navigator.clipboard.writeText(allQuestions);
+
     if (provider === "google") {
-      // Open Google Forms with pre-filled title + copy questions to clipboard
-      const title = `${roleName} — ${result?.project.name || "Project"}`;
-      const url = `https://docs.google.com/forms/create?title=${encodeURIComponent(title)}`;
-      const questionList = [
-        "Add these questions to your form:",
-        "",
-        "Full Name (required)",
-        "Email Address (required)",
-        "Phone Number",
-        "City and State",
-        "Your Agent/Manager",
-        "",
-        ...questions.map(q => {
-          let line = q.label;
-          if (q.type === "radio" && q.options?.length) line += ` [${q.options.join(" / ")}]`;
-          if (q.required) line += " (required)";
-          return line;
-        }),
-      ].join("\n");
-      await navigator.clipboard.writeText(questionList);
-      window.open(url, "_blank");
-      setCopied("form-google");
-      setTimeout(() => setCopied(null), 3000);
+      // Google Forms pre-filled URL with title
+      window.open(`https://docs.google.com/forms/create?title=${encodeURIComponent(title)}`, "_blank");
     } else {
-      // JotForm: copy the form structure as formatted questions + open JotForm
-      const questionList = [
-        "Full Name (required)",
-        "Email Address (required)",
-        "Phone Number",
-        "City and State",
-        "Your Agent/Manager",
-        "",
-        ...questions.map(q => {
-          let line = q.label;
-          if (q.type === "radio" && q.options?.length) line += ` — Options: ${q.options.join(", ")}`;
-          if (q.required) line += " (required)";
-          return line;
-        }),
-      ].join("\n");
-      await navigator.clipboard.writeText(questionList);
+      // JotForm — open the builder. Questions are on clipboard ready to paste.
       window.open("https://www.jotform.com/build", "_blank");
-      setCopied("form-jotform");
-      setTimeout(() => setCopied(null), 3000);
     }
+
+    alert(`Questions copied to clipboard!\n\nPaste them into the ${provider === "google" ? "Google" : "Jot"} Forms builder to quickly add each question.`);
+    setCopied(`form-${provider}`);
+    setTimeout(() => setCopied(null), 3000);
   }
 
   function reset() { setStage("upload"); setFiles([]); setResult(null); setDoneRoles(new Set()); setSidesUrls({}); setGeneratingSides({}); setError(""); }
@@ -455,32 +441,28 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
                     ))}
                   </div>
 
-                  {/* Sides */}
-                  {files.some(f => f.name.toLowerCase().endsWith('.pdf')) && (
-                    <div className="flex items-center gap-2">
-                      {sidesUrls[i] ? (
-                        <a
-                          href={sidesUrls[i]}
-                          download={`Sides_${r.name.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`}
-                          draggable="true"
-                          className="inline-flex items-center gap-1 px-2 py-1 bg-green-50 text-green-700 rounded text-[10px] font-medium hover:bg-green-100 cursor-grab"
-                          title="Download or drag to CN"
-                        >
-                          <FileDown size={10} /> Sides PDF ↗
-                        </a>
-                      ) : generatingSides[i] ? (
-                        <span className="text-[10px] text-gray-400">Generating sides...</span>
-                      ) : (
-                        <button onClick={() => generateSides(i)} className="text-[10px] px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200">
-                          <FileDown size={10} className="inline mr-1" />Generate Sides
-                        </button>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Copy All */}
-                  <div className="flex gap-1 mt-2 pt-2 border-t border-gray-100">
+                  {/* Actions row */}
+                  <div className="flex gap-1.5 mt-2 pt-2 border-t border-gray-100 flex-wrap">
                     <CopyBtn text={`${r.name}\nAge: ${r.ageRange || "N/A"}\nGender: ${r.gender || "N/A"}${ethnicity ? "\nEthnicity: " + ethnicity : ""}\n\n${r.description}`} id={`r-${i}-all`} label="Copy All" />
+                    {files.some(f => f.name.toLowerCase().endsWith('.pdf')) && (
+                      <>
+                        {sidesUrls[i] ? (
+                          <a
+                            href={sidesUrls[i]}
+                            download={`Sides_${r.name.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-green-50 text-green-700 hover:bg-green-100"
+                          >
+                            <FileDown size={10} /> Download Sides
+                          </a>
+                        ) : generatingSides[i] ? (
+                          <span className="text-[10px] text-gray-400 px-2">Generating...</span>
+                        ) : (
+                          <button onClick={() => generateSides(i)} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 hover:bg-gray-200">
+                            <FileDown size={10} /> Generate Sides
+                          </button>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
               );
@@ -542,31 +524,45 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-semibold text-gray-900">{fq.roleName}</span>
                     <div className="flex gap-1">
-                      <CopyBtn text={fq.questions.map(q => {
+                      <CopyBtn text={["Full Name *", "Email *", "Phone", "City/State", "Agent/Manager", "", ...fq.questions.map(q => {
                         let line = q.label;
                         if (q.type === "radio" && q.options?.length) line += ` [${q.options.join(" / ")}]`;
                         if (q.required) line += " *";
                         return line;
-                      }).join("\n")} id={`fq-${i}`} label="Copy All" />
+                      })].join("\n")} id={`fq-${i}`} label="Copy All" />
                       <button
                         onClick={() => createFormLink("jotform", fq.roleName, fq.questions)}
                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-orange-50 text-orange-700 hover:bg-orange-100"
+                        title="Copies all questions to clipboard, then opens JotForm builder"
                       >
-                        JotForm
+                        Create JotForm
                       </button>
                       <button
                         onClick={() => createFormLink("google", fq.roleName, fq.questions)}
                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 hover:bg-blue-100"
+                        title="Copies all questions to clipboard, then opens Google Forms"
                       >
-                        Google Forms
+                        Create Google Form
                       </button>
                     </div>
                   </div>
                   {fq.questions.map((q, j) => (
-                    <div key={j} className="flex items-center gap-2 mb-1">
+                    <div key={j} className="flex items-center gap-2 mb-1 group">
                       <span className="text-[9px] px-1.5 py-0.5 rounded bg-gray-200 text-gray-500 uppercase font-mono">{q.type}</span>
                       <span className="text-[11px] text-gray-600 flex-1">{q.label}</span>
+                      {q.options?.length ? <span className="text-[9px] text-gray-400">{q.options.join(" / ")}</span> : null}
                       <CopyBtn text={q.label} id={`fq-${i}-${j}`} />
+                      <button
+                        onClick={() => {
+                          const updated = { ...result };
+                          updated.formQuestions[i].questions = fq.questions.filter((_, k) => k !== j);
+                          setResult({ ...updated });
+                        }}
+                        className="text-red-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Remove question"
+                      >
+                        ✕
+                      </button>
                     </div>
                   ))}
                 </div>
