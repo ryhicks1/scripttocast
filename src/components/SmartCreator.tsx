@@ -305,7 +305,6 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
           { key: "roles" as const, label: "Roles (including non-speaking)" },
           { key: "instructions" as const, label: "Self-Tape Instructions" },
           { key: "forms" as const, label: "Job Form Questions" },
-          { key: "cnAutoFill" as const, label: "Casting Networks Auto-Fill Scripts" },
         ].map(o => (
           <label key={o.key} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
             <input type="checkbox" checked={opts[o.key]} onChange={() => setOpts(p => ({ ...p, [o.key]: !p[o.key] }))} className="accent-gray-900 w-4 h-4" />
@@ -359,74 +358,86 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
 
       {/* Roles */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-        <button onClick={() => toggleSection("roles")} className="flex items-center justify-between w-full mb-3">
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-            Roles — {doneRoles.size}/{result.roles.length} done
-          </h3>
-          {sections.roles ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
-        </button>
-        {sections.roles && (
-          <div className="space-y-2">
-            {result.roles.map((r, i) => (
-              <div key={i} className={`bg-gray-50 border border-gray-200 rounded-lg p-3 transition ${doneRoles.has(i) ? "opacity-30" : ""}`}>
-                <div className="flex items-center gap-2 mb-1">
-                  <input type="checkbox" checked={doneRoles.has(i)} onChange={() => toggleDone(i)} className="accent-green-600 w-3.5 h-3.5" />
-                  <span className={`text-xs font-semibold text-gray-900 flex-1 ${doneRoles.has(i) ? "line-through" : ""}`}>{r.name}</span>
-                  <span className={`text-[8px] px-1.5 py-0.5 rounded font-semibold uppercase ${r.speaking ? "bg-green-50 text-green-600" : "bg-blue-50 text-blue-600"}`}>
-                    {r.speaking ? "Speaking" : "Non-speaking"}
-                  </span>
-                </div>
-                <p className="text-[11px] text-gray-500 mb-1">{r.description}</p>
-                {(r.ageRange || r.gender) && <p className="text-[10px] text-gray-400">{[r.ageRange && `Age: ${r.ageRange}`, r.gender].filter(Boolean).join(" · ")}</p>}
-                <div className="flex gap-1 mt-2">
-                  <CopyBtn text={r.name} id={`r-${i}-n`} label="Name" />
-                  <CopyBtn text={r.description} id={`r-${i}-d`} label="Desc" />
-                  <CopyBtn text={`${r.name}\n${r.description}${r.ageRange ? "\nAge: " + r.ageRange : ""}${r.gender ? "\nGender: " + r.gender : ""}`} id={`r-${i}-a`} label="All" />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Sides */}
-      {result.roles.length > 0 && files.some(f => f.name.toLowerCase().endsWith('.pdf')) && (
-        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Sides (Script Pages Per Role)</h3>
+        <div className="flex items-center justify-between mb-3">
+          <button onClick={() => toggleSection("roles")} className="flex items-center gap-2">
+            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+              Roles — {doneRoles.size}/{result.roles.length} done
+            </h3>
+            {sections.roles ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
+          </button>
+          {files.some(f => f.name.toLowerCase().endsWith('.pdf')) && (
             <button onClick={generateAllSides} className="text-[10px] px-3 py-1 bg-gray-900 text-white rounded-lg hover:bg-gray-800">
               Generate All Sides
             </button>
-          </div>
-          <p className="text-[10px] text-gray-400 mb-3">Extracts the script pages where each character appears. Download or drag into CN.</p>
-          <div className="space-y-2">
-            {result.roles.map((r, i) => (
-              <div key={i} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
-                <span className="text-xs text-gray-700">{r.name}</span>
-                <div className="flex items-center gap-2">
-                  {sidesUrls[i] ? (
-                    <a
-                      href={sidesUrls[i]}
-                      download={`Sides_${r.name.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`}
-                      draggable="true"
-                      className="inline-flex items-center gap-1 px-2 py-1 bg-green-50 text-green-700 rounded text-[10px] font-medium hover:bg-green-100 cursor-grab"
-                      title="Download or drag to CN"
-                    >
-                      <FileDown size={10} /> Sides PDF — drag to CN ↗
-                    </a>
-                  ) : generatingSides[i] ? (
-                    <span className="text-[10px] text-gray-400">Generating...</span>
-                  ) : (
-                    <button onClick={() => generateSides(i)} className="text-[10px] px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200">
-                      Generate
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+          )}
         </div>
-      )}
+        {sections.roles && (
+          <div className="space-y-3">
+            {result.roles.map((r, i) => {
+              const ethnicity = r.characteristics?.find((c: string) => /ethni|race|background|asian|african|latin|caucas|indigenous|pacific/i.test(c)) || null;
+              return (
+                <div key={i} className={`bg-gray-50 border border-gray-200 rounded-lg p-3 transition ${doneRoles.has(i) ? "opacity-30" : ""}`}>
+                  {/* Header: checkbox, name, speaking badge */}
+                  <div className="flex items-center gap-2 mb-2">
+                    <input type="checkbox" checked={doneRoles.has(i)} onChange={() => toggleDone(i)} className="accent-green-600 w-3.5 h-3.5" />
+                    <span className={`text-xs font-semibold text-gray-900 flex-1 ${doneRoles.has(i) ? "line-through" : ""}`}>{r.name}</span>
+                    <span className={`text-[8px] px-1.5 py-0.5 rounded font-semibold uppercase ${r.speaking ? "bg-green-50 text-green-600" : "bg-blue-50 text-blue-600"}`}>
+                      {r.speaking ? "Speaking" : "Non-speaking"}
+                    </span>
+                  </div>
+
+                  {/* Field rows with copy buttons */}
+                  <div className="space-y-1 mb-2">
+                    {[
+                      { label: "Name", value: r.name },
+                      { label: "Age Range", value: r.ageRange },
+                      { label: "Gender", value: r.gender },
+                      { label: "Ethnicity", value: ethnicity },
+                      { label: "Description", value: r.description },
+                    ].filter(f => f.value).map((f, j) => (
+                      <div key={j} className="flex items-center justify-between bg-white border border-gray-100 rounded px-2.5 py-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-[9px] text-gray-400 w-20 shrink-0 uppercase">{f.label}</span>
+                          <span className="text-[11px] text-gray-700 truncate">{f.value}</span>
+                        </div>
+                        <CopyBtn text={f.value!} id={`r-${i}-${j}`} />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Sides */}
+                  {files.some(f => f.name.toLowerCase().endsWith('.pdf')) && (
+                    <div className="flex items-center gap-2">
+                      {sidesUrls[i] ? (
+                        <a
+                          href={sidesUrls[i]}
+                          download={`Sides_${r.name.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`}
+                          draggable="true"
+                          className="inline-flex items-center gap-1 px-2 py-1 bg-green-50 text-green-700 rounded text-[10px] font-medium hover:bg-green-100 cursor-grab"
+                          title="Download or drag to CN"
+                        >
+                          <FileDown size={10} /> Sides PDF ↗
+                        </a>
+                      ) : generatingSides[i] ? (
+                        <span className="text-[10px] text-gray-400">Generating sides...</span>
+                      ) : (
+                        <button onClick={() => generateSides(i)} className="text-[10px] px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200">
+                          <FileDown size={10} className="inline mr-1" />Generate Sides
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Copy All */}
+                  <div className="flex gap-1 mt-2 pt-2 border-t border-gray-100">
+                    <CopyBtn text={`${r.name}\nAge: ${r.ageRange || "N/A"}\nGender: ${r.gender || "N/A"}${ethnicity ? "\nEthnicity: " + ethnicity : ""}\n\n${r.description}`} id={`r-${i}-all`} label="Copy All" />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Self-Tape Instructions */}
       {result.selfTapeInstructions?.length > 0 && (
@@ -514,72 +525,6 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
           )}
         </div>
       )}
-
-      {/* CN Quick-Paste Guide */}
-      {opts.cnAutoFill && <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Casting Networks — Quick Paste Guide</h3>
-        <p className="text-[11px] text-gray-500 mb-4">Open CN in another tab. Click each copy button, switch to CN, paste into the matching field.</p>
-
-        {/* Project fields */}
-        <div className="mb-4">
-          <p className="text-[10px] font-semibold text-gray-400 uppercase mb-2">Step 1: Create Project on CN</p>
-          <div className="space-y-1.5">
-            {[
-              { label: "Project Name", value: p.name },
-              { label: "Brand / Client", value: p.brand },
-              { label: "Type", value: p.type },
-              { label: "Location", value: p.location },
-              { label: "Director", value: p.director },
-              { label: "Production Dates", value: p.productionDates },
-            ].filter(f => f.value).map((f, i) => (
-              <div key={i} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-1.5">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-gray-400 w-28 shrink-0">{f.label}</span>
-                  <span className="text-xs text-gray-700 truncate">{f.value}</span>
-                </div>
-                <CopyBtn text={f.value!} id={`cn-p-${i}`} />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Per-role fields */}
-        <div>
-          <p className="text-[10px] font-semibold text-gray-400 uppercase mb-2">Step 2: Add Roles (one at a time)</p>
-          {result.roles.map((r, i) => (
-            <details key={i} className={`mb-2 ${doneRoles.has(i) ? "opacity-40" : ""}`}>
-              <summary className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-100 text-xs text-gray-700 font-medium">
-                <span>{r.name} {r.speaking ? "" : <span className="text-[9px] text-gray-400 ml-1">(non-speaking)</span>}</span>
-                <span className="text-[10px] text-gray-400">{doneRoles.has(i) ? "✓ Done" : "Click to expand"}</span>
-              </summary>
-              <div className="mt-1.5 ml-2 space-y-1.5">
-                {[
-                  { label: "Role Name", value: r.name },
-                  { label: "Age Range", value: r.ageRange },
-                  { label: "Gender", value: r.gender },
-                  { label: "Ethnicity", value: r.characteristics?.find((c: string) => /ethni|race|background|asian|african|latin|caucas|indigenous|pacific/i.test(c)) || null },
-                  { label: "Description", value: r.description },
-                ].filter(f => f.value).map((f, j) => (
-                  <div key={j} className="flex items-center justify-between bg-white border border-gray-100 rounded-lg px-3 py-1.5">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-gray-400 w-24 shrink-0">{f.label}</span>
-                      <span className="text-[11px] text-gray-600 line-clamp-2">{f.value}</span>
-                    </div>
-                    <CopyBtn text={f.value!} id={`cn-r-${i}-${j}`} />
-                  </div>
-                ))}
-                <button onClick={() => toggleDone(i)} className="text-[10px] text-gray-400 hover:text-gray-600 mt-1">
-                  {doneRoles.has(i) ? "↩ Mark as not done" : "✓ Mark as done"}
-                </button>
-              </div>
-            </details>
-          ))}
-        </div>
-
-        <div className="mt-3 pt-3 border-t border-gray-100 text-[10px] text-gray-400 text-center">
-          {doneRoles.size}/{result.roles.length} roles completed on CN
-        </div>
-      </div>}
 
       {/* Bottom bar */}
       <div className="sticky bottom-0 bg-white/90 backdrop-blur border-t border-gray-200 py-3 flex items-center gap-2 flex-wrap">

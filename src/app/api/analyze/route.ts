@@ -106,7 +106,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Failed to parse AI response" }, { status: 500 });
     }
 
-    return NextResponse.json(JSON.parse(jsonMatch[0]));
+    let jsonStr = jsonMatch[0];
+    // Fix common JSON issues from LLM output
+    // Remove trailing commas before ] or }
+    jsonStr = jsonStr.replace(/,\s*([\]}])/g, "$1");
+    // Fix unescaped newlines in strings
+    jsonStr = jsonStr.replace(/(?<=":.*)"([^"]*)\n([^"]*)"(?=\s*[,}\]])/g, '"$1\\n$2"');
+
+    try {
+      return NextResponse.json(JSON.parse(jsonStr));
+    } catch (parseError: any) {
+      console.error("JSON parse error:", parseError.message);
+      console.error("JSON text (first 500):", jsonStr.slice(0, 500));
+      // Try more aggressive cleanup
+      try {
+        // Remove any control characters except \n\r\t
+        const cleaned = jsonStr.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, "");
+        return NextResponse.json(JSON.parse(cleaned));
+      } catch {
+        return NextResponse.json({ error: "AI returned malformed JSON. Please try again." }, { status: 500 });
+      }
+    }
   } catch (error: any) {
     console.error("Analyze error:", error);
     return NextResponse.json({ error: error.message || "Analysis failed" }, { status: 500 });
