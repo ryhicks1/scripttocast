@@ -422,27 +422,61 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
                     </span>
                   </div>
 
-                  {/* Field rows with copy buttons */}
-                  <div className="space-y-1 mb-2">
-                    {[
-                      { label: "Name", value: r.name },
-                      { label: "Age Range", value: r.ageRange },
-                      { label: "Gender", value: r.gender },
-                      { label: "Ethnicity", value: ethnicity },
-                      { label: "Description", value: r.description },
-                    ].filter(f => f.value).map((f, j) => (
-                      <div key={j} className="flex items-center justify-between bg-white border border-gray-100 rounded px-2.5 py-1">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-[9px] text-gray-400 w-20 shrink-0 uppercase">{f.label}</span>
-                          <span className="text-[11px] text-gray-700 truncate">{f.value}</span>
-                        </div>
-                        <CopyBtn text={f.value!} id={`r-${i}-${j}`} />
-                      </div>
-                    ))}
+                  {/* Name row */}
+                  <div className="flex items-center justify-between bg-white border border-gray-100 rounded px-2.5 py-1 mb-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-[9px] text-gray-400 w-16 shrink-0 uppercase">Name</span>
+                      <span className="text-[11px] text-gray-700">{r.name}</span>
+                    </div>
+                    <CopyBtn text={r.name} id={`r-${i}-name`} />
                   </div>
 
-                  {/* Actions row */}
-                  <div className="flex gap-1.5 mt-2 pt-2 border-t border-gray-100 flex-wrap">
+                  {/* Age + Gender side by side */}
+                  <div className="grid grid-cols-2 gap-1 mb-1">
+                    {r.ageRange && (
+                      <div className="flex items-center justify-between bg-white border border-gray-100 rounded px-2.5 py-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] text-gray-400 uppercase">Age</span>
+                          <span className="text-[11px] text-gray-700">{r.ageRange}</span>
+                        </div>
+                        <CopyBtn text={r.ageRange} id={`r-${i}-age`} />
+                      </div>
+                    )}
+                    {r.gender && (
+                      <div className="flex items-center justify-between bg-white border border-gray-100 rounded px-2.5 py-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] text-gray-400 uppercase">Gender</span>
+                          <span className="text-[11px] text-gray-700">{r.gender}</span>
+                        </div>
+                        <CopyBtn text={r.gender} id={`r-${i}-gender`} />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Ethnicity */}
+                  {ethnicity && (
+                    <div className="flex items-center justify-between bg-white border border-gray-100 rounded px-2.5 py-1 mb-1">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[9px] text-gray-400 w-16 shrink-0 uppercase">Ethnicity</span>
+                        <span className="text-[11px] text-gray-700">{ethnicity}</span>
+                      </div>
+                      <CopyBtn text={ethnicity} id={`r-${i}-eth`} />
+                    </div>
+                  )}
+
+                  {/* Description — full text, not truncated */}
+                  <div className="bg-white border border-gray-100 rounded px-2.5 py-1.5 mb-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <span className="text-[9px] text-gray-400 uppercase block mb-0.5">Description</span>
+                        <p className="text-[11px] text-gray-700 leading-relaxed">{r.description}</p>
+                      </div>
+                      <CopyBtn text={r.description} id={`r-${i}-desc`} />
+                    </div>
+                  </div>
+
+                  {/* Actions row — Copy All + Sides side by side */}
+                  <div className="flex gap-1.5 flex-wrap">
                     <CopyBtn text={`${r.name}\nAge: ${r.ageRange || "N/A"}\nGender: ${r.gender || "N/A"}${ethnicity ? "\nEthnicity: " + ethnicity : ""}\n\n${r.description}`} id={`r-${i}-all`} label="Copy All" />
                     {files.some(f => f.name.toLowerCase().endsWith('.pdf')) && (
                       <>
