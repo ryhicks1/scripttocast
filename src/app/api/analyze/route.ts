@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { PDFDocument } from "pdf-lib";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 const SYSTEM_PROMPT = `You are an expert casting director's assistant. Analyze casting documents and extract comprehensive project information.
 
@@ -73,46 +74,187 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No files provided" }, { status: 400 });
     }
 
-    // Build content blocks — always send PDFs directly to Claude for visual reading
-    // This ensures consistent, reliable extraction regardless of PDF encoding
-    const contentBlocks: Anthropic.Messages.ContentBlockParam[] = [];
+    const MAX_PDF_PAGES = 95; // Stay under Claude's 100-page limit
+    const anthropic = new Anthropic();
+
+    // Split large PDFs into chunks, collect all file content
+    interface PdfChunk {
+      fileName: string;
+      chunkIndex: number;
+      totalChunks: number;
+      pageOffset: number; // first page number in this chunk (1-indexed)
+      base64: string;
+    }
+    const pdfChunks: PdfChunk[] = [];
     const textParts: string[] = [];
 
     for (const file of files) {
       const buffer = Buffer.from(await file.arrayBuffer());
 
       if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
-        // Always send PDFs directly to Claude for visual reading — most accurate and consistent
-        const base64 = buffer.toString("base64");
-        contentBlocks.push({
-          type: "document",
-          source: {
-            type: "base64",
-            media_type: "application/pdf",
-            data: base64,
-          },
-        } as any);
-        textParts.push(`=== ${file.name} (PDF document attached above) ===`);
+        const pdfDoc = await PDFDocument.load(buffer);
+        const totalPages = pdfDoc.getPageCount();
+
+        if (totalPages <= MAX_PDF_PAGES) {
+          // Small enough — send as-is
+          pdfChunks.push({
+            fileName: file.name,
+            chunkIndex: 0,
+            totalChunks: 1,
+            pageOffset: 1,
+            base64: buffer.toString("base64"),
+          });
+        } else {
+          // Split into chunks
+          const numChunks = Math.ceil(totalPages / MAX_PDF_PAGES);
+          for (let i = 0; i < numChunks; i++) {
+            const startPage = i * MAX_PDF_PAGES;
+            const endPage = Math.min(startPage + MAX_PDF_PAGES, totalPages);
+
+            const chunkDoc = await PDFDocument.create();
+            const pages = await chunkDoc.copyPages(
+              pdfDoc,
+              Array.from({ length: endPage - startPage }, (_, j) => startPage + j)
+            );
+            pages.forEach((p) => chunkDoc.addPage(p));
+
+            const chunkBytes = await chunkDoc.save();
+            pdfChunks.push({
+              fileName: file.name,
+              chunkIndex: i,
+              totalChunks: numChunks,
+              pageOffset: startPage + 1,
+              base64: Buffer.from(chunkBytes).toString("base64"),
+            });
+          }
+        }
       } else {
         textParts.push(`=== ${file.name} ===\n${buffer.toString("utf-8")}`);
       }
     }
 
-    // Add the text instruction
-    contentBlocks.push({
-      type: "text",
-      text: `Analyze these casting documents and return ONLY valid JSON (no markdown, no backticks, no explanation — just the JSON object):\n\n${textParts.join("\n\n")}`,
-    });
+    // If only one chunk (or no PDF), do a single request
+    if (pdfChunks.length <= 1) {
+      const contentBlocks: Anthropic.Messages.ContentBlockParam[] = [];
+      if (pdfChunks.length === 1) {
+        contentBlocks.push({
+          type: "document",
+          source: {
+            type: "base64",
+            media_type: "application/pdf",
+            data: pdfChunks[0].base64,
+          },
+        } as any);
+        textParts.push(`=== ${pdfChunks[0].fileName} (PDF document attached above) ===`);
+      }
+      contentBlocks.push({
+        type: "text",
+        text: `Analyze these casting documents and return ONLY valid JSON (no markdown, no backticks, no explanation — just the JSON object):\n\n${textParts.join("\n\n")}`,
+      });
 
-    const anthropic = new Anthropic();
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 20000,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: contentBlocks }],
-    });
+      const response = await anthropic.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 20000,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: "user", content: contentBlocks }],
+      });
 
-    const text = response.content[0].type === "text" ? response.content[0].text : "";
+      var text = response.content[0].type === "text" ? response.content[0].text : "";
+    } else {
+      // Multiple chunks — process in parallel, then merge
+      const chunkPromises = pdfChunks.map((chunk) => {
+        const chunkBlocks: Anthropic.Messages.ContentBlockParam[] = [
+          {
+            type: "document",
+            source: {
+              type: "base64",
+              media_type: "application/pdf",
+              data: chunk.base64,
+            },
+          } as any,
+          {
+            type: "text",
+            text: `This is chunk ${chunk.chunkIndex + 1} of ${chunk.totalChunks} from "${chunk.fileName}".
+Pages in this chunk start at page ${chunk.pageOffset} of the original document.
+IMPORTANT: When listing pageNumbers for characters, use the ORIGINAL page numbers (starting from ${chunk.pageOffset}).
+
+Analyze this section and return ONLY valid JSON (no markdown, no backticks):\n\n${textParts.join("\n\n")}`,
+          },
+        ];
+
+        return anthropic.messages.create({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 20000,
+          system: SYSTEM_PROMPT,
+          messages: [{ role: "user", content: chunkBlocks }],
+        });
+      });
+
+      const chunkResponses = await Promise.all(chunkPromises);
+      const chunkResults = chunkResponses.map((r) => {
+        const t = r.content[0].type === "text" ? r.content[0].text : "{}";
+        const m = t.match(/\{[\s\S]*\}/);
+        if (!m) return null;
+        let s = m[0].replace(/,\s*([\]}])/g, "$1");
+        s = s.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, "");
+        try { return JSON.parse(s); } catch { return null; }
+      }).filter(Boolean);
+
+      if (!chunkResults.length) {
+        return NextResponse.json({ error: "Failed to analyze any chunk" }, { status: 500 });
+      }
+
+      // Merge: take project from first chunk, merge roles by deduplicating on name
+      const merged = chunkResults[0];
+      const roleMap = new Map<string, any>();
+      for (const result of chunkResults) {
+        if (result.roles) {
+          for (const role of result.roles) {
+            const key = role.name?.toLowerCase()?.trim();
+            if (!key) continue;
+            if (roleMap.has(key)) {
+              // Merge page numbers
+              const existing = roleMap.get(key);
+              const allPages = [...new Set([...(existing.pageNumbers || []), ...(role.pageNumbers || [])])].sort((a: number, b: number) => a - b);
+              existing.pageNumbers = allPages;
+              // Keep the longer description
+              if ((role.description || "").length > (existing.description || "").length) {
+                existing.description = role.description;
+              }
+              // Merge characteristics
+              existing.characteristics = [...new Set([...(existing.characteristics || []), ...(role.characteristics || [])])];
+            } else {
+              roleMap.set(key, { ...role });
+            }
+          }
+        }
+      }
+      merged.roles = Array.from(roleMap.values());
+
+      // Merge selfTapeInstructions
+      const stMap = new Map<string, any>();
+      for (const result of chunkResults) {
+        for (const st of result.selfTapeInstructions || []) {
+          const key = st.roleName?.toLowerCase()?.trim();
+          if (!key || stMap.has(key)) continue;
+          stMap.set(key, st);
+        }
+      }
+      merged.selfTapeInstructions = Array.from(stMap.values());
+
+      // Merge formQuestions
+      const fqMap = new Map<string, any>();
+      for (const result of chunkResults) {
+        for (const fq of result.formQuestions || []) {
+          const key = fq.roleName?.toLowerCase()?.trim();
+          if (!key || fqMap.has(key)) continue;
+          fqMap.set(key, fq);
+        }
+      }
+      merged.formQuestions = Array.from(fqMap.values());
+
+      var text = JSON.stringify(merged);
+    }
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       return NextResponse.json({ error: "Failed to parse AI response" }, { status: 500 });
