@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 
+export const maxDuration = 120;
+
 const SYSTEM_PROMPT = `You are an expert casting director's assistant. Analyze casting documents and extract comprehensive project information.
 
 Extract ALL of the following:
@@ -17,7 +19,7 @@ Extract ALL of the following:
    - gender: "Male"/"Female"/"Any"/"Non-binary" or null
    - speaking: boolean
    - characteristics: string array of castable traits (e.g. ["authoritative", "weathered", "imposing physical presence", "Italian-American accent", "capable of quiet menace and genuine warmth"])
-   - pageNumbers: array of page numbers (1-indexed) where this character has dialogue or appears in the script. Use the [PAGE X] markers in the text. This is CRITICAL for generating sides.
+   - pageNumbers: array of page numbers (1-indexed) where this character has dialogue or significant action. Be PRECISE — only include pages where the character actually speaks or is actively involved. Do NOT assign all pages to every character.
 
 3. SELF-TAPE INSTRUCTIONS per role (if documents contain audition instructions):
    - videos: [{label: "SLATE"/"SCENE 1"/etc, description: exact instructions}]
@@ -30,6 +32,7 @@ Extract ALL of the following:
 CRITICAL RULES:
 - You MUST populate ALL 4 sections (project, roles, selfTapeInstructions, formQuestions) — never return empty arrays
 - Include ALL roles including background/extras (mark non-speaking)
+- pageNumbers MUST be accurate — carefully track which pages each character appears on. Wrong page numbers make the output useless.
 - selfTapeInstructions: Look for ANY mention of audition videos, slates, scenes to record, photo requirements, filming tips. Even if just one doc has these, extract them
 - If a document contains step-by-step self-tape instructions, extract EVERY step with its full description
 - ALWAYS include at least general self-tape instructions (slate + scene) for any project type
@@ -61,18 +64,23 @@ Return ONLY valid JSON matching this schema:
   "formQuestions": [{ "roleName": string, "questions": [{"type": string, "label": string, "options": string[]|null, "required": boolean}] }]
 }`;
 
-async function extractPdfText(buffer: Buffer): Promise<string> {
-  const { getDocumentProxy } = await import("unpdf");
-  const pdf = await getDocumentProxy(new Uint8Array(buffer));
-  let text = "";
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    // Add page markers so AI can identify which pages characters appear on
-    text += `[PAGE ${i}]\n`;
-    text += (content.items as any[]).map(item => item.str || "").join(" ") + "\n\n";
+async function extractPdfText(buffer: Buffer): Promise<{ text: string; hasContent: boolean }> {
+  try {
+    const { getDocumentProxy } = await import("unpdf");
+    const pdf = await getDocumentProxy(new Uint8Array(buffer));
+    let text = "";
+    let totalChars = 0;
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const pageText = (content.items as any[]).map(item => item.str || "").join(" ").trim();
+      text += `[PAGE ${i}]\n${pageText}\n\n`;
+      totalChars += pageText.length;
+    }
+    return { text, hasContent: totalChars > 100 };
+  } catch {
+    return { text: "", hasContent: false };
   }
-  return text;
 }
 
 export async function POST(request: Request) {
@@ -84,23 +92,50 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No files provided" }, { status: 400 });
     }
 
-    const allTexts: string[] = [];
+    // Build content blocks for Claude — use native PDF reading when text extraction fails
+    const contentBlocks: Anthropic.Messages.ContentBlockParam[] = [];
+    const textParts: string[] = [];
+
     for (const file of files) {
       const buffer = Buffer.from(await file.arrayBuffer());
+
       if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
-        const text = await extractPdfText(buffer);
-        allTexts.push(`=== ${file.name} ===\n${text}`);
+        // Try text extraction first
+        const { text, hasContent } = await extractPdfText(buffer);
+
+        if (hasContent) {
+          // Text extraction worked — use it (cheaper, includes page markers)
+          textParts.push(`=== ${file.name} ===\n${text}`);
+        } else {
+          // Text extraction failed — send PDF directly to Claude for visual reading
+          const base64 = buffer.toString("base64");
+          contentBlocks.push({
+            type: "document",
+            source: {
+              type: "base64",
+              media_type: "application/pdf",
+              data: base64,
+            },
+          } as any);
+          textParts.push(`=== ${file.name} (sent as PDF document above) ===`);
+        }
       } else {
-        allTexts.push(`=== ${file.name} ===\n${buffer.toString("utf-8")}`);
+        textParts.push(`=== ${file.name} ===\n${buffer.toString("utf-8")}`);
       }
     }
+
+    // Add the text instruction
+    contentBlocks.push({
+      type: "text",
+      text: `Analyze these casting documents and return ONLY valid JSON (no markdown, no backticks, no explanation — just the JSON object):\n\n${textParts.join("\n\n")}`,
+    });
 
     const anthropic = new Anthropic();
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
       max_tokens: 20000,
       system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: `Analyze these casting documents and return ONLY valid JSON (no markdown, no backticks, no explanation — just the JSON object):\n\n${allTexts.join("\n\n")}` }],
+      messages: [{ role: "user", content: contentBlocks }],
     });
 
     const text = response.content[0].type === "text" ? response.content[0].text : "";
@@ -111,9 +146,7 @@ export async function POST(request: Request) {
 
     let jsonStr = jsonMatch[0];
     // Fix common JSON issues from LLM output
-    // Remove trailing commas before ] or }
     jsonStr = jsonStr.replace(/,\s*([\]}])/g, "$1");
-    // Fix unescaped newlines in strings
     jsonStr = jsonStr.replace(/(?<=":.*)"([^"]*)\n([^"]*)"(?=\s*[,}\]])/g, '"$1\\n$2"');
 
     try {
@@ -121,9 +154,7 @@ export async function POST(request: Request) {
     } catch (parseError: any) {
       console.error("JSON parse error:", parseError.message);
       console.error("JSON text (first 500):", jsonStr.slice(0, 500));
-      // Try more aggressive cleanup
       try {
-        // Remove any control characters except \n\r\t
         const cleaned = jsonStr.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, "");
         return NextResponse.json(JSON.parse(cleaned));
       } catch {
