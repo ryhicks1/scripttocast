@@ -381,10 +381,11 @@ legend{padding:0;margin-bottom:.55rem}
       <span class="short">WSFB</span>
     </a>
     <nav class="nav" aria-label="Primary">
-      <a href="#services">Services</a>
+      <a href="/websites/">Websites</a>
+      <a href="/ai/">AI</a>
       <a href="#work">Work</a>
-      <a href="#process">Process</a>
-      <a href="#ai">AI</a>
+      <a href="/faq/">FAQ</a>
+      <a href="/resources/">Resources</a>
     </nav>
     <a class="btn btn-primary" href="#contact">
       Start a project
@@ -402,10 +403,11 @@ legend{padding:0;margin-bottom:.55rem}
     <button class="menu-close" id="menu-close" type="button">Close ✕</button>
   </div>
   <nav class="menu-nav" aria-label="Sections">
-    <a href="#services">Services</a>
+    <a href="/websites/">Websites</a>
+    <a href="/ai/">AI</a>
     <a href="#work">Work</a>
-    <a href="#process">Process</a>
-    <a href="#ai">AI</a>
+    <a href="/faq/">FAQ</a>
+    <a href="/resources/">Resources</a>
     <a href="#contact">Contact</a>
   </nav>
   <div class="menu-foot">
@@ -669,10 +671,11 @@ legend{padding:0;margin-bottom:.55rem}
     <div class="ft-top">
       <a class="mark" href="#top"><i aria-hidden="true"></i><span>Web Services for Business</span></a>
       <nav class="ft-nav" aria-label="Footer">
-        <a href="#services">Services</a>
+        <a href="/websites/">Websites</a>
+        <a href="/ai/">AI</a>
         <a href="#work">Work</a>
-        <a href="#process">Process</a>
-        <a href="#ai">AI</a>
+        <a href="/faq/">FAQ</a>
+        <a href="/resources/">Resources</a>
         <a href="#contact">Contact</a>
         <a href="mailto:support@webservicesforbusiness.com">Email</a>
       </nav>
@@ -715,7 +718,10 @@ legend{padding:0;margin-bottom:.55rem}
     items.forEach(function (el) { io.observe(el); });
   }
 
-  var links = [].slice.call(document.querySelectorAll('.nav a'));
+  var links = [].slice.call(document.querySelectorAll('.nav a')).filter(function (a) {
+    var h = a.getAttribute('href') || '';
+    return h.charAt(0) === '#';
+  });
   var targets = links.map(function (a) { return document.querySelector(a.getAttribute('href')); });
   if ('IntersectionObserver' in window) {
     var vis = [];
@@ -789,6 +795,5 @@ legend{padding:0;margin-bottom:.55rem}
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
 </script>
 <script defer src="/_vercel/insights/script.js"></script>
-
 </body>
 </html>
