@@ -1,6 +1,3 @@
-# GO-LIVE: while this is a preview deploy the whole site is blocked from indexing.
-# When the real domain is attached, replace the two lines below with:
-#   Allow: /
-#   Sitemap: https://www.webservicesforbusiness.com/sitemap.xml
 User-agent: *
-Disallow: /
+Allow: /
+Sitemap: https://www.webservicesforbusiness.com/sitemap.xml
