@@ -71,7 +71,8 @@ so a missing or failed image reveals the plate underneath instead of a broken ic
 - **No sole-trader framing.**
 - **Terse.** Short sentences, concrete nouns. If a sentence only adds warmth,
   cut it.
-- **No social profiles** and no surname anywhere.
+- **No social profiles** and no surname anywhere. The ABN in the footer is
+  intentional; note it is publicly searchable on ABN Lookup.
 
 ## Contact form
 
