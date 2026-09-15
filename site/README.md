@@ -7,7 +7,7 @@ dependencies, no backend. Open `index.html` and it runs.
 site/
 ├── index.html              the deploy build — markup, CSS and JS inline
 ├── index.standalone.html   same page with fonts inlined; opens with no server
-├── robots.txt              blocks indexing while it's a preview deploy
+├── robots.txt              allows indexing — the site is live
 ├── fonts/                  Archivo + IBM Plex Mono (woff2, latin subset)
 ├── img/og.png              1200×630 social share card
 ├── img/work/               screenshots of the portfolio sites — SEE BELOW
@@ -54,8 +54,8 @@ so a missing or failed image reveals the plate underneath instead of a broken ic
 - **Type:** Archivo (400–800, headings and body) and IBM Plex Mono (labels,
   numerals). Self-hosted — no third-party request, no layout shift. ~65 KB total.
 - **Colour:** near-black `#0C0D0F`, white text, and a single orange `#FF6B00`
-  used only as micro-accent: the wordmark bar, hover states, focus rings, the
-  demo tag. Deliberately sparing — do not expand it into headings or buttons.
+  used only as micro-accent: the wordmark bar, hover states and focus rings.
+  Deliberately sparing — do not expand it into headings or buttons.
 - **Layout:** hairline grid, square corners, no shadows. Structure carries the
   design, not decoration.
 - **Motion:** a 12px rise on scroll and nothing else. Off under
@@ -71,6 +71,8 @@ so a missing or failed image reveals the plate underneath instead of a broken ic
 - **No sole-trader framing.**
 - **Terse.** Short sentences, concrete nouns. If a sentence only adds warmth,
   cut it.
+- **Never label work as a demo, preview, mock or placeholder.** The cards state
+  the sector and nothing about status.
 - **No social profiles** and no surname anywhere. The ABN in the footer is
   intentional; note it is publicly searchable on ABN Lookup.
 
