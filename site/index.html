@@ -1,0 +1,1320 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+<!--
+  ============================================================================
+  Web Services for Business — webservicesforbusiness.com
+  Single-file static site. Deploy this folder as-is (Vercel / Netlify / any host).
+
+  TOKENS USED (per brief — already resolved to final values):
+    {{BUSINESS_NAME}} = Web Services for Business
+    {{DOMAIN}}        = webservicesforbusiness.com
+    {{EMAIL}}         = support@webservicesforbusiness.com
+    (admin@ is an alias to the same inbox — not used publicly)
+    (onlineservicesforbusiness.com is a redirect only — never marketed here)
+
+  GOING LIVE — two things to change, both marked "GO-LIVE" in this file:
+    1. Delete the <meta name="robots" content="noindex, nofollow"> line below.
+    2. Edit robots.txt in this folder (swap Disallow for Allow).
+  ============================================================================
+-->
+
+<title>Web Services for Business — Websites &amp; practical AI, Wollongong</title>
+<meta name="description" content="Ryan builds fast, simple websites for trades and local shops around Wollongong, and helps small teams use AI on the boring parts of the job. Plain English, no lock-in.">
+<meta name="author" content="Ryan">
+<link rel="canonical" href="https://www.webservicesforbusiness.com/">
+
+<!-- GO-LIVE: delete the next line when a real domain is attached -->
+<meta name="robots" content="noindex, nofollow">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Web Services for Business">
+<meta property="og:title" content="Websites for local business. And practical AI for the people running it.">
+<meta property="og:description" content="Ryan — Wollongong sole trader. Fast, simple websites for trades and local shops, plus practical AI help for small teams.">
+<meta property="og:url" content="https://www.webservicesforbusiness.com/">
+<meta property="og:image" content="https://www.webservicesforbusiness.com/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Web Services for Business — websites and practical AI for local business, Wollongong NSW.">
+<meta property="og:locale" content="en_AU">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Websites for local business. And practical AI for the people running it.">
+<meta name="twitter:description" content="Ryan — Wollongong sole trader. Websites for trades and local shops, plus practical AI help for small teams.">
+<meta name="twitter:image" content="https://www.webservicesforbusiness.com/img/og.png">
+<meta name="theme-color" content="#F4F1EA">
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%2311261F'/%3E%3Cpath d='M12 22h6l4 16 4-16h6l4 16 4-16h6l-7 24h-7l-3-13-3 13h-7z' fill='%23F4F1EA'/%3E%3Ccircle cx='47' cy='19' r='4' fill='%23C25E2A'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%2311261F'/%3E%3Cpath d='M12 22h6l4 16 4-16h6l4 16 4-16h6l-7 24h-7l-3-13-3 13h-7z' fill='%23F4F1EA'/%3E%3C/svg%3E">
+
+<link rel="preload" href="fonts/instrument-serif-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "ProfessionalService",
+  "name": "Web Services for Business",
+  "alternateName": "WSFB",
+  "url": "https://www.webservicesforbusiness.com/",
+  "email": "support@webservicesforbusiness.com",
+  "telephone": "+61450914150",
+  "description": "Websites for local businesses and practical AI consultancy and education for small Australian teams.",
+  "founder": { "@type": "Person", "name": "Ryan" },
+  "address": {
+    "@type": "PostalAddress",
+    "addressLocality": "Wollongong",
+    "addressRegion": "NSW",
+    "postalCode": "2500",
+    "addressCountry": "AU"
+  },
+  "areaServed": [
+    { "@type": "Place", "name": "Wollongong" },
+    { "@type": "Place", "name": "Illawarra" },
+    { "@type": "Place", "name": "Sydney" },
+    { "@type": "Country", "name": "Australia" }
+  ],
+  "knowsAbout": ["Web design", "Search engine optimisation", "Google Business Profile", "AI adoption for small business", "AI training"],
+  "makesOffer": [
+    { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Websites for local business" } },
+    { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "AI readiness assessment" } },
+    { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Team AI education" } },
+    { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "AI workflow design" } }
+  ]
+}
+</script>
+
+<style>
+/* ═══ 1. Faces ════════════════════════════════════════════════════════════ */
+@font-face{font-family:'Instrument Serif';font-style:normal;font-weight:400;font-display:swap;
+  src:url(fonts/instrument-serif-latin.woff2) format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+2074,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+@font-face{font-family:'Instrument Serif';font-style:italic;font-weight:400;font-display:swap;
+  src:url(fonts/instrument-serif-latin-italic.woff2) format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+2074,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+@font-face{font-family:'Instrument Sans';font-style:normal;font-weight:400 700;font-display:swap;
+  src:url(fonts/instrument-sans-latin.woff2) format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+2074,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+@font-face{font-family:'Instrument Sans';font-style:italic;font-weight:400 700;font-display:swap;
+  src:url(fonts/instrument-sans-latin-italic.woff2) format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+2074,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+
+/* ═══ 2. Tokens ═══════════════════════════════════════════════════════════ */
+:root{
+  --paper:#F4F1EA;
+  --paper-2:#EDE8DE;
+  --paper-3:#E4DED1;
+  --ink:#141310;
+  --ink-80:#3A3730;
+  --ink-60:#5E594E;
+  --ink-45:#6B665B;
+  --line:rgba(20,19,16,.14);
+  --line-soft:rgba(20,19,16,.08);
+  --forest:#11261F;
+  --forest-2:#17332A;
+  --bone:#EDE9DD;
+  --bone-60:#A8B3A6;
+  --clay:#C25E2A;
+  --clay-deep:#9C4518;
+  --clay-soft:rgba(194,94,42,.14);
+  --clay-light:#D07B3C;   /* accent for the dark ground — 4.97:1 on --forest */
+
+  --sans:'Instrument Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+  --serif:'Instrument Serif',ui-serif,Georgia,'Times New Roman',serif;
+
+  --gutter:clamp(1.25rem,4vw,3.25rem);
+  --maxw:82.5rem;
+  --sec-y:clamp(4.5rem,10vw,9rem);
+  --r:2px;
+  --ease:cubic-bezier(.22,.61,.36,1);
+}
+
+/* ═══ 3. Base ═════════════════════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:var(--sans);font-size:1.0625rem;line-height:1.65;
+  font-weight:400;letter-spacing:-.008em;
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+  overflow-x:hidden;
+}
+/* paper grain — a real texture, not a gradient */
+body::before{
+  content:"";position:fixed;inset:0;z-index:9999;pointer-events:none;opacity:.05;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode:multiply;
+}
+img,svg{max-width:100%;display:block}
+a{color:inherit;text-decoration:none}
+h1,h2,h3,h4,p,ul,ol,figure,blockquote{margin:0}
+ul{padding:0;list-style:none}
+button,input,textarea,select{font:inherit;color:inherit}
+::selection{background:var(--ink);color:var(--paper)}
+:focus-visible{outline:2px solid var(--clay-deep);outline-offset:3px;border-radius:1px}
+.skip{position:absolute;left:-9999px;top:0;z-index:10000;background:var(--ink);color:var(--paper);padding:.75rem 1.25rem;font-size:.875rem}
+.skip:focus{left:.5rem;top:.5rem}
+
+/* ═══ 4. Layout ═══════════════════════════════════════════════════════════ */
+.wrap{max-width:var(--maxw);margin-inline:auto;padding-inline:var(--gutter)}
+.sec{padding-block:var(--sec-y);position:relative}
+section[id],#top{scroll-margin-top:5.5rem}
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:clamp(1.25rem,2.6vw,2.25rem)}
+
+/* section header: number + label sitting on a ledger rule */
+.sec-head{display:grid;grid-template-columns:repeat(12,1fr);gap:clamp(1.25rem,2.6vw,2.25rem);
+  border-top:1px solid var(--line);padding-top:1.25rem;margin-bottom:clamp(2.5rem,5vw,4rem)}
+.sec-num{grid-column:1/3;font-family:var(--sans);font-size:.6875rem;font-weight:600;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--clay-deep);padding-top:.5rem}
+.sec-head-main{grid-column:3/13}
+.sec-title{font-family:var(--serif);font-weight:400;letter-spacing:-.018em;line-height:1.02;
+  font-size:clamp(2.1rem,4.6vw,3.6rem);text-wrap:balance}
+.sec-title em{font-style:italic}
+.sec-lead{margin-top:1.25rem;max-width:46ch;color:var(--ink-60);font-size:clamp(1rem,1.25vw,1.1875rem);line-height:1.6}
+@media (max-width:860px){
+  .sec-num{grid-column:1/13;padding-top:0}
+  .sec-head-main{grid-column:1/13;margin-top:.75rem}
+}
+
+/* ═══ 5. Bits ═════════════════════════════════════════════════════════════ */
+.eyebrow{font-size:.6875rem;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-45)}
+.btn{display:inline-flex;align-items:center;gap:.6rem;padding:.9rem 1.5rem;border-radius:100px;
+  font-size:.9375rem;font-weight:600;letter-spacing:-.005em;border:1px solid transparent;
+  transition:background .3s var(--ease),color .3s var(--ease),border-color .3s var(--ease),transform .3s var(--ease);
+  cursor:pointer;white-space:nowrap}
+.btn svg{transition:transform .35s var(--ease);flex:none}
+.btn:hover svg{transform:translateX(4px)}
+.btn-primary{background:var(--ink);color:var(--paper)}
+.btn-primary:hover{background:var(--clay-deep)}
+.btn-ghost{border-color:var(--line);color:var(--ink);background:transparent}
+.btn-ghost:hover{border-color:var(--ink);background:rgba(20,19,16,.04)}
+.btn-light{background:var(--bone);color:var(--forest)}
+.btn-light:hover{background:#fff}
+.btn-outline-light{border-color:rgba(237,233,221,.3);color:var(--bone)}
+.btn-outline-light:hover{border-color:var(--bone);background:rgba(237,233,221,.08)}
+
+/* link with an underline that draws in */
+.ul{background-image:linear-gradient(currentColor,currentColor);background-size:0% 1px;
+  background-repeat:no-repeat;background-position:0 100%;transition:background-size .4s var(--ease);
+  padding-bottom:1px}
+.ul:hover,a:focus-visible .ul{background-size:100% 1px}
+
+.arrow-link{display:inline-flex;align-items:center;gap:.5rem;font-size:.875rem;font-weight:600;
+  letter-spacing:.01em;color:var(--clay-deep)}
+.arrow-link svg{transition:transform .35s var(--ease)}
+.arrow-link:hover svg{transform:translateX(4px)}
+
+/* reveal */
+.rv{opacity:0;transform:translateY(14px);transition:opacity .8s var(--ease),transform .8s var(--ease);
+  transition-delay:var(--d,0ms)}
+.rv.in{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){.rv{opacity:1;transform:none;transition:none}}
+</style>
+
+<style>
+/* ═══ 6. Header ═══════════════════════════════════════════════════════════ */
+.hdr{position:fixed;top:0;left:0;right:0;z-index:100;
+  padding-top:env(safe-area-inset-top,0px);
+  transition:background .4s var(--ease),border-color .4s var(--ease),backdrop-filter .4s var(--ease);
+  border-bottom:1px solid transparent}
+.hdr.stuck{background:rgba(244,241,234,.86);backdrop-filter:saturate(180%) blur(14px);
+  -webkit-backdrop-filter:saturate(180%) blur(14px);border-bottom-color:var(--line)}
+.hdr-in{max-width:var(--maxw);margin-inline:auto;padding:1.1rem var(--gutter);
+  display:flex;align-items:center;justify-content:space-between;gap:2rem;
+  transition:padding .4s var(--ease)}
+.hdr.stuck .hdr-in{padding-block:.8rem}
+.mark{display:flex;align-items:baseline;gap:.55rem;font-weight:600;letter-spacing:-.02em;font-size:1rem;line-height:1}
+.mark .dot{width:6px;height:6px;border-radius:50%;background:var(--clay);flex:none;transform:translateY(-1px)}
+.mark .full{white-space:nowrap}
+.mark .short{display:none}
+@media (max-width:1080px){.mark .full{display:none}.mark .short{display:inline}}
+.nav{display:flex;align-items:center;gap:clamp(1.25rem,2.4vw,2.25rem)}
+.nav a{font-size:.875rem;font-weight:500;color:var(--ink-60);transition:color .3s var(--ease);position:relative}
+.nav a::after{content:"";position:absolute;left:0;right:0;bottom:-6px;height:1px;background:var(--clay);
+  transform:scaleX(0);transform-origin:left;transition:transform .4s var(--ease)}
+.nav a:hover{color:var(--ink)}
+.nav a[aria-current="true"]{color:var(--ink)}
+.nav a[aria-current="true"]::after,.nav a:hover::after{transform:scaleX(1)}
+.hdr .btn{padding:.6rem 1.1rem;font-size:.8125rem}
+@media (max-width:860px){.nav{display:none}}
+/* mobile menu */
+.menu-btn{display:none;align-items:center;gap:.55rem;background:none;border:0;padding:.5rem 0;
+  font-size:.875rem;font-weight:600;letter-spacing:-.005em;cursor:pointer}
+.menu-btn .bars{display:inline-flex;flex-direction:column;gap:4px;width:18px}
+.menu-btn .bars i{display:block;height:1.5px;background:var(--ink);border-radius:2px;
+  transition:transform .35s var(--ease),opacity .25s var(--ease)}
+.menu-btn .bars i:last-child{width:12px;margin-left:auto}
+@media (max-width:860px){.menu-btn{display:inline-flex}.hdr .btn{display:none}}
+.menu{position:fixed;inset:0;z-index:200;background:var(--paper);display:flex;flex-direction:column;
+  padding:calc(1.1rem + env(safe-area-inset-top,0px)) var(--gutter) calc(2rem + env(safe-area-inset-bottom,0px));
+  opacity:0;visibility:hidden;transition:opacity .35s var(--ease),visibility .35s}
+.menu[data-open="true"]{opacity:1;visibility:visible}
+.menu-head{display:flex;align-items:center;justify-content:space-between;gap:1rem}
+.menu-close{background:none;border:0;padding:.5rem 0;font-size:.875rem;font-weight:600;cursor:pointer;
+  display:inline-flex;align-items:center;gap:.5rem}
+.menu-nav{margin-top:auto;margin-bottom:auto;padding-block:2rem}
+.menu-nav a{display:block;font-family:var(--serif);font-size:clamp(2.1rem,10vw,3rem);line-height:1.12;
+  letter-spacing:-.02em;padding:.25rem 0;opacity:0;transform:translateY(10px);
+  transition:opacity .5s var(--ease),transform .5s var(--ease),color .3s var(--ease);transition-delay:var(--d,0ms)}
+.menu[data-open="true"] .menu-nav a{opacity:1;transform:none}
+.menu-nav a:active{color:var(--clay-deep)}
+.menu-foot{border-top:1px solid var(--line);padding-top:1.25rem;display:grid;gap:.5rem}
+.menu-foot a{font-size:1rem;font-weight:500}
+.menu-foot .k{font-size:.6875rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-45)}
+body.locked{overflow:hidden}
+@media (prefers-reduced-motion:reduce){.menu,.menu-nav a{transition:none}}
+
+/* ═══ 7. Hero ═════════════════════════════════════════════════════════════ */
+.hero{position:relative;padding-top:clamp(7.5rem,15vh,10rem);padding-bottom:clamp(3rem,6vw,5rem);overflow:hidden}
+.hero-contour{position:absolute;right:-6%;top:22%;width:min(58rem,82vw);color:var(--ink);opacity:.1;
+  pointer-events:none;
+  -webkit-mask-image:radial-gradient(70% 70% at 70% 40%,#000 25%,transparent 78%);
+  mask-image:radial-gradient(70% 70% at 70% 40%,#000 25%,transparent 78%)}
+@media (max-width:860px){.hero-contour{opacity:.055;top:38%;right:-22%}}
+.hero-status{display:inline-flex;align-items:center;gap:.6rem;border:1px solid var(--line);
+  border-radius:100px;padding:.4rem .9rem .4rem .75rem;font-size:.75rem;font-weight:500;
+  letter-spacing:.02em;color:var(--ink-60);background:rgba(255,255,255,.4)}
+.pulse{position:relative;width:7px;height:7px;border-radius:50%;background:#2E7D5B;flex:none}
+.pulse::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1px solid #2E7D5B;
+  opacity:.5;animation:pulse 2.6s var(--ease) infinite}
+@keyframes pulse{0%{transform:scale(.5);opacity:.7}70%,100%{transform:scale(1.25);opacity:0}}
+@media (prefers-reduced-motion:reduce){.pulse::after{animation:none;opacity:.35}}
+
+h1.hero-h{margin-top:clamp(1.5rem,3vw,2.25rem);font-family:var(--serif);font-weight:400;
+  font-size:clamp(2.75rem,6.6vw,5.5rem);line-height:.98;letter-spacing:-.026em;max-width:17ch;
+  text-wrap:balance}
+h1.hero-h em{font-style:italic;color:var(--clay-deep)}
+.hero-sub{margin-top:clamp(1.5rem,3vw,2rem);max-width:52ch;font-size:clamp(1.0625rem,1.5vw,1.25rem);
+  line-height:1.6;color:var(--ink-60)}
+.hero-ctas{margin-top:clamp(2rem,4vw,2.75rem);display:flex;flex-wrap:wrap;gap:.75rem}
+.hero-meta{margin-top:clamp(3rem,6vw,4.5rem);border-top:1px solid var(--line);padding-top:1.5rem;
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1.5rem}
+.hero-meta dt{font-size:.6875rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-45)}
+.hero-meta dd{margin:.5rem 0 0;font-size:.9375rem;color:var(--ink-80);line-height:1.45}
+@media (max-width:720px){.hero-meta{grid-template-columns:1fr 1fr;gap:1.25rem}.hero-meta div:last-child{grid-column:1/3}}
+
+/* ═══ 8. Trust strip ══════════════════════════════════════════════════════ */
+.trust{background:var(--ink);color:var(--paper)}
+.trust-in{display:grid;grid-template-columns:repeat(3,1fr);gap:0}
+.trust-item{padding:clamp(2.5rem,4.4vw,3.75rem) clamp(1.5rem,2.6vw,2.5rem);
+  border-left:1px solid rgba(244,241,234,.14)}
+.trust-item:first-child{border-left:0;padding-left:0}
+.trust-item:last-child{padding-right:0}
+.trust-item .trust-n{font-family:var(--serif);font-size:1.5rem;line-height:1;color:var(--clay-light)}
+.trust-t{margin-top:1rem;font-size:1.0625rem;font-weight:600;letter-spacing:-.015em;line-height:1.35}
+.trust-d{margin-top:.5rem;font-size:.9375rem;line-height:1.55;color:rgba(244,241,234,.62)}
+@media (max-width:860px){
+  .trust-in{grid-template-columns:1fr}
+  .trust-item{border-left:0;border-top:1px solid rgba(244,241,234,.14);padding-inline:0}
+  .trust-item:first-child{border-top:0}
+}
+
+/* ═══ 9. Two offers ═══════════════════════════════════════════════════════ */
+.offers{display:grid;grid-template-columns:1fr 1fr;gap:clamp(1rem,2vw,1.5rem)}
+@media (max-width:920px){.offers{grid-template-columns:1fr}}
+.offer{position:relative;padding:clamp(1.75rem,3.2vw,2.75rem);border:1px solid var(--line);
+  display:flex;flex-direction:column;min-height:100%;background:rgba(255,255,255,.35)}
+.offer--dark{background:var(--forest);border-color:var(--forest);color:var(--bone)}
+.offer .offer-n{font-family:var(--serif);font-size:clamp(2.75rem,5vw,4rem);line-height:.8;color:var(--clay);
+  opacity:.85;margin-bottom:clamp(1.75rem,3vw,2.5rem)}
+.offer--dark .offer-n,.offer--dark p.offer-n{color:var(--clay-light);opacity:1}
+.offer h3{font-family:var(--serif);font-weight:400;font-size:clamp(1.65rem,2.7vw,2.25rem);
+  line-height:1.08;letter-spacing:-.018em}
+.offer p{margin-top:1rem;color:var(--ink-60);font-size:1rem;line-height:1.6;max-width:42ch}
+.offer--dark p{color:rgba(237,233,221,.72)}
+.offer ul{margin-top:1.75rem;border-top:1px solid var(--line)}
+.offer--dark ul{border-top-color:rgba(237,233,221,.18)}
+.offer li{border-bottom:1px solid var(--line);padding:.8rem 0;display:flex;gap:.9rem;
+  font-size:.9375rem;line-height:1.45;align-items:baseline}
+.offer--dark li{border-bottom-color:rgba(237,233,221,.18)}
+.offer li span{color:var(--ink-45);font-size:.6875rem;font-weight:600;letter-spacing:.1em;flex:none;
+  font-variant-numeric:tabular-nums}
+.offer--dark li span{color:var(--bone-60)}
+.offer .arrow-link{margin-top:auto;padding-top:1.75rem}
+.offer--dark .arrow-link{color:var(--clay-light)}
+</style>
+
+<style>
+/* ═══ 10. Selected work ═══════════════════════════════════════════════════ */
+.work-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:clamp(1.5rem,3vw,2.5rem)}
+@media (max-width:820px){.work-grid{grid-template-columns:1fr}}
+.card{display:block;position:relative}
+.card--wide{grid-column:1/-1;display:grid;grid-template-columns:1.15fr 1fr;
+  gap:clamp(1.5rem,3.5vw,3rem);align-items:center}
+@media (max-width:820px){.card--wide{grid-template-columns:1fr;gap:1.25rem}.card--wide .plate{aspect-ratio:16/10}}
+
+/* the plate: a designed brand field, not a fake screenshot */
+.plate{position:relative;aspect-ratio:16/10;overflow:hidden;background:var(--pl-bg);
+  display:flex;align-items:center;justify-content:center;isolation:isolate}
+.card--wide .plate{aspect-ratio:16/11}
+.plate::before{content:"";position:absolute;inset:clamp(.7rem,1.4vw,1.1rem);
+  border:1px solid var(--pl-fg);opacity:.22;transition:inset .5s var(--ease),opacity .5s var(--ease);z-index:2}
+.plate::after{content:"";position:absolute;inset:0;z-index:1;opacity:.5;
+  background-image:var(--pl-tex,none);background-size:var(--pl-tex-size,auto)}
+.card:hover .plate::before{inset:clamp(.4rem,.9vw,.7rem);opacity:.4}
+.plate-mark{position:relative;z-index:3;color:var(--pl-fg);text-align:center;padding:2rem 1.5rem;
+  transition:transform .6s var(--ease)}
+.card:hover .plate-mark{transform:scale(1.022)}
+.plate-name{display:block;line-height:1;font-weight:400}
+.plate-sub{display:block;margin-top:.7rem;font-family:var(--sans);font-size:.625rem;font-weight:600;
+  letter-spacing:.24em;text-transform:uppercase;opacity:.62}
+.plate-tag{position:absolute;z-index:3;left:clamp(1.3rem,2.4vw,1.9rem);bottom:clamp(1.15rem,2.2vw,1.7rem);
+  color:var(--pl-fg);font-size:.625rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
+  opacity:.6;display:flex;align-items:center;gap:.45rem}
+.plate-live{position:absolute;z-index:3;right:clamp(1.3rem,2.4vw,1.9rem);bottom:clamp(1.15rem,2.2vw,1.7rem);
+  color:var(--pl-fg);font-size:.625rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;opacity:.6}
+
+/* per-project plate identities */
+.pl-sakura{--pl-bg:#2B1620;--pl-fg:#F0CDD2;
+  --pl-tex:radial-gradient(circle at 26% 22%,rgba(240,205,210,.12) 0 1px,transparent 1px);--pl-tex-size:26px 26px}
+.pl-sakura .plate-name{font-family:var(--serif);font-size:clamp(2rem,4.2vw,3.2rem);letter-spacing:-.01em}
+.pl-anytime{--pl-bg:#0E1B2C;--pl-fg:#F4C534;
+  --pl-tex:repeating-linear-gradient(135deg,rgba(244,197,52,.07) 0 10px,transparent 10px 20px)}
+.pl-anytime .plate-name{font-family:var(--sans);font-weight:700;font-size:clamp(1.3rem,2.7vw,2rem);
+  letter-spacing:-.03em;text-transform:uppercase}
+.pl-will{--pl-bg:#10242E;--pl-fg:#93D5E6;
+  --pl-tex:repeating-linear-gradient(0deg,rgba(147,213,230,.08) 0 1px,transparent 1px 14px)}
+.pl-will .plate-name{font-family:var(--sans);font-weight:600;font-size:clamp(1.3rem,2.7vw,2rem);letter-spacing:-.02em}
+.pl-acting{--pl-bg:#191411;--pl-fg:#EFE4D2;
+  --pl-tex:linear-gradient(90deg,rgba(239,228,210,.05) 0 1px,transparent 1px 34px)}
+.pl-acting .plate-name{font-family:var(--serif);font-style:italic;font-size:clamp(1.7rem,3.4vw,2.5rem);letter-spacing:-.01em}
+.pl-brief{--pl-bg:#1A2430;--pl-fg:#E9EEF3;
+  --pl-tex:linear-gradient(0deg,rgba(233,238,243,.05) 0 1px,transparent 1px 22px),linear-gradient(90deg,rgba(233,238,243,.05) 0 1px,transparent 1px 22px)}
+.pl-brief .plate-name{font-family:var(--sans);font-weight:600;font-size:clamp(1.3rem,2.7vw,1.95rem);letter-spacing:-.025em}
+
+.card-body{margin-top:1.25rem}
+.card--wide .card-body{margin-top:0}
+.card-top{display:flex;align-items:baseline;justify-content:space-between;gap:1rem;
+  border-top:1px solid var(--line);padding-top:.9rem}
+.card-sector{font-size:.6875rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-45)}
+.card h3{margin-top:.75rem;font-family:var(--serif);font-weight:400;letter-spacing:-.015em;line-height:1.05;
+  font-size:clamp(1.5rem,2.5vw,2rem)}
+.card--wide h3{font-size:clamp(1.75rem,3.4vw,2.6rem)}
+.card p{margin-top:.6rem;color:var(--ink-60);font-size:.9688rem;line-height:1.55;max-width:44ch}
+.card-url{margin-top:1.1rem;display:inline-flex;align-items:center;gap:.5rem;font-size:.8125rem;
+  font-weight:600;color:var(--ink);letter-spacing:-.005em}
+.card-url svg{transition:transform .35s var(--ease)}
+.card:hover .card-url svg{transform:translate(3px,-3px)}
+.card-url span{background-image:linear-gradient(currentColor,currentColor);background-size:0% 1px;
+  background-repeat:no-repeat;background-position:0 100%;transition:background-size .4s var(--ease)}
+.card:hover .card-url span{background-size:100% 1px}
+.work-note{margin-top:clamp(2.5rem,5vw,3.5rem);border-top:1px solid var(--line);padding-top:1.25rem;
+  font-size:.875rem;color:var(--ink-45);display:flex;flex-wrap:wrap;gap:.35rem 1rem;justify-content:space-between}
+
+/* ═══ 11. Process ═════════════════════════════════════════════════════════ */
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:clamp(1.25rem,2.6vw,2.25rem)}
+@media (max-width:920px){.steps{grid-template-columns:1fr 1fr}}
+@media (max-width:560px){.steps{grid-template-columns:1fr}}
+.step{border-top:1px solid var(--ink);padding-top:1.1rem;position:relative}
+.step::before{content:"";position:absolute;top:-3px;left:0;width:5px;height:5px;border-radius:50%;background:var(--clay)}
+.step .step-n{font-size:.6875rem;font-weight:600;letter-spacing:.16em;color:var(--clay-deep);font-variant-numeric:tabular-nums}
+.step h3{margin-top:.9rem;font-size:1.1875rem;font-weight:600;letter-spacing:-.02em;line-height:1.2}
+.step p{margin-top:.6rem;font-size:.9375rem;line-height:1.55;color:var(--ink-60)}
+
+/* ═══ 12. AI section (dark) ═══════════════════════════════════════════════ */
+.dark{background:var(--forest);color:var(--bone);position:relative;overflow:hidden}
+.dark .sec-head{border-top-color:rgba(237,233,221,.2)}
+.dark .sec-num{color:var(--clay-light)}
+.dark .sec-lead{color:rgba(237,233,221,.7)}
+.dark .eyebrow{color:var(--bone-60)}
+.ai-list{border-top:1px solid rgba(237,233,221,.2)}
+.ai-item{display:grid;grid-template-columns:repeat(12,1fr);gap:clamp(1.25rem,2.6vw,2.25rem);
+  border-bottom:1px solid rgba(237,233,221,.2);padding-block:clamp(1.5rem,2.8vw,2.25rem);
+  transition:background .4s var(--ease)}
+.ai-item:hover{background:rgba(237,233,221,.035)}
+.ai-item .ai-item-n{grid-column:1/3;font-size:.6875rem;font-weight:600;letter-spacing:.16em;color:var(--clay-light);
+  padding-top:.45rem;font-variant-numeric:tabular-nums}
+.ai-item h3{grid-column:3/7;font-family:var(--serif);font-weight:400;font-size:clamp(1.35rem,2.3vw,1.9rem);
+  line-height:1.12;letter-spacing:-.015em}
+.ai-item p{grid-column:7/13;color:rgba(237,233,221,.72);font-size:1rem;line-height:1.6;max-width:52ch}
+.ai-item .opt{display:inline-block;margin-left:.6rem;font-family:var(--sans);font-size:.625rem;
+  font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--bone-60);
+  border:1px solid rgba(237,233,221,.28);border-radius:100px;padding:.15rem .5rem;vertical-align:middle}
+@media (max-width:860px){
+  .ai-item .ai-item-n{grid-column:1/13;padding-top:0}
+  .ai-item h3{grid-column:1/13;margin-top:.5rem}
+  .ai-item p{grid-column:1/13;margin-top:.6rem}
+}
+.ai-cols{margin-top:clamp(3rem,6vw,4.5rem);display:grid;grid-template-columns:repeat(3,1fr);
+  gap:clamp(1.5rem,3vw,2.5rem)}
+@media (max-width:860px){.ai-cols{grid-template-columns:1fr}}
+.ai-col{border-top:1px solid rgba(237,233,221,.2);padding-top:1.25rem}
+.ai-col--not{border-top-color:var(--clay-light)}
+.ai-col h3{font-size:.6875rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--bone-60)}
+.ai-col--not h3{color:var(--clay-light)}
+.ai-col ul{margin-top:1.1rem}
+.ai-col li{padding:.55rem 0;font-size:.9375rem;line-height:1.5;color:rgba(237,233,221,.82);
+  display:flex;gap:.75rem;align-items:flex-start}
+.ai-col li::before{content:"";width:14px;height:1px;background:rgba(237,233,221,.45);flex:none;margin-top:.7rem}
+.ai-col--not li::before{background:var(--clay-light)}
+.ai-cta{margin-top:clamp(2.5rem,5vw,3.5rem);display:flex;flex-wrap:wrap;gap:.75rem;align-items:center}
+.ai-cta p{font-size:.9375rem;color:rgba(237,233,221,.6);margin-right:auto;max-width:34ch}
+</style>
+
+<style>
+/* ═══ 13. About ═══════════════════════════════════════════════════════════ */
+.about{display:grid;grid-template-columns:repeat(12,1fr);gap:clamp(1.25rem,2.6vw,2.25rem)}
+.about-body{grid-column:3/9}
+.about-body p{font-size:clamp(1.0625rem,1.35vw,1.1875rem);line-height:1.65;color:var(--ink-80)}
+.about-body p + p{margin-top:1.25rem}
+.about-quote{grid-column:9/13;border-left:1px solid var(--line);padding-left:clamp(1.25rem,2.4vw,2rem)}
+.about-quote blockquote{font-family:var(--serif);font-size:clamp(1.35rem,2.2vw,1.75rem);line-height:1.22;
+  letter-spacing:-.015em;font-style:italic}
+.about-facts{margin-top:1.75rem;border-top:1px solid var(--line);padding-top:1rem}
+.about-facts div{display:flex;justify-content:space-between;gap:1rem;padding:.5rem 0;font-size:.8125rem;
+  border-bottom:1px solid var(--line-soft)}
+.about-facts dt{color:var(--ink-45);letter-spacing:.02em}
+.about-facts dd{margin:0;text-align:right;color:var(--ink-80);font-weight:500}
+@media (max-width:920px){
+  .about-body{grid-column:1/13}
+  .about-quote{grid-column:1/13;border-left:0;border-top:1px solid var(--line);padding-left:0;
+    padding-top:1.5rem;margin-top:2rem}
+}
+
+/* ═══ 14. Contact ═════════════════════════════════════════════════════════ */
+.contact{background:var(--paper-2);border-top:1px solid var(--line)}
+.contact-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:clamp(1.5rem,3vw,3rem)}
+.contact-left{grid-column:1/6}
+.contact-right{grid-column:7/13}
+@media (max-width:920px){.contact-left,.contact-right{grid-column:1/13}}
+.contact h2{font-family:var(--serif);font-weight:400;font-size:clamp(2.4rem,5.4vw,4rem);line-height:.98;
+  letter-spacing:-.025em}
+.contact h2 em{font-style:italic;color:var(--clay-deep)}
+.contact-lead{margin-top:1.25rem;max-width:36ch;color:var(--ink-60);font-size:1.0625rem;line-height:1.6}
+.contact-direct{margin-top:clamp(2rem,4vw,3rem);border-top:1px solid var(--line)}
+.cd-row{display:flex;align-items:baseline;justify-content:space-between;
+  gap:1rem;padding:1rem 0;border-bottom:1px solid var(--line);transition:padding-left .35s var(--ease)}
+a.cd-row:hover{padding-left:.5rem}
+.cd-k{font-size:.6875rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-45);flex:none}
+.cd-v{font-size:clamp(.9375rem,1.5vw,1.125rem);font-weight:500;letter-spacing:-.015em;text-align:right;
+  word-break:break-word;color:var(--ink-80)}
+a.cd-row .cd-v{color:var(--ink)}
+a.cd-row:hover .cd-v{color:var(--clay-deep)}
+
+form{margin-top:0}
+.field{margin-bottom:1.1rem}
+.field label{display:block;font-size:.6875rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-45);margin-bottom:.5rem}
+.field input,.field textarea{width:100%;background:rgba(255,255,255,.55);border:1px solid var(--line);
+  border-radius:var(--r);padding:.85rem 1rem;font-size:1rem;color:var(--ink);
+  transition:border-color .3s var(--ease),background .3s var(--ease)}
+.field input::placeholder,.field textarea::placeholder{color:var(--ink-45);opacity:.65}
+.field input:focus,.field textarea:focus{outline:none;border-color:var(--ink);background:#fff}
+.field input:focus-visible,.field textarea:focus-visible{outline:2px solid var(--clay-deep);outline-offset:2px}
+.field textarea{resize:vertical;min-height:7.5rem;line-height:1.55}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+@media (max-width:560px){.field-row{grid-template-columns:1fr}}
+fieldset{border:0;padding:0;margin:0 0 1.5rem}
+legend{font-size:.6875rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-45);margin-bottom:.65rem;padding:0}
+.seg{display:flex;flex-wrap:wrap;gap:.5rem}
+.seg label{position:relative;display:inline-flex;cursor:pointer}
+.seg input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+.seg span{display:inline-block;border:1px solid var(--line);border-radius:100px;padding:.5rem 1rem;
+  font-size:.875rem;font-weight:500;transition:background .3s var(--ease),color .3s var(--ease),border-color .3s var(--ease)}
+.seg input:checked + span{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.seg input:focus-visible + span{outline:2px solid var(--clay-deep);outline-offset:2px}
+.seg label:hover span{border-color:var(--ink)}
+.form-foot{display:flex;flex-wrap:wrap;align-items:center;gap:1rem;margin-top:.5rem}
+.form-note{font-size:.8125rem;color:var(--ink-45);line-height:1.45;max-width:34ch}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+
+/* ═══ 15. Footer ══════════════════════════════════════════════════════════ */
+.ft{background:var(--ink);color:var(--paper);padding-block:clamp(3.5rem,7vw,5.5rem) 0}
+.ft-top{display:grid;grid-template-columns:repeat(12,1fr);gap:clamp(1.5rem,3vw,2.5rem);
+  padding-bottom:clamp(3rem,6vw,4.5rem)}
+.ft-brand{grid-column:1/6}
+.ft-cols{grid-column:7/13;display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem}
+@media (max-width:860px){.ft-brand{grid-column:1/13}.ft-cols{grid-column:1/13;margin-top:2.5rem}}
+@media (max-width:480px){.ft-cols{grid-template-columns:1fr 1fr}}
+.ft-word{font-family:var(--serif);font-size:clamp(1.75rem,3.2vw,2.5rem);line-height:1.05;letter-spacing:-.02em}
+.ft-tag{margin-top:.9rem;color:rgba(244,241,234,.6);font-size:.9375rem;line-height:1.55;max-width:32ch}
+.ft-cols h3{font-size:.6875rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
+  color:rgba(244,241,234,.45);margin-bottom:1rem}
+.ft-cols li{margin-bottom:.6rem}
+.ft-cols a{font-size:.9375rem;color:rgba(244,241,234,.86);transition:color .3s var(--ease)}
+.ft-cols a.ft-mail{font-size:.8125rem;overflow-wrap:break-word;word-break:normal;line-height:1.4}
+.ft-cols a:hover{color:var(--clay-light)}
+.ft-legal{border-top:1px solid rgba(244,241,234,.16);padding-block:1.5rem 2rem;
+  display:flex;flex-wrap:wrap;gap:.6rem 1.5rem;justify-content:space-between;align-items:baseline;
+  font-size:.8125rem;color:rgba(244,241,234,.5);
+  padding-bottom:calc(2rem + env(safe-area-inset-bottom,0px))}
+.ft-legal p{line-height:1.6}
+.to-top{display:inline-flex;align-items:center;gap:.5rem;color:rgba(244,241,234,.5);
+  font-size:.8125rem;transition:color .3s var(--ease)}
+.to-top:hover{color:var(--paper)}
+@media (max-width:860px){.ft-legal{padding-bottom:calc(6.5rem + env(safe-area-inset-bottom,0px))}}
+
+/* ═══ 16. Sticky mobile CTA ═══════════════════════════════════════════════ */
+.dock{position:fixed;left:0;right:0;bottom:0;z-index:95;display:none;
+  background:rgba(244,241,234,.92);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border-top:1px solid var(--line);
+  padding:.7rem var(--gutter) calc(.7rem + env(safe-area-inset-bottom,0px));
+  transform:translateY(110%);transition:transform .45s var(--ease)}
+.dock.up{transform:none}
+.dock-in{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;max-width:32rem;margin-inline:auto}
+.dock a{display:flex;align-items:center;justify-content:center;gap:.5rem;padding:.85rem 1rem;
+  border-radius:100px;font-size:.9375rem;font-weight:600}
+.dock .call{background:var(--ink);color:var(--paper)}
+.dock .mail{border:1px solid var(--line);color:var(--ink)}
+@media (max-width:860px){.dock{display:block}}
+@media (prefers-reduced-motion:reduce){.dock{transition:none}}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="hdr" id="hdr">
+  <div class="hdr-in">
+    <a class="mark" href="#top" aria-label="Web Services for Business — home">
+      <span class="dot" aria-hidden="true"></span>
+      <span class="full">Web Services for Business</span>
+      <span class="short">WSFB</span>
+    </a>
+    <nav class="nav" aria-label="Primary">
+      <a href="#services">Services</a>
+      <a href="#work">Work</a>
+      <a href="#process">How it works</a>
+      <a href="#ai">AI help</a>
+      <a href="#about">About</a>
+    </nav>
+    <a class="btn btn-primary" href="#contact">
+      Book a chat
+      <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><path d="M1 6.5h10M7 2.5l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </a>
+    <button class="menu-btn" id="menu-btn" type="button" aria-expanded="false" aria-controls="menu">
+      Menu
+      <span class="bars" aria-hidden="true"><i></i><i></i></span>
+    </button>
+  </div>
+</header>
+
+<div class="menu" id="menu" data-open="false" aria-hidden="true">
+  <div class="menu-head">
+    <span class="mark"><span class="dot" aria-hidden="true"></span><span>WSFB</span></span>
+    <button class="menu-close" id="menu-close" type="button">
+      Close
+      <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><path d="M2 2l9 9M11 2l-9 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+  <nav class="menu-nav" aria-label="Sections">
+    <a href="#services" style="--d:60ms">Services</a>
+    <a href="#work" style="--d:110ms">Selected work</a>
+    <a href="#process" style="--d:160ms">How it works</a>
+    <a href="#ai" style="--d:210ms">AI help</a>
+    <a href="#about" style="--d:260ms">About</a>
+    <a href="#contact" style="--d:310ms">Contact</a>
+  </nav>
+  <div class="menu-foot">
+    <span class="k">Direct</span>
+    <a href="tel:+61450914150">0450 914 150</a>
+    <a href="mailto:support@webservicesforbusiness.com">support@webservicesforbusiness.com</a>
+  </div>
+</div>
+
+<main id="main">
+
+<!-- ═══ HERO ═══ -->
+<section class="hero" id="top">
+  <svg class="hero-contour" viewBox="0 0 900 620" fill="none" aria-hidden="true" focusable="false">
+    <g stroke="currentColor" stroke-width="1.1" fill="none">
+      <path d="M-40 470C120 452 196 392 268 330c86-74 150-160 262-186 92-21 196 8 268 62 66 50 106 128 150 196"/>
+      <path d="M-40 512C118 492 206 430 282 364c88-76 156-152 264-176 96-22 190 14 258 70 62 52 100 124 144 188"/>
+      <path d="M-40 554C124 534 220 470 300 400c92-80 164-146 268-166 98-19 184 20 248 78 58 52 94 120 136 180"/>
+      <path d="M-40 596C136 578 238 512 322 440c96-82 172-142 272-158 96-15 176 26 236 86 54 54 88 118 128 176"/>
+      <path d="M120 620C216 566 292 500 372 432c94-80 168-134 266-146 90-11 164 32 220 92 48 52 80 112 116 168"/>
+    </g>
+  </svg>
+
+  <div class="wrap">
+    <p class="hero-status rv">
+      <span class="pulse" aria-hidden="true"></span>
+      Wollongong NSW — taking on work this month
+    </p>
+
+    <h1 class="hero-h rv" style="--d:70ms">Websites for local business. And <em>practical AI</em> for the people running it.</h1>
+
+    <p class="hero-sub rv" style="--d:140ms">
+      I'm Ryan — a sole trader in Wollongong. I build fast, simple websites for trades
+      and local shops, then help small teams use AI on the boring parts of the job.
+      Plain English. No lock&#8209;in.
+    </p>
+
+    <div class="hero-ctas rv" style="--d:210ms">
+      <a class="btn btn-primary" href="#contact">
+        Book a chat
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><path d="M1 6.5h10M7 2.5l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </a>
+      <a class="btn btn-ghost" href="#work">See the work</a>
+    </div>
+
+    <dl class="hero-meta rv" style="--d:280ms">
+      <div>
+        <dt>Based</dt>
+        <dd>Wollongong NSW — working across the Illawarra &amp; Sydney</dd>
+      </div>
+      <div>
+        <dt>Reply time</dt>
+        <dd>Usually the same day, Mon&ndash;Fri</dd>
+      </div>
+      <div>
+        <dt>Direct line</dt>
+        <dd><a class="ul" href="tel:+61450914150">0450 914 150</a></dd>
+      </div>
+    </dl>
+  </div>
+</section>
+
+<!-- ═══ TRUST STRIP ═══ -->
+<section class="trust" aria-label="Why work with me">
+  <div class="wrap">
+    <div class="trust-in">
+      <div class="trust-item rv">
+        <p class="trust-n">01</p>
+        <h2 class="trust-t">You deal with me, not an account manager</h2>
+        <p class="trust-d">Wollongong-based sole trader. The person you call is the person who builds it.</p>
+      </div>
+      <div class="trust-item rv" style="--d:90ms">
+        <p class="trust-n">02</p>
+        <h2 class="trust-t">Live sites running for real businesses</h2>
+        <p class="trust-d">Links below, not logos. Open them, load them on your phone, judge for yourself.</p>
+      </div>
+      <div class="trust-item rv" style="--d:180ms">
+        <p class="trust-n">03</p>
+        <h2 class="trust-t">AI help you can use Monday morning</h2>
+        <p class="trust-d">One or two jobs made faster with tools you already pay for. Not a six-month program.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 01 SERVICES ═══ -->
+<section class="sec" id="services" aria-labelledby="services-h">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <p class="sec-num">01 &mdash; What I do</p>
+      <div class="sec-head-main">
+        <h2 class="sec-title" id="services-h">Two things, done properly.</h2>
+        <p class="sec-lead">Most weeks I'm building a website for a local business, or sitting with a small team working out where AI actually saves them time. Often both for the same client.</p>
+      </div>
+    </div>
+
+    <div class="offers">
+      <article class="offer rv">
+        <p class="offer-n">01</p>
+        <h3>Websites for local business</h3>
+        <p>A clean one-page or small site that loads fast, reads properly on a phone, and tells people what you do and how to reach you. Built by hand, not dragged out of a template.</p>
+        <ul>
+          <li><span>01</span> One-page and small business sites</li>
+          <li><span>02</span> Google Search (SEO) done the honest way</li>
+          <li><span>03</span> Google Business Profile setup or tidy-up</li>
+          <li><span>04</span> Domain, hosting and email sorted for you</li>
+          <li><span>05</span> Words and layout help if you're stuck</li>
+        </ul>
+        <a class="arrow-link" href="#work">
+          See recent work
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><path d="M1 6.5h10M7 2.5l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+      </article>
+
+      <article class="offer offer--dark rv" style="--d:110ms">
+        <p class="offer-n">02</p>
+        <h3>AI consultancy &amp; education</h3>
+        <p>Practical AI for small Australian businesses. I look at how you actually work, find the one or two places AI saves real hours, and show your team how to use it safely.</p>
+        <ul>
+          <li><span>01</span> AI readiness assessment</li>
+          <li><span>02</span> Team AI education</li>
+          <li><span>03</span> Workflow design</li>
+          <li><span>04</span> Tool choice &amp; setup</li>
+          <li><span>05</span> Ongoing advisory, if you want it</li>
+        </ul>
+        <a class="arrow-link" href="#ai">
+          How the AI work runs
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><path d="M1 6.5h10M7 2.5l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 02 SELECTED WORK ═══ -->
+<section class="sec" id="work" aria-labelledby="work-h">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <p class="sec-num">02 &mdash; Selected work</p>
+      <div class="sec-head-main">
+        <h2 class="sec-title" id="work-h">Sites you can open <em>right now</em>.</h2>
+        <p class="sec-lead">Real businesses and real links. Two of these are demo builds — they're marked, because pretending otherwise would be the sort of thing this page is against.</p>
+      </div>
+    </div>
+
+    <div class="work-grid">
+
+      <a class="card card--wide rv" href="https://www.sakurawollongong.com/" target="_blank" rel="noopener">
+        <div class="plate pl-sakura">
+          <div class="plate-mark">
+            <svg width="30" height="30" viewBox="0 0 40 40" fill="none" aria-hidden="true" style="margin:0 auto .9rem">
+              <g fill="currentColor" opacity=".85">
+                <ellipse cx="20" cy="9" rx="4.2" ry="6.4"/>
+                <ellipse cx="30.5" cy="16.6" rx="4.2" ry="6.4" transform="rotate(72 30.5 16.6)"/>
+                <ellipse cx="26.5" cy="29" rx="4.2" ry="6.4" transform="rotate(144 26.5 29)"/>
+                <ellipse cx="13.5" cy="29" rx="4.2" ry="6.4" transform="rotate(216 13.5 29)"/>
+                <ellipse cx="9.5" cy="16.6" rx="4.2" ry="6.4" transform="rotate(288 9.5 16.6)"/>
+              </g>
+              <circle cx="20" cy="20" r="2.4" fill="currentColor"/>
+            </svg>
+            <span class="plate-name">Sakura</span>
+            <span class="plate-sub">Wollongong</span>
+          </div>
+          <span class="plate-tag">Hospitality</span>
+          <span class="plate-live">Live client</span>
+        </div>
+        <div class="card-body">
+          <div class="card-top">
+            <span class="card-sector">Restaurant &middot; Wollongong CBD</span>
+            <span class="card-sector">2025</span>
+          </div>
+          <h3>Sakura Wollongong</h3>
+          <p>Japanese restaurant in town. Menu, hours and bookings, built to load in a second on a phone at the table — which is where most people look it up.</p>
+          <span class="card-url">
+            <span>sakurawollongong.com</span>
+            <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true"><path d="M2 9l7-7M3.4 2H9v5.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+        </div>
+      </a>
+
+      <a class="card rv" href="https://illawarra-previews.vercel.app/anytime-v2/" target="_blank" rel="noopener">
+        <div class="plate pl-anytime">
+          <div class="plate-mark">
+            <span class="plate-name">Anytime<br>Plumbing</span>
+            <span class="plate-sub">24 / 7 &middot; Illawarra</span>
+          </div>
+          <span class="plate-tag">Trades</span>
+          <span class="plate-live">Demo build</span>
+        </div>
+        <div class="card-body">
+          <div class="card-top">
+            <span class="card-sector">Plumbing &middot; Demo</span>
+            <span class="card-sector">Preview</span>
+          </div>
+          <h3>Anytime Plumbing</h3>
+          <p>A demo for how a plumber's site should work: emergency call button above the fold, plain service list, suburbs served.</p>
+          <span class="card-url">
+            <span>View the demo</span>
+            <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true"><path d="M2 9l7-7M3.4 2H9v5.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+        </div>
+      </a>
+
+      <a class="card rv" style="--d:90ms" href="https://illawarra-previews.vercel.app/will-cool-hvac/" target="_blank" rel="noopener">
+        <div class="plate pl-will">
+          <div class="plate-mark">
+            <span class="plate-name">Will Cool</span>
+            <span class="plate-sub">Heating &amp; Cooling</span>
+          </div>
+          <span class="plate-tag">Trades</span>
+          <span class="plate-live">Demo build</span>
+        </div>
+        <div class="card-body">
+          <div class="card-top">
+            <span class="card-sector">HVAC &middot; Demo</span>
+            <span class="card-sector">Preview</span>
+          </div>
+          <h3>Will Cool HVAC</h3>
+          <p>Heating and cooling, same idea: seasonal services up front, a quote request that takes thirty seconds, no stock photos of smiling families.</p>
+          <span class="card-url">
+            <span>View the demo</span>
+            <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true"><path d="M2 9l7-7M3.4 2H9v5.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+        </div>
+      </a>
+
+      <a class="card rv" href="https://www.actingresources.com/" target="_blank" rel="noopener">
+        <div class="plate pl-acting">
+          <div class="plate-mark">
+            <span class="plate-name">Acting Resources</span>
+            <span class="plate-sub">Est. online</span>
+          </div>
+          <span class="plate-tag">Media</span>
+          <span class="plate-live">Live</span>
+        </div>
+        <div class="card-body">
+          <div class="card-top">
+            <span class="card-sector">Content site</span>
+            <span class="card-sector">Live</span>
+          </div>
+          <h3>Acting Resources</h3>
+          <p>A long-running resource site for performers. Heavy on content, still quick — which is the harder half of the job.</p>
+          <span class="card-url">
+            <span>actingresources.com</span>
+            <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true"><path d="M2 9l7-7M3.4 2H9v5.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+        </div>
+      </a>
+
+      <a class="card rv" style="--d:90ms" href="https://www.castingbrief.com/" target="_blank" rel="noopener">
+        <div class="plate pl-brief">
+          <div class="plate-mark">
+            <span class="plate-name">Casting Brief</span>
+            <span class="plate-sub">Built &amp; run in-house</span>
+          </div>
+          <span class="plate-tag">Product</span>
+          <span class="plate-live">Live</span>
+        </div>
+        <div class="card-body">
+          <div class="card-top">
+            <span class="card-sector">Software &middot; My own</span>
+            <span class="card-sector">Live</span>
+          </div>
+          <h3>Casting Brief</h3>
+          <p>Software I designed, built and run myself, end to end. Useful proof that the technical side isn't outsourced.</p>
+          <span class="card-url">
+            <span>castingbrief.com</span>
+            <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true"><path d="M2 9l7-7M3.4 2H9v5.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+        </div>
+      </a>
+
+    </div>
+
+    <p class="work-note rv">
+      <span>Want to see something closer to your trade? Ask and I'll send the nearest example.</span>
+      <a class="arrow-link" href="#contact">
+        Get in touch
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><path d="M1 6.5h10M7 2.5l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </a>
+    </p>
+  </div>
+</section>
+
+<!-- ═══ 03 PROCESS ═══ -->
+<section class="sec" id="process" aria-labelledby="process-h">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <p class="sec-num">03 &mdash; How it works</p>
+      <div class="sec-head-main">
+        <h2 class="sec-title" id="process-h">Four steps. No mystery.</h2>
+        <p class="sec-lead">Same shape whether it's a website, an AI assessment, or both together.</p>
+      </div>
+    </div>
+
+    <div class="steps">
+      <article class="step rv">
+        <p class="step-n">STEP 01</p>
+        <h3>Enquire</h3>
+        <p>Call or send the form. Tell me what you do and what's annoying you. No charge and no pitch deck.</p>
+      </article>
+      <article class="step rv" style="--d:80ms">
+        <p class="step-n">STEP 02</p>
+        <h3>Scope</h3>
+        <p>We agree what's actually needed and what it costs, in writing, before any work starts.</p>
+      </article>
+      <article class="step rv" style="--d:160ms">
+        <p class="step-n">STEP 03</p>
+        <h3>Build or advise</h3>
+        <p>I build the site, or run the assessment and the sessions. You see it as it goes, not at the end.</p>
+      </article>
+      <article class="step rv" style="--d:240ms">
+        <p class="step-n">STEP 04</p>
+        <h3>Handover</h3>
+        <p>You own the domain, the site and the accounts. I show you how to run it. Help afterwards if you want it.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 04 AI ═══ -->
+<section class="sec dark" id="ai" aria-labelledby="ai-h">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <p class="sec-num">04 &mdash; AI, without the theatre</p>
+      <div class="sec-head-main">
+        <h2 class="sec-title" id="ai-h">Practical AI for small Australian businesses.</h2>
+        <p class="sec-lead">No transformation slogans. I work with what you've already got — your quotes, your inbox, your scheduling, your content — and we make one or two jobs measurably faster.</p>
+      </div>
+    </div>
+
+    <div class="ai-list">
+      <article class="ai-item rv">
+        <p class="ai-item-n">01</p>
+        <h3>AI readiness assessment</h3>
+        <p>Where you are today: the tools you're paying for, where your data lives, what the risks are, and the quick wins sitting in front of you. You get written findings and a priority list you can act on without me.</p>
+      </article>
+      <article class="ai-item rv">
+        <p class="ai-item-n">02</p>
+        <h3>Team AI education</h3>
+        <p>Hands-on sessions for owners and staff. ChatGPT, Claude and Cursor basics, what's safe to put in and what isn't, and prompts written around the jobs your people actually do — using your own work as the examples.</p>
+      </article>
+      <article class="ai-item rv">
+        <p class="ai-item-n">03</p>
+        <h3>Workflow design</h3>
+        <p>Pick one painful process — quoting, follow-ups, scheduling, content — and we map it properly, then build a simple AI-assisted version of it. One process done well beats ten half-automated.</p>
+      </article>
+      <article class="ai-item rv">
+        <p class="ai-item-n">04</p>
+        <h3>Tool choice &amp; setup</h3>
+        <p>What to buy, what to cancel, and how to configure it. Set up under your own accounts so nothing is hostage to me, and no vendor lock-in theatre.</p>
+      </article>
+      <article class="ai-item rv">
+        <p class="ai-item-n">05</p>
+        <h3>Ongoing advisory <span class="opt">Optional</span></h3>
+        <p>A light monthly check-in for teams that want a steady hand as things change. Month to month — cancel whenever it stops being useful.</p>
+      </article>
+    </div>
+
+    <div class="ai-cols">
+      <div class="ai-col rv">
+        <h3>Who it's for</h3>
+        <ul>
+          <li>Owners and small teams, roughly 1&ndash;30 people</li>
+          <li>Trades, clinics, retail, professional services</li>
+          <li>People who've tried ChatGPT once and want to know what's next</li>
+          <li>Teams worried about doing it unsafely with client data</li>
+        </ul>
+      </div>
+      <div class="ai-col rv" style="--d:90ms">
+        <h3>What you get</h3>
+        <ul>
+          <li>Written findings and a ranked list of what to do first</li>
+          <li>Sessions run on your real work, not generic demos</li>
+          <li>Working setups in your own accounts</li>
+          <li>Plain notes your team can follow after I've gone</li>
+        </ul>
+      </div>
+      <div class="ai-col ai-col--not rv" style="--d:180ms">
+        <h3>What it's not</h3>
+        <ul>
+          <li>Not enterprise change management</li>
+          <li>Not a chatbot bolted onto your website</li>
+          <li>Not a plan to replace your staff</li>
+          <li>Not a subscription you forget you're paying for</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="ai-cta rv">
+      <p>Not sure which one you need? That's what the first call is for.</p>
+      <a class="btn btn-light" href="#contact">
+        Book an assessment chat
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><path d="M1 6.5h10M7 2.5l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </a>
+      <a class="btn btn-outline-light" href="tel:+61450914150">Call 0450 914 150</a>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 05 ABOUT ═══ -->
+<section class="sec" id="about" aria-labelledby="about-h">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <p class="sec-num">05 &mdash; About</p>
+      <div class="sec-head-main">
+        <h2 class="sec-title" id="about-h">Ryan, in Wollongong.</h2>
+      </div>
+    </div>
+
+    <div class="about">
+      <div class="about-body rv">
+        <p>I live and work in Wollongong and I run this on my own. No agency, no offshore team, no account manager sitting between you and the person doing the work. If you call the number on this page, I answer it.</p>
+        <p>I build websites because most small businesses are stuck with something slow, dated or half-finished that someone set up years ago and never came back to. I do the AI work because those same businesses are getting sold hype at one end and left behind at the other. Both jobs come down to the same thing: work out what you actually need, build it properly, then hand it over so you're not tied to me.</p>
+      </div>
+      <aside class="about-quote rv" style="--d:100ms">
+        <blockquote>“If you don't need it, I'll tell you. That's usually cheaper for both of us.”</blockquote>
+        <dl class="about-facts">
+          <div><dt>Trading as</dt><dd>Web Services for Business</dd></div>
+          <div><dt>Structure</dt><dd>Sole trader</dd></div>
+          <div><dt>ABN</dt><dd>43 762 178 040</dd></div>
+          <div><dt>Based</dt><dd>Wollongong NSW</dd></div>
+        </dl>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 06 CONTACT ═══ -->
+<section class="sec contact" id="contact" aria-labelledby="contact-h">
+  <div class="wrap">
+    <div class="contact-grid">
+      <div class="contact-left rv">
+        <p class="eyebrow" style="margin-bottom:1.25rem">06 &mdash; Contact</p>
+        <h2 id="contact-h">Tell me what's <em>in the way</em>.</h2>
+        <p class="contact-lead">A website, AI help, or you're not sure yet — all fine. If I'm not the right fit I'll say so and point you at someone who is.</p>
+
+        <div class="contact-direct">
+          <a class="cd-row" href="tel:+61450914150">
+            <span class="cd-k">Phone</span>
+            <span class="cd-v">0450 914 150</span>
+          </a>
+          <a class="cd-row" href="mailto:support@webservicesforbusiness.com">
+            <span class="cd-k">Email</span>
+            <span class="cd-v">support@webservicesforbusiness.com</span>
+          </a>
+          <div class="cd-row">
+            <span class="cd-k">Hours</span>
+            <span class="cd-v">Mon&ndash;Fri, 8am&ndash;6pm AEST</span>
+          </div>
+          <div class="cd-row">
+            <span class="cd-k">Area</span>
+            <span class="cd-v">Illawarra, Sydney &amp; remote</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="contact-right rv" style="--d:110ms">
+        <!-- Posts nowhere by design: opens the visitor's mail app with the details filled in.
+             To wire a real backend later, set action="https://formspree.io/f/XXXX" method="POST"
+             on the <form> and delete the submit handler at the bottom of this file. -->
+        <form id="enquiry" novalidate>
+          <div class="field-row">
+            <div class="field">
+              <label for="f-name">Your name</label>
+              <input id="f-name" name="name" type="text" autocomplete="name" placeholder="Jane Smith" required>
+            </div>
+            <div class="field">
+              <label for="f-biz">Business</label>
+              <input id="f-biz" name="business" type="text" autocomplete="organization" placeholder="Smith Plumbing">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="f-email">Email</label>
+              <input id="f-email" name="email" type="email" autocomplete="email" placeholder="jane@example.com.au" required>
+            </div>
+            <div class="field">
+              <label for="f-phone">Phone <span style="text-transform:none;letter-spacing:0;font-weight:400">(optional)</span></label>
+              <input id="f-phone" name="phone" type="tel" autocomplete="tel" placeholder="04xx xxx xxx">
+            </div>
+          </div>
+
+          <fieldset>
+            <legend>What do you need?</legend>
+            <div class="seg">
+              <label><input type="radio" name="need" value="A website" checked><span>A website</span></label>
+              <label><input type="radio" name="need" value="AI help"><span>AI help</span></label>
+              <label><input type="radio" name="need" value="Both"><span>Both</span></label>
+              <label><input type="radio" name="need" value="Not sure yet"><span>Not sure yet</span></label>
+            </div>
+          </fieldset>
+
+          <div class="field">
+            <label for="f-msg">What's going on?</label>
+            <textarea id="f-msg" name="message" placeholder="A couple of lines is plenty — what you do, and what's not working."></textarea>
+          </div>
+
+          <div class="hp" aria-hidden="true">
+            <label for="f-hp">Leave this empty</label>
+            <input id="f-hp" name="website" type="text" tabindex="-1" autocomplete="off">
+          </div>
+
+          <div class="form-foot">
+            <button class="btn btn-primary" type="submit">
+              Send enquiry
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><path d="M1 6.5h10M7 2.5l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <p class="form-note" id="form-note" role="status">Opens your email app with the details filled in. Nothing is stored on this site.</p>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ═══ FOOTER ═══ -->
+<footer class="ft">
+  <div class="wrap">
+    <div class="ft-top">
+      <div class="ft-brand">
+        <p class="ft-word">Web Services<br>for Business</p>
+        <p class="ft-tag">Websites for local business, and practical AI for the people running it. Wollongong NSW.</p>
+      </div>
+      <div class="ft-cols">
+        <div>
+          <h3>Pages</h3>
+          <ul>
+            <li><a href="#services">Services</a></li>
+            <li><a href="#work">Selected work</a></li>
+            <li><a href="#process">How it works</a></li>
+            <li><a href="#ai">AI help</a></li>
+            <li><a href="#about">About</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Contact</h3>
+          <ul>
+            <li><a href="tel:+61450914150">0450 914 150</a></li>
+            <li><a class="ft-mail" href="mailto:support@webservicesforbusiness.com">support@<wbr>webservicesforbusiness.com</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Details</h3>
+          <ul>
+            <li>Ryan</li>
+            <li>Sole trader</li>
+            <li>Wollongong NSW</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="ft-legal">
+      <p>ABN 43 762 178 040 &middot; Wollongong NSW &middot; 0450 914 150 &middot; &copy; <span id="yr">2026</span> Web Services for Business</p>
+      <a class="to-top" href="#top">
+        Back to top
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M6 10.5V1.5M2 5.5l4-4 4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </a>
+    </div>
+  </div>
+</footer>
+
+<!-- sticky mobile CTA -->
+<div class="dock" id="dock">
+  <div class="dock-in">
+    <a class="call" href="tel:+61450914150">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M12.6 10.1v1.9a1.3 1.3 0 0 1-1.4 1.3 12.7 12.7 0 0 1-5.5-2 12.5 12.5 0 0 1-3.8-3.8 12.7 12.7 0 0 1-2-5.5A1.3 1.3 0 0 1 1.2.6h1.9A1.3 1.3 0 0 1 4.4 1.7c.1.6.2 1.2.5 1.8a1.3 1.3 0 0 1-.3 1.4l-.8.8a10.4 10.4 0 0 0 3.8 3.8l.8-.8a1.3 1.3 0 0 1 1.4-.3c.6.2 1.2.4 1.8.5a1.3 1.3 0 0 1 1 1.2z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+      Call Ryan
+    </a>
+    <a class="mail" href="#contact">Send an enquiry</a>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* footer year */
+  var yr = document.getElementById('yr');
+  if (yr) yr.textContent = new Date().getFullYear();
+
+  /* header state + mobile dock */
+  var hdr = document.getElementById('hdr'),
+      dock = document.getElementById('dock'),
+      last = 0;
+  function onScroll() {
+    var y = window.scrollY || 0;
+    hdr.classList.toggle('stuck', y > 24);
+    if (dock) dock.classList.toggle('up', y > window.innerHeight * 0.75);
+    last = y;
+  }
+  onScroll();
+  window.addEventListener('scroll', onScroll, { passive: true });
+
+  /* reveal on scroll */
+  var items = document.querySelectorAll('.rv');
+  if (reduce || !('IntersectionObserver' in window)) {
+    items.forEach(function (el) { el.classList.add('in'); });
+  } else {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+      });
+    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
+    items.forEach(function (el) { io.observe(el); });
+  }
+
+  /* active nav link */
+  var links = Array.prototype.slice.call(document.querySelectorAll('.nav a'));
+  var targets = links.map(function (a) { return document.querySelector(a.getAttribute('href')); });
+  if ('IntersectionObserver' in window) {
+    var visible = [];
+    var spy = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        var i = targets.indexOf(e.target);
+        var at = visible.indexOf(i);
+        if (e.isIntersecting && at === -1) visible.push(i);
+        if (!e.isIntersecting && at > -1) visible.splice(at, 1);
+      });
+      var current = visible.length ? Math.min.apply(null, visible) : -1;
+      links.forEach(function (a, n) {
+        if (n === current) a.setAttribute('aria-current', 'true');
+        else a.removeAttribute('aria-current');
+      });
+    }, { rootMargin: '-45% 0px -50% 0px' });
+    targets.forEach(function (t) { if (t) spy.observe(t); });
+  }
+
+  /* mobile menu */
+  var menu = document.getElementById('menu'),
+      mBtn = document.getElementById('menu-btn'),
+      mClose = document.getElementById('menu-close');
+  function setMenu(open) {
+    menu.setAttribute('data-open', open ? 'true' : 'false');
+    menu.setAttribute('aria-hidden', open ? 'false' : 'true');
+    mBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    document.body.classList.toggle('locked', open);
+    if (open) { menu.querySelector('.menu-nav a').focus(); } else { mBtn.focus(); }
+  }
+  if (menu && mBtn) {
+    mBtn.addEventListener('click', function () { setMenu(true); });
+    mClose.addEventListener('click', function () { setMenu(false); });
+    menu.querySelectorAll('a').forEach(function (a) {
+      a.addEventListener('click', function () { setMenu(false); });
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && menu.getAttribute('data-open') === 'true') setMenu(false);
+    });
+    /* keep focus inside while open */
+    menu.addEventListener('keydown', function (e) {
+      if (e.key !== 'Tab') return;
+      var f = menu.querySelectorAll('a, button');
+      var first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
+  }
+
+  /* enquiry form -> mailto (posts nowhere by design) */
+  var form = document.getElementById('enquiry'),
+      note = document.getElementById('form-note');
+  if (form) {
+    form.addEventListener('submit', function (ev) {
+      if (form.getAttribute('action')) return;      // a real backend was wired up
+      ev.preventDefault();
+
+      if (form.elements.website && form.elements.website.value) return;  // honeypot
+
+      var name = (form.elements.name.value || '').trim(),
+          email = (form.elements.email.value || '').trim();
+
+      if (!name || !email || email.indexOf('@') < 1) {
+        note.textContent = 'Please add your name and a valid email so I can reply.';
+        note.style.color = '#9C4518';
+        (!name ? form.elements.name : form.elements.email).focus();
+        return;
+      }
+
+      var need = form.querySelector('input[name="need"]:checked'),
+          biz = (form.elements.business.value || '').trim(),
+          phone = (form.elements.phone.value || '').trim(),
+          msg = (form.elements.message.value || '').trim();
+
+      var body = [
+        'Name: ' + name,
+        biz ? 'Business: ' + biz : '',
+        'Email: ' + email,
+        phone ? 'Phone: ' + phone : '',
+        'Needs: ' + (need ? need.value : 'Not specified'),
+        '',
+        msg || '(no message)',
+        '',
+        '— Sent from webservicesforbusiness.com'
+      ].filter(Boolean).join('\n');
+
+      var subject = 'Enquiry — ' + (need ? need.value : 'General') + (biz ? ' — ' + biz : '');
+      window.location.href = 'mailto:support@webservicesforbusiness.com'
+        + '?subject=' + encodeURIComponent(subject)
+        + '&body=' + encodeURIComponent(body);
+
+      note.textContent = 'Opening your email app… if nothing happens, email support@webservicesforbusiness.com directly.';
+      note.style.color = '';
+    });
+  }
+})();
+</script>
+</body>
+</html>
