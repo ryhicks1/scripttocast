@@ -1,6 +1,6 @@
 # Web Services for Business — marketing site
 
-Single-page static site for **webservicesforbusiness.com** (Ryan Hicks, Wollongong NSW).
+Single-page static site for **webservicesforbusiness.com** (Ryan, Wollongong NSW).
 No build step, no framework, no dependencies. Open `index.html` and it runs.
 
 ```
@@ -46,14 +46,17 @@ Until then the site is invisible to Google, which is what you want on a preview 
 | `{{EMAIL}}` | support@webservicesforbusiness.com |
 
 Already resolved throughout the file — the table is here so a future find-and-replace knows
-what to look for. Other facts baked in: Ryan Hicks, ABN 43 762 178 040, 0450 914 150,
-Wollongong NSW, linkedin.com/in/ryhicks1.
+what to look for. Other facts baked in: ABN 43 762 178 040, 0450 914 150,
+Wollongong NSW.
 
 Notes:
 - `admin@webservicesforbusiness.com` is an alias to the same inbox and is **not** used publicly.
 - `onlineservicesforbusiness.com` is a redirect only (www + apex) and is **not** mentioned
   anywhere on the page — it isn't a second brand.
-- Nav shortens to **WSFB** under 1080px; the full name stays in the hero, footer and OG card.
+- Nav shortens to **WSFB** under 1080px; the full business name stays in the hero, footer and OG card.
+- The site is deliberately semi-anonymous: first name only, no surname and no LinkedIn link.
+  Keep it that way when editing. Note that the ABN in the footer is publicly searchable on
+  ABN Lookup, which does surface the registered legal name.
 - No street address appears anywhere on the site, per the brief.
 
 ## The contact form
