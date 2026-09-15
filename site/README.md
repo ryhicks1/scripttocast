@@ -1,108 +1,83 @@
 # Web Services for Business — marketing site
 
-Single-page static site for **webservicesforbusiness.com** (Ryan, Wollongong NSW).
-No build step, no framework, no dependencies. Open `index.html` and it runs.
+Single-page static site for **webservicesforbusiness.com**. No build step, no
+dependencies, no backend. Open `index.html` and it runs.
 
 ```
 site/
-├── index.html              the deploy build — markup, CSS and JS inline, fonts from fonts/
-├── index.standalone.html   the same page with fonts inlined as data URIs: one file,
-│                           no siblings needed — open it locally or email it to someone
-├── robots.txt              blocks indexing while it's a preview deploy
-├── fonts/                  Instrument Serif + Instrument Sans (woff2, latin subset)
-└── img/og.png              1200×630 social share card
+├── index.html              the deploy build — markup, CSS and JS inline
+├── index.standalone.html   same page with fonts inlined; opens with no server
+├── robots.txt              allows indexing — the site is live
+├── fonts/                  Archivo + IBM Plex Mono (woff2, latin subset)
+├── img/og.png              1200×630 social share card
+├── img/work/               screenshots of the portfolio sites — SEE BELOW
+└── tools/                  screenshot capture script
 ```
-
-Deploy `index.html`. Use `index.standalone.html` when you want to double-click it on your
-own machine or hand someone a single file — it renders identically with nothing alongside it.
-If you edit the page, edit `index.html` and regenerate the standalone copy (it is a
-straight copy with the four `url(fonts/…)` references swapped for base64 data URIs).
 
 ## Deploy
 
-**Vercel** — import the repo, then set **Root Directory** to `site`, Framework Preset
-to **Other**, and leave the build and output settings empty. Static files are served as-is.
+Vercel: set **Root Directory** to `site`, Framework Preset **Other**, and leave
+build/install/output empty. Any static host works the same way.
 
-Anything else that serves a folder (Netlify drop, Cloudflare Pages, S3, cPanel) works the
-same way: upload the contents of `site/`.
+## Indexing
 
-Nothing here talks to a server, so there are no environment variables or secrets.
+The site is **live and indexable**: there is no robots meta tag, and `robots.txt`
+allows crawling. Do not re-add a `noindex` tag or set `Disallow: /` — that would
+pull a live site out of search results.
 
-## Going live — two changes
+## Work screenshots — action needed
 
-Both are marked `GO-LIVE` in the source:
+The Work cards expect five JPEGs in `img/work/`:
 
-1. **`index.html`** — delete `<meta name="robots" content="noindex, nofollow">` (near the top).
-2. **`robots.txt`** — replace `Disallow: /` with `Allow: /`.
-
-Until then the site is invisible to Google, which is what you want on a preview URL.
-
-## Identity (locked 15 Sep 2026)
-
-| Token | Value |
-|---|---|
-| `{{BUSINESS_NAME}}` | Web Services for Business |
-| `{{DOMAIN}}` | webservicesforbusiness.com |
-| `{{EMAIL}}` | support@webservicesforbusiness.com |
-
-Already resolved throughout the file — the table is here so a future find-and-replace knows
-what to look for. Other facts baked in: ABN 43 762 178 040, 0450 914 150,
-Wollongong NSW.
-
-Notes:
-- `admin@webservicesforbusiness.com` is an alias to the same inbox and is **not** used publicly.
-- `onlineservicesforbusiness.com` is a redirect only (www + apex) and is **not** mentioned
-  anywhere on the page — it isn't a second brand.
-- Nav shortens to **WSFB** under 1080px; the full business name stays in the hero, footer and OG card.
-- The site is deliberately semi-anonymous: first name only, no surname and no LinkedIn link.
-  Keep it that way when editing. Note that the ABN in the footer is publicly searchable on
-  ABN Lookup, which does surface the registered legal name.
-- No street address appears anywhere on the site, per the brief.
-
-## The contact form
-
-It posts nowhere. On submit it validates name + email, then opens the visitor's mail client
-with a pre-filled message to `support@`. Nothing is stored and there is no third-party script.
-
-To wire a real backend later (Formspree, Basin, Netlify Forms), add `action` and `method` to
-the `<form id="enquiry">` tag — the submit handler checks for `action` and steps aside when
-one is present, so the mailto path turns itself off:
-
-```html
-<form id="enquiry" action="https://formspree.io/f/XXXXXXX" method="POST">
+```
+sakura.jpg  teacherchang.jpg  willcool.jpg  acting.jpg  castingbrief.jpg
 ```
 
-A honeypot field (`name="website"`, visually hidden) is already in place for spam.
+**They are not committed.** The portfolio sites were unreachable from the build
+environment, so each card currently falls back to a styled brand plate keyed to
+that site's real colours. The page is not broken without them — it just gets
+better with them.
 
-## Design notes
+To generate them, from inside `site/`:
 
-- **Type:** Instrument Serif for display, Instrument Sans for everything else. Self-hosted, so
-  there is no request to Google and no layout shift; the two faces used above the fold are
-  preloaded. Total font weight ~105 KB.
-- **Colour:** bone paper `#F4F1EA`, ink `#141310`, deep green `#11261F` for the inverted
-  sections, burnt clay `#C25E2A` as the single accent — with a lighter `#D07B3C` reserved for
-  the dark ground so every text pair clears WCAG AA (verified, 0 failures).
-- **Work cards:** the five portfolio links get designed brand plates rather than screenshots —
-  each with its own palette, typeface and texture. Demo builds are labelled "DEMO BUILD" on
-  the plate and "Demo" in the caption, so nothing is passed off as a client site.
-- **Motion:** a staggered 14px rise on scroll, a drawn underline on links, and nothing else.
-  All of it switches off under `prefers-reduced-motion`.
-- **Mobile:** sticky Call / Send-an-enquiry dock appears past the hero, and a full-screen menu
-  (Escape closes it, focus stays inside while open).
-- **Accessibility:** semantic landmarks, skip link, one `h1`, labelled form fields, visible
-  focus rings, `scroll-margin` so anchor jumps clear the sticky header.
-- **SEO/social:** meta title and description, canonical, Open Graph and Twitter cards,
-  and `ProfessionalService` JSON-LD with the ABN-backed business details.
-
-## Swapping the brand plates for real screenshots
-
-The plates live in section 10 of the stylesheet (`.pl-sakura`, `.pl-anytime`, `.pl-will`,
-`.pl-acting`, `.pl-brief`). To use a real screenshot instead, drop the image in `img/` and
-replace that card's `<div class="plate …">` with:
-
-```html
-<div class="plate"><img src="img/sakura.webp" alt="Sakura Wollongong homepage"></div>
+```bash
+npm i -D playwright
+npx playwright install chromium
+node tools/capture-screenshots.mjs
 ```
 
-Add `.plate img{width:100%;height:100%;object-fit:cover;object-position:top}` and keep the
-`aspect-ratio` as-is so the grid doesn't move.
+Then commit `img/work/` and redeploy. Each `<img>` carries `onerror="this.remove()"`,
+so a missing or failed image reveals the plate underneath instead of a broken icon.
+
+## Design
+
+- **Type:** Archivo (400–800, headings and body) and IBM Plex Mono (labels,
+  numerals). Self-hosted — no third-party request, no layout shift. ~65 KB total.
+- **Colour:** near-black `#0C0D0F`, white text, and a single orange `#FF6B00`
+  used only as micro-accent: the wordmark bar, hover states and focus rings.
+  Deliberately sparing — do not expand it into headings or buttons.
+- **Layout:** hairline grid, square corners, no shadows. Structure carries the
+  design, not decoration.
+- **Motion:** a 12px rise on scroll and nothing else. Off under
+  `prefers-reduced-motion`.
+- **Accessibility:** semantic landmarks, skip link, one `h1`, labelled fields,
+  visible focus, `scroll-margin` so anchors clear the sticky header.
+
+## Copy rules
+
+- **Not personal.** No founder name, no first-person introduction, no "about me".
+- **Not location-bound.** No city, region or country. It is a global services
+  business.
+- **No sole-trader framing.**
+- **Terse.** Short sentences, concrete nouns. If a sentence only adds warmth,
+  cut it.
+- **Never label work as a demo, preview, mock or placeholder.** The cards state
+  the sector and nothing about status.
+- **No social profiles** and no surname anywhere. The ABN in the footer is
+  intentional; note it is publicly searchable on ABN Lookup.
+
+## Contact form
+
+Posts nowhere: validates, then opens the visitor's mail client. A honeypot field
+is in place. To wire a backend, add `action` and `method` to `<form id="enquiry">`
+— the submit handler steps aside when an `action` is present.
