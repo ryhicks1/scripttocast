@@ -5,11 +5,18 @@ No build step, no framework, no dependencies. Open `index.html` and it runs.
 
 ```
 site/
-├── index.html      the whole page — markup, CSS and JS inline
-├── robots.txt      blocks indexing while it's a preview deploy
-├── fonts/          Instrument Serif + Instrument Sans (self-hosted woff2, latin subset)
-└── img/og.png      1200×630 social share card
+├── index.html              the deploy build — markup, CSS and JS inline, fonts from fonts/
+├── index.standalone.html   the same page with fonts inlined as data URIs: one file,
+│                           no siblings needed — open it locally or email it to someone
+├── robots.txt              blocks indexing while it's a preview deploy
+├── fonts/                  Instrument Serif + Instrument Sans (woff2, latin subset)
+└── img/og.png              1200×630 social share card
 ```
+
+Deploy `index.html`. Use `index.standalone.html` when you want to double-click it on your
+own machine or hand someone a single file — it renders identically with nothing alongside it.
+If you edit the page, edit `index.html` and regenerate the standalone copy (it is a
+straight copy with the four `url(fonts/…)` references swapped for base64 data URIs).
 
 ## Deploy
 
