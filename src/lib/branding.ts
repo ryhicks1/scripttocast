@@ -1,9 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export interface Branding {
   companyName: string;
@@ -49,7 +44,7 @@ export async function getUserBranding(userId: string): Promise<Branding> {
   };
 
   try {
-    const { data } = await supabaseAdmin
+    const { data } = await supabaseAdmin()
       .from("user_settings")
       .select("*")
       .eq("user_id", userId)
@@ -74,7 +69,7 @@ export async function getUserBranding(userId: string): Promise<Branding> {
 
     if (data.logo_path) {
       try {
-        const { data: urlData } = supabaseAdmin.storage.from("logos").getPublicUrl(data.logo_path);
+        const { data: urlData } = supabaseAdmin().storage.from("logos").getPublicUrl(data.logo_path);
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 5000);
         const res = await fetch(urlData.publicUrl, { signal: controller.signal });
