@@ -114,7 +114,10 @@
   --maxw:84rem;
   --sec-y:clamp(4rem,8vw,7rem);
   --ease:cubic-bezier(.22,.61,.36,1);
+  --banner-extra:2.75rem;
 }
+@media (max-width:640px){:root{--banner-extra:4.35rem}}
+html.banner-off{--banner-extra:0px}
 
 *,*::before,*::after{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
@@ -136,7 +139,7 @@ button,input,textarea{font:inherit;color:inherit}
 
 .wrap{max-width:var(--maxw);margin-inline:auto;padding-inline:var(--gutter)}
 .sec{padding-block:var(--sec-y);position:relative}
-section[id],#top{scroll-margin-top:5rem}
+section[id],#top{scroll-margin-top:calc(5rem + var(--banner-extra))}
 
 /* ═══ Type ════════════════════════════════════════════════════════════════ */
 .mono{font-family:var(--mono);font-size:.6875rem;font-weight:600;letter-spacing:.14em;
@@ -215,8 +218,26 @@ h1,h2,h3{font-weight:800;letter-spacing:-.035em;line-height:1.02}
 .menu-foot{border-top:1px solid var(--line);padding-top:1rem;display:grid;gap:.4rem;font-size:.9375rem}
 body.locked{overflow:hidden}
 
+/* ═══ Session banner ══════════════════════════════════════════════════════ */
+.session-banner{background:#131619;border-bottom:1px solid var(--accent);color:var(--text)}
+html.banner-off .session-banner{display:none}
+.session-banner-in{max-width:var(--maxw);margin-inline:auto;padding:.5rem var(--gutter);
+  display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:.45rem .75rem}
+.session-banner p{font-size:.8125rem;font-weight:600;letter-spacing:-.01em;line-height:1.35}
+.session-banner-cta{display:inline-flex;align-items:center;background:var(--text);color:#0C0D0F;
+  font-size:.75rem;font-weight:700;letter-spacing:-.01em;padding:.38rem .75rem;white-space:nowrap}
+.session-banner-cta:hover{background:#fff}
+.session-banner-x{background:none;border:0;color:var(--text-2);cursor:pointer;padding:.25rem .2rem;
+  font-size:.875rem;line-height:1;font-family:var(--mono)}
+.session-banner-x:hover{color:var(--text)}
+@media (max-width:640px){
+  .session-banner-in{grid-template-columns:minmax(0,1fr) auto}
+  .session-banner p{grid-column:1/-1}
+}
+@media print{.session-banner{display:none!important}}
+
 /* ═══ Hero ════════════════════════════════════════════════════════════════ */
-.hero{padding-top:clamp(7rem,14vh,9.5rem);padding-bottom:clamp(2.5rem,5vw,4rem);position:relative;overflow:hidden}
+.hero{padding-top:calc(clamp(7rem,14vh,9.5rem) + var(--banner-extra));padding-bottom:clamp(2.5rem,5vw,4rem);position:relative;overflow:hidden}
 .hero::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--line)}
 .hero-grid{position:absolute;inset:0;pointer-events:none;opacity:.5;
   background-image:linear-gradient(90deg,var(--line) 1px,transparent 1px);
@@ -369,11 +390,19 @@ legend{padding:0;margin-bottom:.55rem}
 @media (max-width:880px){.dock{display:block}}
 @media (prefers-reduced-motion:reduce){.dock{transition:none}}
 </style>
+<script>try{if(sessionStorage.getItem('wsfb-ai-session-banner')==='1')document.documentElement.classList.add('banner-off')}catch(e){}</script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 
 <header class="hdr" id="hdr">
+  <div class="session-banner" id="session-banner" role="region" aria-label="AI Information Session">
+    <div class="session-banner-in">
+      <p>Free AI Information Session — Tue 22 Sep, 7pm Sydney (30 mins)</p>
+      <a class="session-banner-cta" href="https://docs.google.com/forms/d/e/1FAIpQLSf3f_gJ4QQ9EVLPRlVa1ZmlNRayrVVTMbHmtOYdT8Gv6Xra9w/viewform" target="_blank" rel="noopener noreferrer">Sign up</a>
+      <button class="session-banner-x" type="button" aria-label="Dismiss banner" onclick="try{sessionStorage.setItem('wsfb-ai-session-banner','1')}catch(e){}document.documentElement.classList.add('banner-off')">✕</button>
+    </div>
+  </div>
   <div class="hdr-in">
     <a class="mark" href="#top" aria-label="Web Services for Business — home">
       <i aria-hidden="true"></i>

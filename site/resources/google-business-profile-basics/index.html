@@ -27,6 +27,7 @@
 <link rel="preload" href="../../fonts/archivo-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="../../fonts/plexmono-600-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="../../css/site.css">
+<script>try{if(sessionStorage.getItem('wsfb-ai-session-banner')==='1')document.documentElement.classList.add('banner-off')}catch(e){}</script>
 
 <script type="application/ld+json">
 {
@@ -80,6 +81,13 @@
 <a class="skip" href="#main">Skip to content</a>
 
 <header class="hdr" id="hdr">
+  <div class="session-banner" id="session-banner" role="region" aria-label="AI Information Session">
+    <div class="session-banner-in">
+      <p>Free AI Information Session — Tue 22 Sep, 7pm Sydney (30 mins)</p>
+      <a class="session-banner-cta" href="https://docs.google.com/forms/d/e/1FAIpQLSf3f_gJ4QQ9EVLPRlVa1ZmlNRayrVVTMbHmtOYdT8Gv6Xra9w/viewform" target="_blank" rel="noopener noreferrer">Sign up</a>
+      <button class="session-banner-x" type="button" aria-label="Dismiss banner" onclick="try{sessionStorage.setItem('wsfb-ai-session-banner','1')}catch(e){}document.documentElement.classList.add('banner-off')">✕</button>
+    </div>
+  </div>
   <div class="hdr-in">
     <a class="mark" href="/" aria-label="Web Services for Business — home">
       <i aria-hidden="true"></i>
