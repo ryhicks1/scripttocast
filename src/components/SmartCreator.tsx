@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { Upload, Copy, Check, ChevronDown, ChevronRight, FileDown, RotateCcw, Sparkles, Download } from "lucide-react";
+import type { AnalysisResult, BreakdownMode, Project, Role, SelfTapeInstruction } from "@/lib/breakdown";
 
 const PROGRESS_STEPS = [
   { pct: 3, msg: "Uploading documents..." },
@@ -84,15 +85,34 @@ function AnalyzingProgress() {
   );
 }
 
-interface Role { name: string; description: string; ageRange?: string; gender?: string; speaking: boolean; characteristics?: string[]; pageNumbers?: number[]; }
-interface SelfTapeInstruction { roleName: string; videos: { label: string; description: string }[]; photos: string[]; filmingNotes: string[]; }
-interface FormQuestion { roleName: string; questions: { type: string; label: string; options?: string[]; required: boolean }[]; }
-interface AnalysisResult {
-  project: { name: string; brand: string; type: string; location?: string; director?: string; castingDirector?: string; productionDates?: string; deadline?: string };
-  roles: Role[];
-  selfTapeInstructions: SelfTapeInstruction[];
-  formQuestions: FormQuestion[];
-  projectId?: string;
+/** One role as plain text, for clipboard and report output. */
+function roleToText(r: Role): string {
+  const lines = [r.name];
+  if (r.roleType) lines.push(`Role Type: ${r.roleType}`);
+  lines.push(`Age: ${r.ageRange || "N/A"}`);
+  lines.push(`Gender: ${r.gender || "N/A"}`);
+  if (r.ethnicity) lines.push(`Ethnicity: ${r.ethnicity}`);
+  lines.push(r.speaking ? "Speaking" : "Non-speaking");
+  if (r.contentAdvisories?.length) lines.push(`Advisories: ${r.contentAdvisories.join("; ")}`);
+  if (r.submissionNotes?.length) lines.push(`Submission Notes: ${r.submissionNotes.join("; ")}`);
+  lines.push("", r.description);
+  return lines.join("\n");
+}
+
+/** Project header as label/value pairs, skipping anything unset. */
+function projectFields(p: Project): { label: string; value: string }[] {
+  const pairs: [string, string | null | undefined][] = [
+    ["Name", p.name], ["Brand", p.brand], ["Type", p.type?.replace(/_/g, " ")],
+    ["Logline", p.logline], ["Location", p.location], ["Union", p.union],
+    ["Rate", p.rate], ["Director", p.director], ["Writer", p.writer],
+    ["Producers", p.producers], ["CD", p.castingDirector],
+    ["Audition Dates", p.auditionDates], ["Callback Dates", p.callbackDates],
+    ["Shoot Dates", p.shootDates], ["Dates", p.productionDates],
+    ["Deadline", p.deadline],
+  ];
+  return pairs
+    .filter((pair): pair is [string, string] => Boolean(pair[1]))
+    .map(([label, value]) => ({ label, value }));
 }
 
 export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn: boolean; initialResult?: AnalysisResult }) {
@@ -108,6 +128,7 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
   const [formModal, setFormModal] = useState<{ provider: "jotform" | "google"; questions: string; title: string; url: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [opts, setOpts] = useState({ project: true, roles: true, instructions: true, forms: true, sides: true, cnAutoFill: true });
+  const [mode, setMode] = useState<BreakdownMode>("auto");
 
   function copyText(text: string, key: string) {
     navigator.clipboard.writeText(text);
@@ -153,6 +174,7 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
       const formData = new FormData();
       files.forEach(f => formData.append("files", f));
       formData.append("options", JSON.stringify(opts));
+      formData.append("mode", mode);
       const res = await fetch("/api/analyze", { method: "POST", body: formData });
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Analysis failed"); }
       const data: AnalysisResult = await res.json();
@@ -172,8 +194,12 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
   function copyEverything() {
     if (!result) return;
     const p = result.project;
-    let t = `PROJECT: ${p.name}\nBrand: ${p.brand}\nType: ${p.type}\nLocation: ${p.location || "N/A"}\nDirector: ${p.director || "N/A"}\nDates: ${p.productionDates || "N/A"}\n\nROLES:\n`;
-    t += result.roles.map(r => `${r.name} (${r.speaking ? "Speaking" : "Non-speaking"})${r.ageRange ? ` | Age: ${r.ageRange}` : ""}${r.gender ? ` | ${r.gender}` : ""}\n${r.description}`).join("\n\n");
+    let t = `PROJECT\n${projectFields(p).map(f => `${f.label}: ${f.value}`).join("\n")}\n`;
+    if (p.synopsis) t += `\nSynopsis: ${p.synopsis}\n`;
+    if (p.contentAdvisories?.length) t += `Advisories: ${p.contentAdvisories.join("; ")}\n`;
+    if (p.submissionNotes?.length) t += `Submission Notes: ${p.submissionNotes.join("; ")}\n`;
+    t += "\nROLES:\n";
+    t += result.roles.map(roleToText).join("\n\n");
     if (result.selfTapeInstructions?.length) {
       t += "\n\nSELF-TAPE INSTRUCTIONS:\n" + result.selfTapeInstructions.map(st =>
         `${st.roleName}:\n${st.videos.map(v => `  ${v.label}: ${v.description}`).join("\n")}${st.photos?.length ? "\n  Photos: " + st.photos.join(", ") : ""}${st.filmingNotes?.length ? "\n  Notes: " + st.filmingNotes.join("; ") : ""}`
@@ -190,16 +216,14 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
     const p = result.project;
     const l: string[] = [];
     l.push("=" .repeat(50), "SCRIPT TO CAST — PROJECT REPORT", "=".repeat(50), "", "PROJECT", "-".repeat(30));
-    l.push(`Name: ${p.name}`);
-    if (p.brand) l.push(`Brand: ${p.brand}`);
-    if (p.type) l.push(`Type: ${p.type.replace(/_/g, " ")}`);
-    if (p.location) l.push(`Location: ${p.location}`);
-    if (p.director) l.push(`Director: ${p.director}`);
-    if (p.productionDates) l.push(`Dates: ${p.productionDates}`);
+    projectFields(p).forEach(f => l.push(`${f.label}: ${f.value}`));
+    if (p.synopsis) l.push("", "Synopsis:", p.synopsis);
+    if (p.contentAdvisories?.length) l.push(`Advisories: ${p.contentAdvisories.join("; ")}`);
+    if (p.submissionNotes?.length) l.push(`Submission Notes: ${p.submissionNotes.join("; ")}`);
     l.push("");
     if (result.roles?.length) {
       l.push("ROLES", "-".repeat(30));
-      result.roles.forEach((r, i) => { l.push(`${i+1}. ${r.name} (${r.speaking?"Speaking":"Non-speaking"})`); l.push(`   ${r.description}`); if (r.ageRange) l.push(`   Age: ${r.ageRange}`); if (r.gender) l.push(`   Gender: ${r.gender}`); l.push(""); });
+      result.roles.forEach((r, i) => { l.push(`${i+1}. ${roleToText(r).split("\n").join("\n   ")}`); l.push(""); });
     }
     if (result.selfTapeInstructions?.length) {
       l.push("SELF-TAPE INSTRUCTIONS", "-".repeat(30));
@@ -217,9 +241,15 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
   function copyCNProjectScript() {
     if (!result) return;
     const p = result.project;
+    // Casting Networks project-type IDs. The first group is carried over from the
+    // original mapping; the second maps the newer project types onto their closest
+    // CN equivalent. `industrial` is deliberately absent — no confirmed CN ID, and
+    // a wrong one silently mis-files the project.
     const typeMap: Record<string, string> = {
       commercial: "26", film: "51", feature_film: "51", tv_series: "28", short_film: "50",
       music_video: "17", web_series: "27", theatre: "11", vertical_short: "428",
+      episodic: "28", straight_to_series: "28", pilot: "28",
+      student_film: "50", digital_series: "27",
     };
     const typeVal = typeMap[p.type] || "";
     const script = `// Script To Cast — Auto-fill CN Project
@@ -381,6 +411,28 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
         </div>
       )}
 
+      <div className="mb-6">
+        <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mb-2">Breakdown style</p>
+        <div className="grid grid-cols-3 gap-1.5">
+          {([
+            { key: "auto", label: "Auto-detect", hint: "Read the docs and decide" },
+            { key: "film_tv", label: "Film / TV", hint: "Character-led, tiered by role" },
+            { key: "commercial", label: "Commercial", hint: "Type and energy led" },
+          ] as const).map(m => (
+            <button
+              key={m.key}
+              type="button"
+              onClick={() => setMode(m.key)}
+              title={m.hint}
+              className={`rounded-lg border px-2 py-2 text-left transition ${mode === m.key ? "border-gray-900 bg-gray-900 text-white" : "border-gray-200 bg-white text-gray-700 hover:border-gray-400"}`}
+            >
+              <span className="block text-[11px] font-semibold">{m.label}</span>
+              <span className={`block text-[9px] leading-tight mt-0.5 ${mode === m.key ? "text-gray-300" : "text-gray-400"}`}>{m.hint}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="space-y-2 mb-6">
         <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">What should we create?</p>
         {[
@@ -418,20 +470,37 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
       <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Project Details</h3>
-          <CopyBtn text={Object.values(p).filter(Boolean).join("\n")} id="p-all" label="Copy All" />
+          <CopyBtn text={projectFields(p).map(f => `${f.label}: ${f.value}`).join("\n")} id="p-all" label="Copy All" />
         </div>
         <div className="grid grid-cols-2 gap-2">
-          {[
-            { l: "Name", v: p.name }, { l: "Brand", v: p.brand }, { l: "Type", v: p.type?.replace(/_/g, " ") },
-            { l: "Location", v: p.location }, { l: "Director", v: p.director }, { l: "CD", v: p.castingDirector },
-            { l: "Dates", v: p.productionDates }, { l: "Deadline", v: p.deadline },
-          ].filter(f => f.v).map(f => (
-            <div key={f.l} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
-              <div><div className="text-[9px] text-gray-400 uppercase">{f.l}</div><div className="text-xs text-gray-800">{f.v}</div></div>
-              <CopyBtn text={f.v!} id={`p-${f.l}`} />
+          {projectFields(p).map(f => (
+            <div key={f.label} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
+              <div className="min-w-0"><div className="text-[9px] text-gray-400 uppercase">{f.label}</div><div className="text-xs text-gray-800">{f.value}</div></div>
+              <CopyBtn text={f.value} id={`p-${f.label}`} />
             </div>
           ))}
         </div>
+
+        {p.synopsis && (
+          <div className="mt-2 flex items-start justify-between gap-2 bg-gray-50 rounded-lg px-3 py-2">
+            <div><div className="text-[9px] text-gray-400 uppercase mb-0.5">Synopsis</div><p className="text-xs text-gray-800 leading-relaxed">{p.synopsis}</p></div>
+            <CopyBtn text={p.synopsis} id="p-synopsis" />
+          </div>
+        )}
+
+        {p.contentAdvisories?.length > 0 && (
+          <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            <div className="text-[9px] text-amber-700 uppercase mb-0.5 font-semibold">Project Advisories</div>
+            <p className="text-xs text-amber-900 leading-relaxed">{p.contentAdvisories.join(" · ")}</p>
+          </div>
+        )}
+
+        {p.submissionNotes?.length > 0 && (
+          <div className="mt-2 bg-gray-50 rounded-lg px-3 py-2">
+            <div className="text-[9px] text-gray-400 uppercase mb-0.5">Submission Notes</div>
+            <p className="text-xs text-gray-800 leading-relaxed">{p.submissionNotes.join(" · ")}</p>
+          </div>
+        )}
       </div>
 
       {/* Roles */}
@@ -467,13 +536,18 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
         {sections.roles && (
           <div className="space-y-3">
             {result.roles.map((r, i) => {
-              const ethnicity = r.characteristics?.find((c: string) => /ethni|race|background|asian|african|latin|caucas|indigenous|pacific/i.test(c)) || null;
+              const ethnicity = r.ethnicity || null;
               return (
                 <div key={i} className={`bg-gray-50 border border-gray-200 rounded-lg p-3 transition ${doneRoles.has(i) ? "opacity-30" : ""}`}>
                   {/* Header: checkbox, name, speaking badge */}
                   <div className="flex items-center gap-2 mb-2">
                     <input type="checkbox" checked={doneRoles.has(i)} onChange={() => toggleDone(i)} className="accent-green-600 w-3.5 h-3.5" />
                     <span className={`text-xs font-semibold text-gray-900 flex-1 ${doneRoles.has(i) ? "line-through" : ""}`}>{r.name}</span>
+                    {r.roleType && (
+                      <span className="text-[8px] px-1.5 py-0.5 rounded font-semibold uppercase bg-amber-50 text-amber-700">
+                        {r.roleType}
+                      </span>
+                    )}
                     <span className={`text-[8px] px-1.5 py-0.5 rounded font-semibold uppercase ${r.speaking ? "bg-green-50 text-green-600" : "bg-blue-50 text-blue-600"}`}>
                       {r.speaking ? "Speaking" : "Non-speaking"}
                     </span>
@@ -532,9 +606,24 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
                     </div>
                   </div>
 
+                  {/* Disclosures talent must see before auditioning */}
+                  {r.contentAdvisories?.length > 0 && (
+                    <div className="bg-amber-50 border border-amber-200 rounded px-2.5 py-1.5 mb-2">
+                      <span className="text-[9px] text-amber-700 uppercase block mb-0.5 font-semibold">Advisories</span>
+                      <p className="text-[11px] text-amber-900 leading-relaxed">{r.contentAdvisories.join(" · ")}</p>
+                    </div>
+                  )}
+
+                  {r.submissionNotes?.length > 0 && (
+                    <div className="bg-white border border-gray-100 rounded px-2.5 py-1.5 mb-2">
+                      <span className="text-[9px] text-gray-400 uppercase block mb-0.5">Submission Notes</span>
+                      <p className="text-[11px] text-gray-700 leading-relaxed">{r.submissionNotes.join(" · ")}</p>
+                    </div>
+                  )}
+
                   {/* Actions row — Copy All + Sides side by side */}
                   <div className="flex gap-1.5 flex-wrap">
-                    <CopyBtn text={`${r.name}\nAge: ${r.ageRange || "N/A"}\nGender: ${r.gender || "N/A"}${ethnicity ? "\nEthnicity: " + ethnicity : ""}\n\n${r.description}`} id={`r-${i}-all`} label="Copy All" />
+                    <CopyBtn text={roleToText(r)} id={`r-${i}-all`} label="Copy All" />
                     {files.some(f => f.name.toLowerCase().endsWith('.pdf')) && (
                       <>
                         {sidesUrls[i] ? (

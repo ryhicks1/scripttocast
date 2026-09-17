@@ -1,69 +1,114 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { PDFDocument } from "pdf-lib";
+import { splitPdf, type PdfChunk } from "@/lib/pdf";
+import {
+  ANALYSIS_JSON_SCHEMA,
+  COMMERCIAL_TYPES,
+  type AnalysisResult,
+  type BreakdownMode,
+  type FormQuestion,
+  type Project,
+  type Role,
+  type SelfTapeInstruction,
+} from "@/lib/breakdown";
+import { buildSystemPrompt } from "@/lib/prompts";
 
 export const maxDuration = 300;
 
-const SYSTEM_PROMPT = `You are an expert casting director's assistant. Analyze casting documents and extract comprehensive project information.
+const MODEL = "claude-opus-5";
 
-Extract ALL of the following:
+function textFrom(message: Anthropic.Message): string {
+  // Adaptive thinking puts thinking blocks in content, so find the text block
+  // rather than assuming content[0].
+  const block = message.content.find((b) => b.type === "text");
+  return block && block.type === "text" ? block.text : "";
+}
 
-1. PROJECT: name, brand/client, type (commercial/film/tv_series/short_film/music_video/web_series/theatre/vertical_short), location, deadline (YYYY-MM-DD if available), director, castingDirector, productionDates (as written)
+/** Merge per-chunk results into one breakdown, deduplicating roles by name. */
+function mergeResults(results: AnalysisResult[]): AnalysisResult {
+  const merged: AnalysisResult = {
+    ...results[0],
+    roles: [],
+    selfTapeInstructions: [],
+    formQuestions: [],
+  };
 
-2. ROLES: Every character including non-speaking/background:
-   - name: exact name as written (use the character name, not the actor)
-   - description: Write as a PROFESSIONAL CASTING BREAKDOWN in exactly 3 concise sentences, written for agents and actors. Think like a casting director writing for Breakdown Services or Casting Networks.
-     FOR FILM/TV: Focus on the character's role in the story, key personality traits and emotional qualities, and the type of actor being sought. Include accents, special skills, or physical requirements only if critical.
-     FOR COMMERCIALS: Focus on physical traits, energy, look, and castable attributes (e.g. "warm and approachable", "edgy and confident", "wholesome family type"). Less about story relationships, more about the vibe and type.
-     NEVER use generic words like "ordinary" or "normal". Be vivid and specific.
-   - ageRange: e.g. "25-35" or null
-   - gender: "Male"/"Female"/"Any"/"Non-binary" or null
-   - speaking: boolean
-   - characteristics: string array of castable traits (e.g. ["authoritative", "weathered", "imposing physical presence", "Italian-American accent", "capable of quiet menace and genuine warmth"])
-   - pageNumbers: array of page numbers (1-indexed) where this character has dialogue or significant action. Be PRECISE — only include pages where the character actually speaks or is actively involved. Do NOT assign all pages to every character.
+  // Fill project fields a later chunk knows but the first one didn't.
+  for (const result of results.slice(1)) {
+    backfillProject(merged.project, result.project);
+  }
+  merged.project.contentAdvisories = union(results.map((r) => r.project?.contentAdvisories));
+  merged.project.submissionNotes = union(results.map((r) => r.project?.submissionNotes));
 
-3. SELF-TAPE INSTRUCTIONS per role (if documents contain audition instructions):
-   - videos: [{label: "SLATE"/"SCENE 1"/etc, description: exact instructions}]
-   - photos: ["1 x close-up", "1 x full body"] etc
-   - filmingNotes: ["Landscape only", "Eyeline off-camera"] etc
+  const roles = new Map<string, Role>();
+  for (const result of results) {
+    for (const role of result.roles ?? []) {
+      const key = role.name?.toLowerCase().trim();
+      if (!key) continue;
 
-4. FORM QUESTIONS per role (project-specific questions + industry-standard questions):
-   - [{type: "text"/"radio"/"textarea"/"checkbox", label: question text, options: ["Yes","No"] if applicable, required: boolean}]
+      const existing = roles.get(key);
+      if (!existing) {
+        roles.set(key, { ...role });
+        continue;
+      }
 
-CRITICAL RULES:
-- You MUST populate ALL 4 sections (project, roles, selfTapeInstructions, formQuestions) — never return empty arrays
-- Include ALL roles including background/extras (mark non-speaking)
-- pageNumbers MUST be accurate — carefully track which pages each character appears on. Wrong page numbers make the output useless.
-- selfTapeInstructions: Look for ANY mention of audition videos, slates, scenes to record, photo requirements, filming tips. Even if just one doc has these, extract them
-- If a document contains step-by-step self-tape instructions, extract EVERY step with its full description
-- ALWAYS include at least general self-tape instructions (slate + scene) for any project type
-- formQuestions: Extract project-specific questions AND add standard industry questions
+      existing.pageNumbers = [
+        ...new Set([...(existing.pageNumbers ?? []), ...(role.pageNumbers ?? [])]),
+      ].sort((a, b) => a - b);
+      existing.characteristics = union([existing.characteristics, role.characteristics]);
+      existing.contentAdvisories = union([existing.contentAdvisories, role.contentAdvisories]);
+      existing.submissionNotes = union([existing.submissionNotes, role.submissionNotes]);
+      existing.speaking = existing.speaking || role.speaking;
 
-FOR COMMERCIALS, ALWAYS include these standard form questions:
-- "Do you have any competitive commercials currently on air?" (radio: Yes/No, required)
-- "Have you appeared in any competitive commercials in the last 2 years?" (radio: Yes/No, required)
-- "Please list any current brand conflicts" (textarea, required)
-- "Are you available for the fitting date?" (radio: Yes/No, required)
-- "Are you available for all shoot dates?" (radio: Yes/No, required)
-- "Do you have a valid passport?" (radio: Yes/No)
-- "Are you a permanent resident or citizen?" (radio: Yes/No)
-- "Do you have any visible tattoos?" (radio: Yes/No)
-- "What is your clothing size?" (text)
-Plus any product-specific questions (e.g. "Are you comfortable eating/drinking the product on camera?")
+      // A chunk that saw more of the character usually writes more; prefer that,
+      // and backfill any demographic field this chunk resolved and the other didn't.
+      if ((role.description ?? "").length > (existing.description ?? "").length) {
+        existing.description = role.description;
+      }
+      existing.ageRange ??= role.ageRange;
+      existing.gender ??= role.gender;
+      existing.ethnicity ??= role.ethnicity;
+      existing.roleType ??= role.roleType;
+    }
+  }
+  merged.roles = [...roles.values()];
 
-FOR FILM/TV, include:
-- "Are you available for all production dates?" (radio: Yes/No, required)
-- "Do you have any scheduling conflicts during the production period?" (textarea)
-- "List any relevant experience" (textarea)
-- "Do you have a valid driver's license?" (radio: Yes/No)
+  merged.selfTapeInstructions = dedupeByRole<SelfTapeInstruction>(
+    results.flatMap((r) => r.selfTapeInstructions ?? []),
+  );
+  merged.formQuestions = dedupeByRole<FormQuestion>(
+    results.flatMap((r) => r.formQuestions ?? []),
+  );
 
-Return ONLY valid JSON matching this schema:
-{
-  "project": { "name": string, "brand": string, "type": string, "location": string|null, "deadline": string|null, "director": string|null, "castingDirector": string|null, "productionDates": string|null },
-  "roles": [{ "name": string, "description": string, "ageRange": string|null, "gender": string|null, "speaking": boolean, "characteristics": string[], "pageNumbers": number[] }],
-  "selfTapeInstructions": [{ "roleName": string, "videos": [{"label": string, "description": string}], "photos": string[], "filmingNotes": string[] }],
-  "formQuestions": [{ "roleName": string, "questions": [{"type": string, "label": string, "options": string[]|null, "required": boolean}] }]
-}`;
+  return merged;
+}
+
+/** Copy fields a later chunk resolved into the project the first chunk built. */
+function backfillProject(target: Project, source: Project | undefined): void {
+  if (!source) return;
+  // Values are heterogeneous across keys, so write through an index signature.
+  const writable = target as unknown as Record<string, unknown>;
+  for (const key of Object.keys(target)) {
+    const current = writable[key];
+    if (current !== null && current !== "") continue;
+    const incoming = (source as unknown as Record<string, unknown>)[key];
+    if (incoming) writable[key] = incoming;
+  }
+}
+
+function union(lists: (string[] | undefined)[]): string[] {
+  return [...new Set(lists.flatMap((l) => l ?? []))];
+}
+
+function dedupeByRole<T extends { roleName: string }>(items: T[]): T[] {
+  const byRole = new Map<string, T>();
+  for (const item of items) {
+    const key = item.roleName?.toLowerCase().trim();
+    if (key && !byRole.has(key)) byRole.set(key, item);
+  }
+  return [...byRole.values()];
+}
 
 export async function POST(request: Request) {
   try {
@@ -74,17 +119,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No files provided" }, { status: 400 });
     }
 
-    const MAX_PDF_PAGES = 95; // Stay under Claude's 100-page limit
-    const anthropic = new Anthropic();
+    const requestedMode = (formData.get("mode") as BreakdownMode) || "auto";
+    const mode: BreakdownMode = ["film_tv", "commercial", "auto"].includes(requestedMode)
+      ? requestedMode
+      : "auto";
 
-    // Split large PDFs into chunks, collect all file content
-    interface PdfChunk {
-      fileName: string;
-      chunkIndex: number;
-      totalChunks: number;
-      pageOffset: number; // first page number in this chunk (1-indexed)
-      base64: string;
-    }
+    const anthropic = new Anthropic();
     const pdfChunks: PdfChunk[] = [];
     const textParts: string[] = [];
 
@@ -93,192 +133,97 @@ export async function POST(request: Request) {
 
       if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
         const pdfDoc = await PDFDocument.load(buffer);
-        const totalPages = pdfDoc.getPageCount();
-
-        if (totalPages <= MAX_PDF_PAGES) {
-          // Small enough — send as-is
-          pdfChunks.push({
-            fileName: file.name,
-            chunkIndex: 0,
-            totalChunks: 1,
-            pageOffset: 1,
-            base64: buffer.toString("base64"),
-          });
-        } else {
-          // Split into chunks
-          const numChunks = Math.ceil(totalPages / MAX_PDF_PAGES);
-          for (let i = 0; i < numChunks; i++) {
-            const startPage = i * MAX_PDF_PAGES;
-            const endPage = Math.min(startPage + MAX_PDF_PAGES, totalPages);
-
-            const chunkDoc = await PDFDocument.create();
-            const pages = await chunkDoc.copyPages(
-              pdfDoc,
-              Array.from({ length: endPage - startPage }, (_, j) => startPage + j)
-            );
-            pages.forEach((p) => chunkDoc.addPage(p));
-
-            const chunkBytes = await chunkDoc.save();
-            pdfChunks.push({
-              fileName: file.name,
-              chunkIndex: i,
-              totalChunks: numChunks,
-              pageOffset: startPage + 1,
-              base64: Buffer.from(chunkBytes).toString("base64"),
-            });
-          }
-        }
+        pdfChunks.push(
+          ...(await splitPdf(pdfDoc, file.name, 0, pdfDoc.getPageCount())),
+        );
       } else {
         textParts.push(`=== ${file.name} ===\n${buffer.toString("utf-8")}`);
       }
     }
 
-    // If only one chunk (or no PDF), do a single request
-    if (pdfChunks.length <= 1) {
-      const contentBlocks: Anthropic.Messages.ContentBlockParam[] = [];
-      if (pdfChunks.length === 1) {
-        contentBlocks.push({
+    const system: Anthropic.TextBlockParam[] = [{
+      type: "text",
+      text: buildSystemPrompt(mode),
+      cache_control: { type: "ephemeral" },
+    }];
+
+    async function analyzeChunk(chunk?: PdfChunk): Promise<AnalysisResult | null> {
+      const content: Anthropic.ContentBlockParam[] = [];
+      const notes: string[] = [];
+
+      if (chunk) {
+        content.push({
           type: "document",
-          source: {
-            type: "base64",
-            media_type: "application/pdf",
-            data: pdfChunks[0].base64,
-          },
-        } as any);
-        textParts.push(`=== ${pdfChunks[0].fileName} (PDF document attached above) ===`);
-      }
-      contentBlocks.push({
-        type: "text",
-        text: `Analyze these casting documents and return ONLY valid JSON (no markdown, no backticks, no explanation — just the JSON object):\n\n${textParts.join("\n\n")}`,
-      });
-
-      const response = await anthropic.messages.create({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 20000,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content: contentBlocks }],
-      });
-
-      var text = response.content[0].type === "text" ? response.content[0].text : "";
-    } else {
-      // Multiple chunks — process in parallel, then merge
-      const chunkPromises = pdfChunks.map((chunk) => {
-        const chunkBlocks: Anthropic.Messages.ContentBlockParam[] = [
-          {
-            type: "document",
-            source: {
-              type: "base64",
-              media_type: "application/pdf",
-              data: chunk.base64,
-            },
-          } as any,
-          {
-            type: "text",
-            text: `This is chunk ${chunk.chunkIndex + 1} of ${chunk.totalChunks} from "${chunk.fileName}".
-Pages in this chunk start at page ${chunk.pageOffset} of the original document.
-IMPORTANT: When listing pageNumbers for characters, use the ORIGINAL page numbers (starting from ${chunk.pageOffset}).
-
-Analyze this section and return ONLY valid JSON (no markdown, no backticks):\n\n${textParts.join("\n\n")}`,
-          },
-        ];
-
-        return anthropic.messages.create({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 20000,
-          system: SYSTEM_PROMPT,
-          messages: [{ role: "user", content: chunkBlocks }],
+          source: { type: "base64", media_type: "application/pdf", data: chunk.base64 },
         });
+        notes.push(`=== ${chunk.fileName} (PDF attached above) ===`);
+        if (pdfChunks.length > 1) {
+          notes.push(
+            `This is one section of "${chunk.fileName}". Its first page is page ` +
+            `${chunk.pageOffset} of the original document — report pageNumbers ` +
+            `using those original numbers, starting at ${chunk.pageOffset}.`,
+          );
+        }
+      }
+
+      content.push({
+        type: "text",
+        text: `Analyze these casting documents and produce the breakdown.\n\n${
+          [...notes, ...textParts].join("\n\n")
+        }`,
       });
 
-      const chunkResponses = await Promise.all(chunkPromises);
-      const chunkResults = chunkResponses.map((r) => {
-        const t = r.content[0].type === "text" ? r.content[0].text : "{}";
-        const m = t.match(/\{[\s\S]*\}/);
-        if (!m) return null;
-        let s = m[0].replace(/,\s*([\]}])/g, "$1");
-        s = s.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, "");
-        try { return JSON.parse(s); } catch { return null; }
-      }).filter(Boolean);
+      const stream = anthropic.messages.stream({
+        model: MODEL,
+        max_tokens: 64000,
+        system,
+        thinking: { type: "adaptive" },
+        output_config: {
+          format: { type: "json_schema", schema: ANALYSIS_JSON_SCHEMA },
+        },
+        messages: [{ role: "user", content }],
+      });
 
-      if (!chunkResults.length) {
-        return NextResponse.json({ error: "Failed to analyze any chunk" }, { status: 500 });
-      }
+      const message = await stream.finalMessage();
+      if (message.stop_reason === "refusal") return null;
 
-      // Merge: take project from first chunk, merge roles by deduplicating on name
-      const merged = chunkResults[0];
-      const roleMap = new Map<string, any>();
-      for (const result of chunkResults) {
-        if (result.roles) {
-          for (const role of result.roles) {
-            const key = role.name?.toLowerCase()?.trim();
-            if (!key) continue;
-            if (roleMap.has(key)) {
-              // Merge page numbers
-              const existing = roleMap.get(key);
-              const allPages = [...new Set([...(existing.pageNumbers || []), ...(role.pageNumbers || [])])].sort((a: number, b: number) => a - b);
-              existing.pageNumbers = allPages;
-              // Keep the longer description
-              if ((role.description || "").length > (existing.description || "").length) {
-                existing.description = role.description;
-              }
-              // Merge characteristics
-              existing.characteristics = [...new Set([...(existing.characteristics || []), ...(role.characteristics || [])])];
-            } else {
-              roleMap.set(key, { ...role });
-            }
-          }
-        }
-      }
-      merged.roles = Array.from(roleMap.values());
-
-      // Merge selfTapeInstructions
-      const stMap = new Map<string, any>();
-      for (const result of chunkResults) {
-        for (const st of result.selfTapeInstructions || []) {
-          const key = st.roleName?.toLowerCase()?.trim();
-          if (!key || stMap.has(key)) continue;
-          stMap.set(key, st);
-        }
-      }
-      merged.selfTapeInstructions = Array.from(stMap.values());
-
-      // Merge formQuestions
-      const fqMap = new Map<string, any>();
-      for (const result of chunkResults) {
-        for (const fq of result.formQuestions || []) {
-          const key = fq.roleName?.toLowerCase()?.trim();
-          if (!key || fqMap.has(key)) continue;
-          fqMap.set(key, fq);
-        }
-      }
-      merged.formQuestions = Array.from(fqMap.values());
-
-      var text = JSON.stringify(merged);
-    }
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      return NextResponse.json({ error: "Failed to parse AI response" }, { status: 500 });
-    }
-
-    let jsonStr = jsonMatch[0];
-    // Fix common JSON issues from LLM output
-    jsonStr = jsonStr.replace(/,\s*([\]}])/g, "$1");
-    jsonStr = jsonStr.replace(/(?<=":.*)"([^"]*)\n([^"]*)"(?=\s*[,}\]])/g, '"$1\\n$2"');
-
-    try {
-      return NextResponse.json(JSON.parse(jsonStr));
-    } catch (parseError: any) {
-      console.error("JSON parse error:", parseError.message);
-      console.error("JSON text (first 500):", jsonStr.slice(0, 500));
       try {
-        const cleaned = jsonStr.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, "");
-        return NextResponse.json(JSON.parse(cleaned));
+        return JSON.parse(textFrom(message)) as AnalysisResult;
       } catch {
-        return NextResponse.json({ error: "AI returned malformed JSON. Please try again." }, { status: 500 });
+        // Schema-constrained output should always parse; a failure here means
+        // the response was truncated.
+        console.error("Failed to parse analysis response", {
+          stopReason: message.stop_reason,
+        });
+        return null;
       }
     }
-  } catch (error: any) {
+
+    const settled = pdfChunks.length
+      ? await Promise.all(pdfChunks.map((chunk) => analyzeChunk(chunk)))
+      : [await analyzeChunk()];
+
+    const results = settled.filter((r): r is AnalysisResult => r !== null);
+    if (!results.length) {
+      return NextResponse.json(
+        { error: "Analysis failed. Please try again." },
+        { status: 500 },
+      );
+    }
+
+    const result = results.length === 1 ? results[0] : mergeResults(results);
+
+    // "auto" leaves the mode to the model; keep it honest against the type it chose.
+    if (mode !== "auto") {
+      result.mode = mode;
+    } else if (COMMERCIAL_TYPES.has(result.project?.type)) {
+      result.mode = "commercial";
+    }
+
+    return NextResponse.json(result);
+  } catch (error) {
     console.error("Analyze error:", error);
-    return NextResponse.json({ error: error.message || "Analysis failed" }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Analysis failed";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
