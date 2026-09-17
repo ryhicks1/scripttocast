@@ -6,6 +6,10 @@ Breakdown Services / Actors Access.
 
 Populate every section. Never return an empty roles array.
 
+Every field is required. When a document does not give you a value, return an
+empty string for it rather than guessing or omitting the field. Return an empty
+array for a list with nothing in it.
+
 PROJECT
 - Capture name, brand/client, type, location and deadline (YYYY-MM-DD when a
   date is given), plus director, writer, producers and casting director.
@@ -20,9 +24,9 @@ ROLES
 - Include every character, speaking and non-speaking.
 - name is the character's name as written, never the actor's.
 - ageRange, gender and ethnicity are also returned as separate fields, in
-  addition to appearing in the description. Set ethnicity to null only when the
+  addition to appearing in the description. Leave ethnicity empty only when the
   documents give no indication; "all ethnicities" is a real, common value and is
-  not the same as null.
+  not the same as leaving it empty.
 - characteristics: castable traits as short strings — accents, special skills,
   physical requirements, emotional range.
 - pageNumbers: pages (1-indexed) where the character actually speaks or drives
