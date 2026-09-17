@@ -19,6 +19,13 @@ export const maxDuration = 300;
 
 const MODEL = "claude-opus-5";
 
+// A feature script plus a full cast of breakdowns is minutes of generation at
+// the default "high" effort, which overruns the function's time limit. This is
+// extraction and structured writing rather than hard reasoning, so low effort
+// costs little in quality and buys back most of the wall-clock.
+const EFFORT = "low" as const;
+const MAX_TOKENS = 32000;
+
 function textFrom(message: Anthropic.Message): string {
   // Adaptive thinking puts thinking blocks in content, so find the text block
   // rather than assuming content[0].
@@ -174,19 +181,42 @@ export async function POST(request: Request) {
         }`,
       });
 
+      const startedAt = Date.now();
       const stream = anthropic.messages.stream({
         model: MODEL,
-        max_tokens: 64000,
+        max_tokens: MAX_TOKENS,
         system,
+        // Adaptive thinking stays on — disabling it on this model degrades
+        // output. Effort is the lever that actually buys back time, and this
+        // is extraction plus structured writing, not a reasoning problem.
         thinking: { type: "adaptive" },
         output_config: {
+          effort: EFFORT,
           format: { type: "json_schema", schema: ANALYSIS_JSON_SCHEMA },
         },
         messages: [{ role: "user", content }],
       });
 
       const message = await stream.finalMessage();
+      const elapsedMs = Date.now() - startedAt;
+
+      // The serverless function has a hard ceiling, so log what each call
+      // actually costs in wall-clock and tokens. A timeout kills the function
+      // before this runs; seeing it at all means the call finished.
+      console.log("analyze: claude call finished", {
+        elapsedSeconds: Math.round(elapsedMs / 1000),
+        effort: EFFORT,
+        stopReason: message.stop_reason,
+        inputTokens: message.usage?.input_tokens,
+        outputTokens: message.usage?.output_tokens,
+        cacheReadTokens: message.usage?.cache_read_input_tokens,
+      });
+
       if (message.stop_reason === "refusal") return null;
+      if (message.stop_reason === "max_tokens") {
+        console.error("analyze: hit max_tokens — output truncated", { MAX_TOKENS });
+        return null;
+      }
 
       try {
         return normalizeResult(JSON.parse(textFrom(message)) as AnalysisResult);
