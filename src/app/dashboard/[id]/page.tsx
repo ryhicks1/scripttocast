@@ -9,12 +9,20 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: project } = await supabase
+  const { data: project, error } = await supabase
     .from("s2c_projects")
     .select("*")
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
+
+  // PGRST116 means the query matched no rows, which is a real 404. Any other
+  // error is a failure to read, and reporting that as "does not exist" tells
+  // the user their project was deleted when it was not.
+  if (error && error.code !== "PGRST116") {
+    console.error("project page: failed to load project", { id, error });
+    throw new Error("Could not load this project. Please try again.");
+  }
 
   if (!project) notFound();
 
