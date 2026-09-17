@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { PDFDocument } from "pdf-lib";
+import { loadPdf } from "@/lib/pdf";
 
 export async function POST(request: Request) {
   try {
@@ -13,8 +14,24 @@ export async function POST(request: Request) {
     }
 
     const pageNumbers: number[] = JSON.parse(pageNumbersStr);
-    const scriptBuffer = await scriptFile.arrayBuffer();
-    const srcDoc = await PDFDocument.load(scriptBuffer);
+    const scriptBuffer = Buffer.from(await scriptFile.arrayBuffer());
+
+    // Extracting pages means writing a new document, and pdf-lib cannot
+    // decrypt — it would emit a file whose pages are unreadable rather than
+    // fail. Better to say so than to hand back a broken PDF.
+    const loaded = await loadPdf(scriptBuffer);
+    if (loaded.encrypted) {
+      return NextResponse.json(
+        {
+          error:
+            `"${scriptFile.name}" is password-protected, so sides cannot be extracted from it. ` +
+            `Please upload a version without password protection.`,
+        },
+        { status: 400 },
+      );
+    }
+
+    const srcDoc = loaded.doc;
     const totalPages = srcDoc.getPageCount();
 
     const pagesToExtract = pageNumbers.length > 0 ? pageNumbers : Array.from({ length: totalPages }, (_, i) => i + 1);
