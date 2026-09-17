@@ -176,7 +176,19 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
       formData.append("options", JSON.stringify(opts));
       formData.append("mode", mode);
       const res = await fetch("/api/analyze", { method: "POST", body: formData });
-      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Analysis failed"); }
+      if (!res.ok) {
+        // A gateway timeout returns an HTML error page, not JSON, so the
+        // generic "Analysis failed" told the user nothing useful.
+        if (res.status === 504 || res.status === 408) {
+          throw new Error(
+            "This document took too long to analyse and the request timed out. " +
+            "Long feature scripts can exceed the limit — try a shorter document, " +
+            "or split the script and upload it in parts."
+          );
+        }
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || `Analysis failed (${res.status})`);
+      }
       const data: AnalysisResult = await res.json();
       if (isLoggedIn) {
         const projectId = await saveProject(data);
