@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { isFrameworkControlFlow } from "@/lib/errors";
 import SmartCreator from "@/components/SmartCreator";
 import Link from "next/link";
 import { Upload, Sparkles, ClipboardCopy, FileText, Users, Video, ListChecks } from "lucide-react";
@@ -6,11 +7,23 @@ import { Upload, Sparkles, ClipboardCopy, FileText, Users, Video, ListChecks } f
 export default async function Home() {
   let isLoggedIn = false;
   let userEmail = "";
+  let authUnavailable = false;
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user }, error } = await supabase.auth.getUser();
+    // A missing session is the ordinary signed-out case. Anything else means
+    // the auth service itself could not be reached, and that must not be
+    // rendered as "signed out" — that is what let a deleted database look
+    // like a healthy app for weeks.
+    if (error && error.name !== "AuthSessionMissingError") throw error;
     if (user) { isLoggedIn = true; userEmail = user.email || ""; }
-  } catch {}
+  } catch (error) {
+    // Next throws from cookies() during static generation to mark the route
+    // dynamic. That must propagate, or the page renders as though auth is down.
+    if (isFrameworkControlFlow(error)) throw error;
+    console.error("home: auth check failed, rendering signed out", error);
+    authUnavailable = true;
+  }
 
   return (
     <div className="min-h-screen bg-[#fafafa]">
@@ -37,7 +50,7 @@ export default async function Home() {
         <div className="max-w-3xl mx-auto px-6">
           <h2 className="text-2xl font-bold text-gray-900 text-center mb-2">Set up your casting project in 60 seconds</h2>
           <p className="text-gray-500 text-sm text-center mb-8">Upload scripts and self-tape briefs. AI extracts roles, instructions, and form questions.</p>
-          <SmartCreator isLoggedIn={isLoggedIn} />
+          <SmartCreator isLoggedIn={isLoggedIn} authUnavailable={authUnavailable} />
         </div>
       </section>
 

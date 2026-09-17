@@ -9,11 +9,15 @@ export default async function Dashboard() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: projects } = await supabase
+  const { data: projects, error } = await supabase
     .from("s2c_projects")
     .select("id, name, data, documents, created_at")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
+
+  // Without this, a failed read renders an empty dashboard — telling users
+  // their saved projects are gone when the table simply could not be read.
+  if (error) console.error("dashboard: failed to load projects", error);
 
   return (
     <div>
@@ -29,7 +33,16 @@ export default async function Dashboard() {
 
       <div className="max-w-4xl mx-auto px-6 py-8">
         <h1 className="text-xl font-bold mb-6">Your Projects</h1>
-        <DashboardClient projects={projects || []} />
+        {error ? (
+          <div className="border border-amber-200 bg-amber-50 rounded-xl p-4">
+            <p className="text-sm font-semibold text-amber-900">Couldn&apos;t load your projects</p>
+            <p className="text-xs text-amber-800 mt-1">
+              Your saved projects are still there — we just couldn&apos;t reach them right now. Try reloading in a moment.
+            </p>
+          </div>
+        ) : (
+          <DashboardClient projects={projects || []} />
+        )}
       </div>
     </div>
   );

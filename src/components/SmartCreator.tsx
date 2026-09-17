@@ -115,7 +115,7 @@ function projectFields(p: Project): { label: string; value: string }[] {
     .map(([label, value]) => ({ label, value }));
 }
 
-export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn: boolean; initialResult?: AnalysisResult }) {
+export default function SmartCreator({ isLoggedIn, initialResult, authUnavailable = false }: { isLoggedIn: boolean; initialResult?: AnalysisResult; authUnavailable?: boolean }) {
   const [stage, setStage] = useState<"upload" | "analyzing" | "results">(initialResult ? "results" : "upload");
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState("");
@@ -129,6 +129,7 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
   const fileRef = useRef<HTMLInputElement>(null);
   const [opts, setOpts] = useState({ project: true, roles: true, instructions: true, forms: true, sides: true, cnAutoFill: true });
   const [mode, setMode] = useState<BreakdownMode>("auto");
+  const [saveWarning, setSaveWarning] = useState("");
 
   function copyText(text: string, key: string) {
     navigator.clipboard.writeText(text);
@@ -150,7 +151,14 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
     setFiles(prev => [...prev, ...newFiles.filter(f => /\.(pdf|docx?)$/i.test(f.name))]);
   }
 
-  async function saveProject(analysisResult: AnalysisResult): Promise<string | null> {
+  type SaveResult = { ok: true; id: string } | { ok: false; reason: string };
+
+  /**
+   * Persist the analysis. Returns why it failed rather than swallowing it —
+   * a silent failure here means the user closes the tab believing their work
+   * is on the dashboard when nothing was ever written.
+   */
+  async function saveProject(analysisResult: AnalysisResult): Promise<SaveResult> {
     try {
       const res = await fetch("/api/projects", {
         method: "POST",
@@ -160,10 +168,15 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
           data: analysisResult,
         }),
       });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        return { ok: false, reason: body.error || `Save failed (${res.status})` };
+      }
       const { id } = await res.json();
-      return id;
-    } catch { return null; }
+      return { ok: true, id };
+    } catch (err) {
+      return { ok: false, reason: err instanceof Error ? err.message : "Network error" };
+    }
   }
 
   async function analyze() {
@@ -190,9 +203,15 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
         throw new Error(d.error || `Analysis failed (${res.status})`);
       }
       const data: AnalysisResult = await res.json();
+      setSaveWarning("");
       if (isLoggedIn) {
-        const projectId = await saveProject(data);
-        if (projectId) data.projectId = projectId;
+        const saved = await saveProject(data);
+        if (saved.ok) {
+          data.projectId = saved.id;
+        } else {
+          console.error("saveProject failed:", saved.reason);
+          setSaveWarning(saved.reason);
+        }
       }
       setResult(data);
       setStage("results");
@@ -423,6 +442,16 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
         </div>
       )}
 
+      {authUnavailable && (
+        <div className="border border-amber-300 bg-amber-50 rounded-xl p-4 mb-4">
+          <p className="text-sm font-semibold text-amber-900">Sign-in is unavailable right now</p>
+          <p className="text-xs text-amber-800 mt-1">
+            Analysis still works, but results can&apos;t be saved to a dashboard — copy or download
+            them before you leave the page.
+          </p>
+        </div>
+      )}
+
       <div className="mb-6">
         <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mb-2">Breakdown style</p>
         <div className="grid grid-cols-3 gap-1.5">
@@ -478,6 +507,19 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
 
   return (
     <div className="space-y-4">
+      {/* The analysis itself needs no database, so it is worth saying plainly
+          when the copy on screen is the only copy. */}
+      {saveWarning && (
+        <div className="border border-amber-300 bg-amber-50 rounded-xl p-4">
+          <p className="text-sm font-semibold text-amber-900">This breakdown wasn&apos;t saved</p>
+          <p className="text-xs text-amber-800 mt-1">
+            Your analysis is complete and correct, but we couldn&apos;t save it to your dashboard,
+            so it will be lost when you leave this page. Copy or download it before closing.
+          </p>
+          <p className="text-[10px] text-amber-700 mt-1.5 font-mono">{saveWarning}</p>
+        </div>
+      )}
+
       {/* Project */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
         <div className="flex items-center justify-between mb-3">
@@ -780,8 +822,14 @@ export default function SmartCreator({ isLoggedIn, initialResult }: { isLoggedIn
         )}
         {isLoggedIn && !result.projectId && (
           <button onClick={async () => {
-            const id = await saveProject(result);
-            if (id) setResult({ ...result, projectId: id });
+            const saved = await saveProject(result);
+            if (saved.ok) {
+              setResult({ ...result, projectId: saved.id });
+              setSaveWarning("");
+            } else {
+              console.error("saveProject failed:", saved.reason);
+              setSaveWarning(saved.reason);
+            }
           }} className="ml-auto flex items-center gap-1 text-xs text-[#00BFA5] font-medium hover:underline">
             <Download size={12} /> Save to Dashboard
           </button>
