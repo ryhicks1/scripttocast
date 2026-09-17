@@ -74,8 +74,16 @@ export async function POST(request: Request) {
   try {
     assertLocalOllama(OLLAMA_BASE);
 
-    const formData = await request.formData();
-    const files = formData.getAll("files") as File[];
+    let formData: FormData;
+    try {
+      formData = await request.formData();
+    } catch {
+      return NextResponse.json(
+        { error: "Expected multipart FormData with files + options" },
+        { status: 400 },
+      );
+    }
+    const files = formData.getAll("files").filter((f): f is File => f instanceof File);
     if (!files.length) {
       return NextResponse.json({ error: "No files provided" }, { status: 400 });
     }
@@ -96,29 +104,41 @@ export async function POST(request: Request) {
     const scriptText = textParts.join("\n\n");
     const scriptSha = createHash("sha256").update(scriptText).digest("hex");
 
-    const ollamaRes = await fetch(`${OLLAMA_BASE.replace(/\/$/, "")}/api/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: OLLAMA_MODEL,
-        stream: false,
-        format: "json",
-        options: { temperature: 0.2 },
-        messages: [
-          {
-            role: "system",
-            content: `${buildSystemPrompt(mode)}\n\n${JSON_OUTPUT_RULES}`,
-          },
-          {
-            role: "user",
-            content:
-              `Analyze these casting documents and produce the breakdown.\n\n${
-                scriptText.slice(0, MAX_SCRIPT_CHARS)
-              }`,
-          },
-        ],
-      }),
-    });
+    let ollamaRes: Response;
+    try {
+      ollamaRes = await fetch(`${OLLAMA_BASE.replace(/\/$/, "")}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: OLLAMA_MODEL,
+          stream: false,
+          format: "json",
+          options: { temperature: 0.2 },
+          messages: [
+            {
+              role: "system",
+              content: `${buildSystemPrompt(mode)}\n\n${JSON_OUTPUT_RULES}`,
+            },
+            {
+              role: "user",
+              content:
+                `Analyze these casting documents and produce the breakdown.\n\n${
+                  scriptText.slice(0, MAX_SCRIPT_CHARS)
+                }`,
+            },
+          ],
+        }),
+      });
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "connection failed";
+      return NextResponse.json(
+        {
+          error: `Could not reach Ollama at ${OLLAMA_BASE}. Is it running? Try: ollama serve && ollama pull ${OLLAMA_MODEL}`,
+          detail,
+        },
+        { status: 502 },
+      );
+    }
 
     if (!ollamaRes.ok) {
       const errText = await ollamaRes.text().catch(() => "");
