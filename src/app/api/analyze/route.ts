@@ -5,6 +5,7 @@ import { splitPdf, type PdfChunk } from "@/lib/pdf";
 import {
   ANALYSIS_JSON_SCHEMA,
   COMMERCIAL_TYPES,
+  normalizeResult,
   type AnalysisResult,
   type BreakdownMode,
   type FormQuestion,
@@ -188,7 +189,7 @@ export async function POST(request: Request) {
       if (message.stop_reason === "refusal") return null;
 
       try {
-        return JSON.parse(textFrom(message)) as AnalysisResult;
+        return normalizeResult(JSON.parse(textFrom(message)) as AnalysisResult);
       } catch {
         // Schema-constrained output should always parse; a failure here means
         // the response was truncated.

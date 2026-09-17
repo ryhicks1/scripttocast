@@ -100,7 +100,11 @@ export interface AnalysisResult {
   projectId?: string;
 }
 
-const nullableString = { type: ["string", "null"] } as const;
+// The API caps a schema at 16 union-typed parameters ("type" arrays or anyOf),
+// and nullable fields blow straight past that. So nothing in the schema is
+// nullable: the model writes "" when a value is absent, and normalizeResult
+// converts those back to null so the types above stay honest.
+const optionalString = { type: "string" } as const;
 const stringArray = { type: "array", items: { type: "string" } } as const;
 
 /**
@@ -126,20 +130,20 @@ export const ANALYSIS_JSON_SCHEMA = {
         name: { type: "string" },
         brand: { type: "string" },
         type: { type: "string", enum: PROJECT_TYPES },
-        logline: nullableString,
-        synopsis: nullableString,
-        location: nullableString,
-        deadline: nullableString,
-        director: nullableString,
-        writer: nullableString,
-        producers: nullableString,
-        castingDirector: nullableString,
-        union: nullableString,
-        rate: nullableString,
-        auditionDates: nullableString,
-        callbackDates: nullableString,
-        shootDates: nullableString,
-        productionDates: nullableString,
+        logline: optionalString,
+        synopsis: optionalString,
+        location: optionalString,
+        deadline: optionalString,
+        director: optionalString,
+        writer: optionalString,
+        producers: optionalString,
+        castingDirector: optionalString,
+        union: optionalString,
+        rate: optionalString,
+        auditionDates: optionalString,
+        callbackDates: optionalString,
+        shootDates: optionalString,
+        productionDates: optionalString,
         contentAdvisories: stringArray,
         submissionNotes: stringArray,
       },
@@ -157,10 +161,10 @@ export const ANALYSIS_JSON_SCHEMA = {
         properties: {
           name: { type: "string" },
           description: { type: "string" },
-          ageRange: nullableString,
-          gender: nullableString,
-          ethnicity: nullableString,
-          roleType: nullableString,
+          ageRange: optionalString,
+          gender: optionalString,
+          ethnicity: optionalString,
+          roleType: optionalString,
           speaking: { type: "boolean" },
           characteristics: stringArray,
           contentAdvisories: stringArray,
@@ -214,7 +218,7 @@ export const ANALYSIS_JSON_SCHEMA = {
                   enum: ["text", "radio", "textarea", "checkbox"],
                 },
                 label: { type: "string" },
-                options: { type: ["array", "null"], items: { type: "string" } },
+                options: stringArray,
                 required: { type: "boolean" },
               },
             },
@@ -224,3 +228,36 @@ export const ANALYSIS_JSON_SCHEMA = {
     },
   },
 } as const;
+
+
+/** Project fields the model may leave empty. */
+const NULLABLE_PROJECT_FIELDS = [
+  "logline", "synopsis", "location", "deadline", "director", "writer",
+  "producers", "castingDirector", "union", "rate", "auditionDates",
+  "callbackDates", "shootDates", "productionDates",
+] as const;
+
+/** Role fields the model may leave empty. */
+const NULLABLE_ROLE_FIELDS = ["ageRange", "gender", "ethnicity", "roleType"] as const;
+
+function emptyToNull(target: object, fields: readonly string[]): void {
+  const record = target as unknown as Record<string, unknown>;
+  for (const field of fields) {
+    if (record[field] === "") record[field] = null;
+  }
+}
+
+/**
+ * Turn the schema's empty-string placeholders back into nulls, and drop the
+ * empty `options` array on question types that don't use it.
+ */
+export function normalizeResult(result: AnalysisResult): AnalysisResult {
+  if (result.project) emptyToNull(result.project, NULLABLE_PROJECT_FIELDS);
+  for (const role of result.roles ?? []) emptyToNull(role, NULLABLE_ROLE_FIELDS);
+  for (const entry of result.formQuestions ?? []) {
+    for (const question of entry.questions ?? []) {
+      if (!question.options?.length) question.options = null;
+    }
+  }
+  return result;
+}
