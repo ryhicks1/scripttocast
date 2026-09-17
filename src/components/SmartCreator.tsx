@@ -115,7 +115,17 @@ function projectFields(p: Project): { label: string; value: string }[] {
     .map(([label, value]) => ({ label, value }));
 }
 
-export default function SmartCreator({ isLoggedIn, initialResult, authUnavailable = false }: { isLoggedIn: boolean; initialResult?: AnalysisResult; authUnavailable?: boolean }) {
+export default function SmartCreator({
+  isLoggedIn,
+  initialResult,
+  authUnavailable = false,
+  analyzeEndpoint = "/api/analyze",
+}: {
+  isLoggedIn: boolean;
+  initialResult?: AnalysisResult;
+  authUnavailable?: boolean;
+  analyzeEndpoint?: string;
+}) {
   const [stage, setStage] = useState<"upload" | "analyzing" | "results">(initialResult ? "results" : "upload");
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState("");
@@ -188,7 +198,7 @@ export default function SmartCreator({ isLoggedIn, initialResult, authUnavailabl
       files.forEach(f => formData.append("files", f));
       formData.append("options", JSON.stringify(opts));
       formData.append("mode", mode);
-      const res = await fetch("/api/analyze", { method: "POST", body: formData });
+      const res = await fetch(analyzeEndpoint, { method: "POST", body: formData });
       if (!res.ok) {
         // A gateway timeout returns an HTML error page, not JSON, so the
         // generic "Analysis failed" told the user nothing useful.
