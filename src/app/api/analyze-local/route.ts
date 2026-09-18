@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
 import { createHash } from "crypto";
 import { extractText } from "unpdf";
+import {
+  normalizeResult,
+  type AnalysisResult,
+  type Project,
+  type Role,
+  type SelfTapeInstruction,
+  type FormQuestion,
+} from "@/lib/breakdown";
 
 export const maxDuration = 300;
 export const runtime = "nodejs";
@@ -17,6 +25,88 @@ Return ONLY valid JSON with this shape:
   "formQuestions": [{ "roleName": string, "questions": [{"type": string, "label": string, "options": string[]|null, "required": boolean}] }]
 }
 Include all roles. Prefer accurate page numbers. No markdown fences. Do not invent roles that are not in the text.`;
+
+
+function emptyProject(partial?: Partial<Project> | null): Project {
+  return {
+    name: partial?.name || "Untitled",
+    brand: partial?.brand || "",
+    type: partial?.type || "commercial",
+    logline: partial?.logline ?? null,
+    synopsis: partial?.synopsis ?? null,
+    location: partial?.location ?? null,
+    deadline: partial?.deadline ?? null,
+    director: partial?.director ?? null,
+    writer: partial?.writer ?? null,
+    producers: partial?.producers ?? null,
+    castingDirector: partial?.castingDirector ?? null,
+    union: partial?.union ?? null,
+    rate: partial?.rate ?? null,
+    auditionDates: partial?.auditionDates ?? null,
+    callbackDates: partial?.callbackDates ?? null,
+    shootDates: partial?.shootDates ?? null,
+    productionDates: partial?.productionDates ?? null,
+    contentAdvisories: partial?.contentAdvisories ?? [],
+    submissionNotes: partial?.submissionNotes ?? [],
+  };
+}
+
+/** Ollama often omits fields; coerce into AnalysisResult so the UI never crashes. */
+function coerceLocalResult(raw: Record<string, unknown>): AnalysisResult {
+  const projectRaw = (raw.project && typeof raw.project === "object"
+    ? (raw.project as Partial<Project>)
+    : null);
+
+  const roles: Role[] = (Array.isArray(raw.roles) ? raw.roles : []).map((r) => {
+    const role = (r && typeof r === "object" ? r : {}) as Partial<Role>;
+    return {
+      name: role.name || "Unnamed role",
+      description: role.description || "",
+      ageRange: role.ageRange ?? null,
+      gender: role.gender ?? null,
+      ethnicity: role.ethnicity ?? null,
+      roleType: role.roleType ?? null,
+      speaking: Boolean(role.speaking),
+      characteristics: Array.isArray(role.characteristics) ? role.characteristics : [],
+      contentAdvisories: Array.isArray(role.contentAdvisories) ? role.contentAdvisories : [],
+      submissionNotes: Array.isArray(role.submissionNotes) ? role.submissionNotes : [],
+      pageNumbers: Array.isArray(role.pageNumbers) ? role.pageNumbers : [],
+    };
+  });
+
+  const selfTapeInstructions: SelfTapeInstruction[] = (
+    Array.isArray(raw.selfTapeInstructions) ? raw.selfTapeInstructions : []
+  ).map((st) => {
+    const entry = (st && typeof st === "object" ? st : {}) as Partial<SelfTapeInstruction>;
+    return {
+      roleName: entry.roleName || "",
+      videos: Array.isArray(entry.videos) ? entry.videos : [],
+      photos: Array.isArray(entry.photos) ? entry.photos : [],
+      filmingNotes: Array.isArray(entry.filmingNotes) ? entry.filmingNotes : [],
+    };
+  });
+
+  const formQuestions: FormQuestion[] = (
+    Array.isArray(raw.formQuestions) ? raw.formQuestions : []
+  ).map((fq) => {
+    const entry = (fq && typeof fq === "object" ? fq : {}) as Partial<FormQuestion>;
+    return {
+      roleName: entry.roleName || "",
+      questions: Array.isArray(entry.questions) ? entry.questions : [],
+    };
+  });
+
+  const mode =
+    raw.mode === "film_tv" || raw.mode === "commercial" ? raw.mode : "commercial";
+
+  return normalizeResult({
+    mode,
+    project: emptyProject(projectRaw),
+    roles,
+    selfTapeInstructions,
+    formQuestions,
+  });
+}
 
 function assertLocalOllama(url: string) {
   let u: URL;
@@ -121,8 +211,9 @@ export async function POST(request: Request) {
       })
     );
 
+    const result = coerceLocalResult(parsed);
     return NextResponse.json({
-      ...parsed,
+      ...result,
       meta: {
         provider: "ollama",
         model: OLLAMA_MODEL,
