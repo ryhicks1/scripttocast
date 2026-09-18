@@ -9,6 +9,7 @@ import {
   type SelfTapeInstruction,
   type FormQuestion,
 } from "@/lib/breakdown";
+import { isVercelHosted } from "@/lib/runtime";
 
 export const maxDuration = 300;
 export const runtime = "nodejs";
@@ -136,6 +137,16 @@ async function pdfToText(buffer: Buffer, name: string): Promise<string> {
 }
 
 export async function POST(request: Request) {
+  if (isVercelHosted()) {
+    return NextResponse.json(
+      {
+        error:
+          "The private local-model path only runs on your Mac. This hosted site cannot reach Ollama on your laptop. Clone the repo, run npm run dev, and open http://localhost:3000/private.",
+      },
+      { status: 403 }
+    );
+  }
+
   try {
     assertLocalOllama(OLLAMA_BASE);
 
