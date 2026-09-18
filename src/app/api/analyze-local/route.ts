@@ -125,7 +125,10 @@ function assertLocalOllama(url: string) {
 async function pdfToText(buffer: Buffer, name: string): Promise<string> {
   try {
     const { text, totalPages } = await extractText(new Uint8Array(buffer), { mergePages: true });
-    const body = (typeof text === "string" ? text : Array.isArray(text) ? text.join("\n") : "").trim();
+    // mergePages: true selects unpdf's overload returning a single string. The
+    // string[] form only comes back with merging off, so the array branch that
+    // used to be here was unreachable — and did not compile.
+    const body = (text ?? "").trim();
     if (!body) {
       return `[PDF: ${name}, pages=${totalPages ?? "?"}. No extractable text layer.]`;
     }
