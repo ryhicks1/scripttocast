@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export async function POST(request: Request) {
   const supabase = await createServerClient();
@@ -9,7 +8,7 @@ export async function POST(request: Request) {
 
   const { name, data, documents } = await request.json();
 
-  const { data: project, error } = await supabaseAdmin()
+  const { data: project, error } = await supabase
     .from("s2c_projects")
     .insert({
       user_id: user.id,
