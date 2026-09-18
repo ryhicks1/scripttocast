@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { createClient as createServerClient } from "@/lib/supabase/server";
 
 export interface Branding {
   companyName: string;
@@ -44,7 +44,11 @@ export async function getUserBranding(userId: string): Promise<Branding> {
   };
 
   try {
-    const { data } = await supabaseAdmin()
+    // Uses the caller's session client, so row-level security decides what is
+    // visible. This only ever reads the signed-in user's own branding; it is
+    // not an admin lookup and will return nothing for anyone else's id.
+    const supabase = await createServerClient();
+    const { data } = await supabase
       .from("user_settings")
       .select("*")
       .eq("user_id", userId)
@@ -69,7 +73,7 @@ export async function getUserBranding(userId: string): Promise<Branding> {
 
     if (data.logo_path) {
       try {
-        const { data: urlData } = supabaseAdmin().storage.from("logos").getPublicUrl(data.logo_path);
+        const { data: urlData } = supabase.storage.from("logos").getPublicUrl(data.logo_path);
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 5000);
         const res = await fetch(urlData.publicUrl, { signal: controller.signal });
