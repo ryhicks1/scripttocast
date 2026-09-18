@@ -1,13 +1,27 @@
+import { connection } from "next/server";
 import SmartCreator from "@/components/SmartCreator";
 import Link from "next/link";
 import { Shield } from "lucide-react";
+import { isVercelHosted } from "@/lib/runtime";
+import PrivateSetupGuide from "./PrivateSetupGuide";
+
+export const metadata = {
+  title: "Private local setup — Script To Cast",
+  description:
+    "The private local-model path only runs on your Mac via localhost and Ollama — not on the hosted site.",
+};
 
 /**
- * Local-only demo route.
- * Run the Next app on your Mac (`npm run dev`) with Ollama on 127.0.0.1:11434.
- * Deploying this to Vercel does NOT keep scripts on your laptop.
+ * On Vercel this is a setup guide. Locally (`npm run dev`) it is the real
+ * private casting tool, which talks only to Ollama on 127.0.0.1.
  */
-export default function PrivatePage() {
+export default async function PrivatePage() {
+  await connection();
+  if (isVercelHosted()) return <PrivateSetupGuide />;
+  return <PrivateLocalTool />;
+}
+
+function PrivateLocalTool() {
   return (
     <div className="min-h-screen bg-[#fafafa]">
       <nav className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">

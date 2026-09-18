@@ -9,6 +9,7 @@ import {
   type SelfTapeInstruction,
   type FormQuestion,
 } from "@/lib/breakdown";
+import { isVercelHosted } from "@/lib/runtime";
 
 export const maxDuration = 300;
 export const runtime = "nodejs";
@@ -124,7 +125,10 @@ function assertLocalOllama(url: string) {
 async function pdfToText(buffer: Buffer, name: string): Promise<string> {
   try {
     const { text, totalPages } = await extractText(new Uint8Array(buffer), { mergePages: true });
-    const body = (typeof text === "string" ? text : Array.isArray(text) ? text.join("\n") : "").trim();
+    // mergePages: true selects unpdf's overload returning a single string. The
+    // string[] form only comes back with merging off, so the array branch that
+    // used to be here was unreachable — and did not compile.
+    const body = (text ?? "").trim();
     if (!body) {
       return `[PDF: ${name}, pages=${totalPages ?? "?"}. No extractable text layer.]`;
     }
@@ -136,6 +140,16 @@ async function pdfToText(buffer: Buffer, name: string): Promise<string> {
 }
 
 export async function POST(request: Request) {
+  if (isVercelHosted()) {
+    return NextResponse.json(
+      {
+        error:
+          "The private local-model path only runs on your Mac. This hosted site cannot reach Ollama on your laptop. Clone the repo, run npm run dev, and open http://localhost:3000/private.",
+      },
+      { status: 403 }
+    );
+  }
+
   try {
     assertLocalOllama(OLLAMA_BASE);
 
