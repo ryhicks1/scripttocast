@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { PDFDocument } from "pdf-lib";
-import { splitPdf, type PdfChunk } from "@/lib/pdf";
+import { chunkPdf, PdfEncryptedError, type PdfChunk } from "@/lib/pdf";
 import {
   ANALYSIS_JSON_SCHEMA,
   COMMERCIAL_TYPES,
@@ -140,10 +139,7 @@ export async function POST(request: Request) {
       const buffer = Buffer.from(await file.arrayBuffer());
 
       if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
-        const pdfDoc = await PDFDocument.load(buffer);
-        pdfChunks.push(
-          ...(await splitPdf(pdfDoc, file.name, 0, pdfDoc.getPageCount())),
-        );
+        pdfChunks.push(...(await chunkPdf(buffer, file.name)));
       } else {
         textParts.push(`=== ${file.name} ===\n${buffer.toString("utf-8")}`);
       }
@@ -253,6 +249,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result);
   } catch (error) {
+    // A document we cannot process is the caller's problem to fix, not a bug.
+    if (error instanceof PdfEncryptedError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     console.error("Analyze error:", error);
     const message = error instanceof Error ? error.message : "Analysis failed";
     return NextResponse.json({ error: message }, { status: 500 });
