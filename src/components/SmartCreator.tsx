@@ -115,11 +115,7 @@ function projectFields(p: Project): { label: string; value: string }[] {
     .map(([label, value]) => ({ label, value }));
 }
 
-<<<<<<< HEAD
-export default function SmartCreator({ isLoggedIn, initialResult, authUnavailable = false }: { isLoggedIn: boolean; initialResult?: AnalysisResult; authUnavailable?: boolean }) {
-=======
-export default function SmartCreator({ isLoggedIn, initialResult, analyzeEndpoint = "/api/analyze", privateMode = false }: { isLoggedIn: boolean; initialResult?: AnalysisResult; analyzeEndpoint?: string; privateMode?: boolean }) {
->>>>>>> 757e3df (Add /private local Ollama analyze path)
+export default function SmartCreator({ isLoggedIn, initialResult, authUnavailable = false, analyzeEndpoint = "/api/analyze", privateMode = false }: { isLoggedIn: boolean; initialResult?: AnalysisResult; authUnavailable?: boolean; analyzeEndpoint?: string; privateMode?: boolean }) {
   const [stage, setStage] = useState<"upload" | "analyzing" | "results">(initialResult ? "results" : "upload");
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState("");
@@ -207,9 +203,8 @@ export default function SmartCreator({ isLoggedIn, initialResult, analyzeEndpoin
         throw new Error(d.error || `Analysis failed (${res.status})`);
       }
       const data: AnalysisResult = await res.json();
-<<<<<<< HEAD
       setSaveWarning("");
-      if (isLoggedIn) {
+      if (isLoggedIn && !privateMode) {
         const saved = await saveProject(data);
         if (saved.ok) {
           data.projectId = saved.id;
@@ -217,11 +212,6 @@ export default function SmartCreator({ isLoggedIn, initialResult, analyzeEndpoin
           console.error("saveProject failed:", saved.reason);
           setSaveWarning(saved.reason);
         }
-=======
-      if (isLoggedIn && !privateMode) {
-        const projectId = await saveProject(data);
-        if (projectId) data.projectId = projectId;
->>>>>>> 757e3df (Add /private local Ollama analyze path)
       }
       setResult(data);
       setStage("results");
