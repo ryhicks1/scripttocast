@@ -115,7 +115,11 @@ function projectFields(p: Project): { label: string; value: string }[] {
     .map(([label, value]) => ({ label, value }));
 }
 
+<<<<<<< HEAD
 export default function SmartCreator({ isLoggedIn, initialResult, authUnavailable = false }: { isLoggedIn: boolean; initialResult?: AnalysisResult; authUnavailable?: boolean }) {
+=======
+export default function SmartCreator({ isLoggedIn, initialResult, analyzeEndpoint = "/api/analyze", privateMode = false }: { isLoggedIn: boolean; initialResult?: AnalysisResult; analyzeEndpoint?: string; privateMode?: boolean }) {
+>>>>>>> 757e3df (Add /private local Ollama analyze path)
   const [stage, setStage] = useState<"upload" | "analyzing" | "results">(initialResult ? "results" : "upload");
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState("");
@@ -188,7 +192,7 @@ export default function SmartCreator({ isLoggedIn, initialResult, authUnavailabl
       files.forEach(f => formData.append("files", f));
       formData.append("options", JSON.stringify(opts));
       formData.append("mode", mode);
-      const res = await fetch("/api/analyze", { method: "POST", body: formData });
+      const res = await fetch(analyzeEndpoint, { method: "POST", body: formData });
       if (!res.ok) {
         // A gateway timeout returns an HTML error page, not JSON, so the
         // generic "Analysis failed" told the user nothing useful.
@@ -203,6 +207,7 @@ export default function SmartCreator({ isLoggedIn, initialResult, authUnavailabl
         throw new Error(d.error || `Analysis failed (${res.status})`);
       }
       const data: AnalysisResult = await res.json();
+<<<<<<< HEAD
       setSaveWarning("");
       if (isLoggedIn) {
         const saved = await saveProject(data);
@@ -212,6 +217,11 @@ export default function SmartCreator({ isLoggedIn, initialResult, authUnavailabl
           console.error("saveProject failed:", saved.reason);
           setSaveWarning(saved.reason);
         }
+=======
+      if (isLoggedIn && !privateMode) {
+        const projectId = await saveProject(data);
+        if (projectId) data.projectId = projectId;
+>>>>>>> 757e3df (Add /private local Ollama analyze path)
       }
       setResult(data);
       setStage("results");
