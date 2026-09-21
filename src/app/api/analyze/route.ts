@@ -13,6 +13,7 @@ import {
   type SelfTapeInstruction,
 } from "@/lib/breakdown";
 import { buildSystemPrompt } from "@/lib/prompts";
+import { findNarrativeVoice } from "@/lib/description-quality";
 
 export const maxDuration = 300;
 
@@ -245,6 +246,19 @@ export async function POST(request: Request) {
       result.mode = mode;
     } else if (COMMERCIAL_TYPES.has(result.project?.type)) {
       result.mode = "commercial";
+    }
+
+    // Log narrative-summary phrasing so the description prompt can be judged
+    // against real output. Descriptions are returned unchanged either way.
+    const flagged = (result.roles ?? [])
+      .map((role) => ({ name: role.name, phrases: findNarrativeVoice(role.description) }))
+      .filter((entry) => entry.phrases.length > 0);
+    if (flagged.length) {
+      console.log("analyze: narrative voice in descriptions", {
+        flaggedRoles: flagged.length,
+        totalRoles: result.roles?.length ?? 0,
+        examples: flagged.slice(0, 5),
+      });
     }
 
     return NextResponse.json(result);

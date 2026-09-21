@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export async function GET() {
   const supabase = await createServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data } = await supabaseAdmin()
+  const { data } = await supabase
     .from("user_settings")
     .select("*")
     .eq("user_id", user.id)
@@ -45,7 +44,7 @@ export async function PUT(request: Request) {
     updated_at: new Date().toISOString(),
   };
 
-  const { error } = await supabaseAdmin()
+  const { error } = await supabase
     .from("user_settings")
     .upsert(settings, { onConflict: "user_id" });
 

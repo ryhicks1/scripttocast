@@ -18,7 +18,8 @@ PROJECT
 - Keep audition, callback and shoot dates in separate fields. Use
   productionDates only for a span that is not clearly one of those three.
 - logline: one sentence. synopsis: a short paragraph. Write them yourself from
-  the script when the documents do not state them.
+  the script when the documents do not state them. These two fields are where
+  the plot goes — which is why role descriptions do not repeat it.
 
 ROLES
 - Include every character, speaking and non-speaking.
@@ -61,31 +62,70 @@ DESCRIPTION FORMAT — follow this exactly:
 
   [GENDER], [AGE RANGE], [ETHNIC BACKGROUND]. [ROLE DESCRIPTION]...[ROLE TYPE]
 
-Worked examples in the house style:
+Worked examples — all real breakdowns, in the house style:
+
+  Man; 45 to 55 years old; White. Small town organized crime enforcer.
+  Hardened, calculating, intimidating. Man of few words whose first language
+  is violence...SUPPORTING.
+
+  Woman; 30 to 45 years old; all ethnicities. A polished LA realtor who calls
+  everyone "diva," hugs like she means it, and hasn't retained a single thing
+  you've told her. She'll compliment your shoes mid-crisis. Warm and
+  glossy...SUPPORTING.
 
   Male, 30ish, all ethnicities. Nerdy-cute with surprising confidence.
   Quick-witted, earnest, and emotionally intelligent beneath his anxious
   exterior. The beloved son of four moms who's spent his life trying to make
   everyone happy...SUPPORTING.
 
-  Female, 50s to early 70s, Iranian. Fatmah is Zeina's mom, visiting from the
-  Middle East. She is a warm woman who is excited to buy souvenirs on Hollywood
-  Blvd and is very welcoming to her new son-in-law, Will, whom she has been told
-  is Muslim...LARGE CO-STAR.
+  Female, mid 50s to early 60s, Latina. A regal Latina beauty. Lesbian mom to
+  a doctor son, and an elegant innkeeper. The human embodiment of impeccable
+  posture, impossible standards, and quiet authority...LEAD.
 
-What the ROLE DESCRIPTION must do, in this order:
-1. Open with a descriptor sentence carrying two or three adjectives that give a
-   taste of the character.
-2. Say who the character IS — not what happens to them.
-3. Give context: their relationship to other characters (mother, mentor,
-   best friend, rival) and their place in the story.
-4. Give their motivation or goal.
+And one to write nothing like, though it does appear in the wild:
 
-LENGTH IS SET BY THE ROLE TYPE — this matters, do not write every role at the
-same length:
-- SERIES REGULAR or LEAD: about 5 sentences.
-- GUEST STAR or SUPPORTING: 3 to 4 sentences.
-- CO-STAR, DAY PLAYER or background: 1 to 2 sentences.
+  Woman; 25 to 30 years old; all ethnicities. A beautiful woman who wakes up in
+  bed with Omar during the film's opening sequence. Relaxed and at ease in his
+  fast-paced lifestyle, they help establish Omar's world before the story
+  begins...DAY PLAYER.
+
+That one recounts a scene, then explains the character's function in the plot.
+Past the age range, an agent learns nothing they could cast on.
+
+WHAT THE DESCRIPTION IS FOR
+An agent reads it to decide, in seconds, whether a particular client is right
+for this role. An actor reads it to know who they are playing well enough to
+make choices in the audition room. A sentence that serves neither does not
+belong in it.
+
+Write the person, not the plot. What happens in the script belongs in synopsis,
+which is a separate field you are already filling. Here, describe who this
+character is: temperament, how they carry themselves, how they treat people,
+what they want, what they are like to be in a room with.
+
+Never describe the character from outside the story. These constructions are
+effectively absent from professional breakdowns, and must not appear:
+
+  "his journey", "her arc", "the character's arc"
+  "in the story", "throughout the film", "by the end"
+  "serves as", "represents", "embodies the theme of"
+  "we learn that", "the audience", "helps establish"
+
+Recounting the character's scenes is the most common way this goes wrong. Do
+not narrate events; describe the person they happen to.
+
+A relationship earns a clause when it defines the character — "Carmen's older
+sister", "Reema's protective older brother". A scene-by-scene account never does.
+
+Before keeping any sentence, apply the cut test: does this change who an agent
+would submit, or what an actor would do in the room? If it does neither, delete
+it. Stopping early is always better than padding.
+
+LENGTH IS A CEILING, NOT A TARGET. Use fewer sentences whenever the role needs
+fewer; a sharp one-line breakdown beats a padded four-line one.
+- SERIES REGULAR or LEAD: at most 5 sentences.
+- GUEST STAR or SUPPORTING: at most 4.
+- CO-STAR, DAY PLAYER or background: at most 2.
 
 ROLE TYPE vocabulary: SERIES REGULAR, GUEST STAR, CO-STAR, RECURRING, LEAD,
 SUPPORTING, DAY PLAYER. Qualifiers as written in the trade are welcome and
@@ -129,7 +169,13 @@ What the description must do:
 3. Note on-camera demands: product interaction, eating or drinking the product,
    improvisation, athletic ability, hand-model detail work.
 
-LENGTH: 2 to 3 sentences for every role. Commercial breakdowns stay tight.
+LENGTH: at most 3 sentences, and frequently one is enough. This is a ceiling,
+not a target — commercial breakdowns stay tight, and padding to fill a quota is
+the most common way they go wrong.
+
+Before keeping any sentence, apply the cut test: does this change who an agent
+would submit, or what an actor would do on the day? If it does neither, delete
+it. Never narrate the spot; describe the person being cast.
 
 ROLE TYPE vocabulary: PRINCIPAL, FEATURED, EXTRA, VOICEOVER, HAND MODEL.
 
