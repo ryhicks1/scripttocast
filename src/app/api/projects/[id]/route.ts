@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -8,7 +7,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data } = await supabaseAdmin()
+  const { data } = await supabase
     .from("s2c_projects")
     .select("*")
     .eq("id", id)
@@ -25,7 +24,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  await supabaseAdmin()
+  await supabase
     .from("s2c_projects")
     .delete()
     .eq("id", id)
