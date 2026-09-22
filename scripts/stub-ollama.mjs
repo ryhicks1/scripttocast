@@ -2,15 +2,15 @@
  * A stand-in for Ollama, for testing the private path without a model.
  *
  * It answers /api/tags, /api/show and /api/chat the way Ollama does, so the
- * route and the assembly can be exercised end to end. What it cannot tell you
- * is whether a real 8B model writes a good description — only running Ollama
- * does that.
+ * route, the parser and the assembly can be exercised end to end. What it
+ * cannot tell you is whether a real 3B model writes a good description — only
+ * running Ollama does that.
  *
  * Scenarios:
- *   ok          — a full breakdown, as a well-behaved model would give
+ *   ok          — schema-shaped replies, as a well-behaved model would give
  *   empty       — {} for every call, as a model that ignores the schema would
  *   small-model — reports 3.2B parameters, to check the undersized warning
- *   slow        — pauses on the breakdown call, so a run outlives the heartbeat
+ *   slow        — pauses on every role, so a run outlives the heartbeat interval
  */
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
@@ -35,8 +35,14 @@ export function startStubOllama({ scenario = "ok", port = 0 } = {}) {
         return json(200, {
           models: [
             { name: "tiny-model", details: { parameter_size: "1.1B" } },
+            // Named as the recommended model, so the "recommendation beats
+            // size" rule is actually exercised rather than reached by accident.
             { name: RECOMMENDED, details: { parameter_size: scenario === "small-model" ? "3.2B" : "8.0B" } },
+            // Bigger than the recommendation AND small enough to fit the
+            // memory budget, so it would win on size alone. It must not:
+            // preferring size defeats the whole update path.
             { name: "older-bigger-model", details: { parameter_size: "11B" } },
+            // Larger than any laptop should run: must not be chosen.
             { name: "huge-model", details: { parameter_size: "70B" } },
           ],
         });
@@ -61,7 +67,9 @@ export function startStubOllama({ scenario = "ok", port = 0 } = {}) {
       const send = () =>
         json(200, { message: { content: JSON.stringify(reply(system, user)) }, done_reason: "stop" });
 
-      if (scenario === "slow" && /Analyze these casting documents/.test(user)) {
+      // A real 8B model takes seconds per role; a feature runs for minutes.
+      // This reproduces that without the wait being real.
+      if (scenario === "slow" && user.startsWith("Character: ")) {
         setTimeout(send, 2500);
         return;
       }
@@ -80,149 +88,80 @@ export function startStubOllama({ scenario = "ok", port = 0 } = {}) {
   });
 }
 
+const copiedOnce = new Set();
+
 function reply(system, user) {
-  // The private path now sends the public job: one breakdown call per chunk.
-  if (/Analyze these casting documents/.test(user)) {
-    return fullBreakdown(user);
+  // Route on the USER message first. Both description prompts are long and the
+  // house one mentions loglines, project fields and role lists, so matching on
+  // system text alone sends description calls to the wrong branch.
+  const isDescription = user.startsWith("Character: ");
+  if (!isDescription && system.includes("pull out facts")) {
+    return {
+      title: "THE LONG WAY DOWN",
+      productionType: "feature_film",
+      director: "Ada Reyes",
+      writer: "Ada Reyes",
+      castingDirector: "",
+      location: "Chicago",
+    };
+  }
+  if (!isDescription && system.includes("logline")) {
+    return {
+      logline: "A night-shift paramedic drives a stolen ambulance across three counties.",
+      synopsis: "Mara takes a call that goes wrong. Devlin follows her out of the city. By morning both of them have to answer for it.",
+    };
+  }
+  if (!isDescription && system.includes("list the roles")) {
+    return { roles: ["HERO DAD", "BARISTA"] };
+  }
+  // Description. Each of these is a failure seen in a real run, reproduced so
+  // the harness proves the guard for it still works.
+  const name = /Character: (.+)/.exec(user)?.[1] ?? "role";
+
+  // A real run returned the prompt's own worked examples as two characters'
+  // descriptions. Copy a phrase straight out of the instructions and the guard
+  // must discard the whole thing.
+  if (name === "Otis" && !system.includes("no examples marker")) {
+    // Answer with a line lifted from whichever prompt was sent. The pipeline
+    // must notice and retry on the lean prompt rather than printing it.
+    const phrase =
+      /DESCRIPTION FORMAT — follow this exactly:\s*\n\s*\n\s*(.+)/.exec(system)?.[1] ??
+      /Write in this order:\n1\. (.+)/.exec(system)?.[1] ??
+      "what they are, their job, their rank, or what they are to another";
+    if (!copiedOnce.has(name)) {
+      copiedOnce.add(name);
+      return { gender: "Man", ageRange: "60s", ethnicity: "", description: phrase, traits: [] };
+    }
   }
 
-  // Older per-role calls should not happen, but keep a minimal answer so a
-  // stray request does not crash the harness.
-  return {
-    mode: "film_tv",
-    project: emptyProject("Untitled"),
-    roles: [],
-    selfTapeInstructions: [],
-    formQuestions: [],
-  };
-}
+  // A real run stamped a two-word phrase from the prompt's physicality section
+  // onto three separate characters. Short quoted examples are the leak the
+  // six-word rule cannot see.
+  if (name === "Nurse Pell" && !copiedOnce.has(name)) {
+    const quoted = /"([^"\n]{4,60})"/.exec(system.split("PHYSICALITY")[1] ?? "")?.[1];
+    if (quoted) {
+      copiedOnce.add(name);
+      return { gender: "Woman", ageRange: "20s", ethnicity: "", description: quoted, traits: [] };
+    }
+  }
 
-function fullBreakdown(user) {
-  const isCommercial = /HERO DAD|BARISTA|commercial board/i.test(user);
-  if (isCommercial) {
+  // A real run gave a lead the ethnicity of the character he shares scenes
+  // with. Nothing in Devlin's evidence says Japanese, so it must be dropped.
+  if (name === "Devlin") {
     return {
-      mode: "commercial",
-      project: {
-        ...emptyProject("Sunshine Spot"),
-        type: "commercial",
-        brand: "Sunshine Cola",
-      },
-      roles: [
-        role("HERO DAD", "Male, 35-45. Warm, approachable everyman...PRINCIPAL.", "PRINCIPAL"),
-        role("BARISTA", "Female, 20s. Quick smile, sure hands...FEATURED.", "FEATURED"),
-      ],
-      selfTapeInstructions: [
-        selfTape("HERO DAD"),
-        selfTape("BARISTA"),
-      ],
-      formQuestions: [
-        formOf("HERO DAD"),
-        formOf("BARISTA"),
-      ],
+      gender: "Man",
+      ageRange: "40 to 50 years old",
+      ethnicity: "Japanese",
+      description: "Hospital administrator who came up through the process and trusts it more than people.",
+      traits: ["procedural"],
     };
   }
 
   return {
-    mode: "film_tv",
-    project: {
-      ...emptyProject("THE LONG WAY DOWN"),
-      director: "Ada Reyes",
-      writer: "Ada Reyes",
-      location: "Chicago",
-      logline: "A night-shift paramedic drives a stolen ambulance across three counties.",
-      synopsis:
-        "Mara takes a call that goes wrong. Devlin follows her out of the city. By morning both of them have to answer for it.",
-    },
-    roles: [
-      role(
-        "Mara",
-        "Woman, 30 to 40 years old. Blunt and unhurried paramedic who has stopped being impressed by emergencies. Dry with colleagues, unexpectedly gentle with patients...LEAD.",
-        "LEAD",
-        { ageRange: "30 to 40 years old", gender: "Woman", pages: [1, 2, 3, 4, 5, 6] },
-      ),
-      role(
-        "Devlin",
-        "Man, 40 to 50 years old. Hospital administrator who came up through the process and trusts it more than people...SUPPORTING.",
-        "SUPPORTING",
-        { ageRange: "40 to 50 years old", gender: "Man", pages: [2, 4] },
-      ),
-      role(
-        "Nurse Pell",
-        "Woman, 20s. Smokes under a sign forbidding it. Says the quiet part out loud...DAY PLAYER.",
-        "DAY PLAYER",
-        { ageRange: "20s", gender: "Woman", pages: [3] },
-      ),
-      role(
-        "Otis",
-        "Man, 60s. Dispatch veteran who eats a sandwich with total focus and has a shortcut for everything...SUPPORTING.",
-        "SUPPORTING",
-        { ageRange: "60s", gender: "Man", pages: [4, 6] },
-      ),
-    ],
-    selfTapeInstructions: ["Mara", "Devlin", "Nurse Pell", "Otis"].map(selfTape),
-    formQuestions: ["Mara", "Devlin", "Nurse Pell", "Otis"].map(formOf),
-  };
-}
-
-function emptyProject(name) {
-  return {
-    name,
-    brand: "",
-    type: "feature_film",
-    logline: null,
-    synopsis: null,
-    location: null,
-    deadline: null,
-    director: null,
-    writer: null,
-    producers: null,
-    castingDirector: null,
-    union: null,
-    rate: null,
-    auditionDates: null,
-    callbackDates: null,
-    shootDates: null,
-    productionDates: null,
-    contentAdvisories: [],
-    submissionNotes: [],
-  };
-}
-
-function role(name, description, roleType, extra = {}) {
-  return {
-    name,
-    description,
-    ageRange: extra.ageRange ?? null,
-    gender: extra.gender ?? null,
-    ethnicity: extra.ethnicity ?? null,
-    roleType,
-    speaking: true,
-    characteristics: [],
-    contentAdvisories: [],
-    submissionNotes: [],
-    pageNumbers: extra.pages ?? [1],
-  };
-}
-
-function selfTape(roleName) {
-  return {
-    roleName,
-    videos: [{ label: "SLATE", description: "Name, height, location, agency." }],
-    photos: ["1 x close-up"],
-    filmingNotes: ["Landscape only"],
-  };
-}
-
-function formOf(roleName) {
-  return {
-    roleName,
-    questions: [
-      {
-        type: "text",
-        label: "Are you available on the shoot dates listed?",
-        options: [],
-        required: true,
-      },
-    ],
+    gender: "Woman",
+    ageRange: "30 to 40 years old",
+    ethnicity: "",
+    description: `Blunt and unhurried, ${name} has stopped being impressed by emergencies. Dry with colleagues, unexpectedly gentle with patients. In the story she learns to trust someone again. She carries herself with an air of quiet authority.`,
+    traits: ["dry wit", "driving"],
   };
 }

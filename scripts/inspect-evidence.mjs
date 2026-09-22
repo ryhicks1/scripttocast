@@ -208,7 +208,7 @@ async function main() {
     if (entrance === "bare") bareEntrance++;
     if (mentions.length > described.length) truncated++;
     if (verdict === "RANKING") fixableByRanking++;
-    if (verdict === "STARVED" && described.length) starved++;
+    if (verdict === "STARVED") starved++;
 
     console.log(
       `${displayName(character.name).padEnd(22)} ${tier.padEnd(11)} ` +
