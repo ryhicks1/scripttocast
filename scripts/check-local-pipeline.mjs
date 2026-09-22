@@ -108,7 +108,14 @@ async function analyze(bytes, fileName, mode = "auto") {
     body: form,
     signal: AbortSignal.timeout(120_000),
   });
-  return { status: res.status, body: await res.json().catch(() => ({})) };
+  const text = await res.text();
+  let parsed = {};
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    parsed = {};
+  }
+  return { status: res.status, body: parsed, raw: text };
 }
 
 const screenplay = await makeScreenplayPdf();
@@ -124,7 +131,7 @@ let server = await startDevServer({
 
 try {
   console.log("\nscreenplay, model answering normally");
-  const { status, body } = await analyze(screenplay, "the-long-way-down.pdf");
+  const { status, body, raw: rawBody } = await analyze(screenplay, "the-long-way-down.pdf");
   check("200 OK", status === 200, `got ${status} ${JSON.stringify(body).slice(0, 200)}`);
   check("project name came from the model", body.project?.name === "THE LONG WAY DOWN", body.project?.name);
   check("mode auto-detected as film_tv", body.mode === "film_tv", body.mode);
@@ -168,12 +175,16 @@ try {
     body.meta?.model === "stub-model",
     `${body.meta?.model} — 70B must be declined, 1.1B must be beaten`,
   );
+  const evidenceFile = body.meta?.diagnostics?.evidenceFile ?? "";
   check(
-    "evidence is written to local-evidence.txt",
-    existsSync("local-evidence.txt") &&
-      readFileSync("local-evidence.txt", "utf8").includes("===== Mara"),
-    "this is how a bad run gets diagnosed without guessing",
+    "evidence is dumped outside the project folder",
+    Boolean(evidenceFile) &&
+      !evidenceFile.startsWith(process.cwd()) &&
+      existsSync(evidenceFile) &&
+      readFileSync(evidenceFile, "utf8").includes("===== Mara"),
+    `${evidenceFile} — writing into a watched folder restarts the dev server mid-run`,
   );
+
   check(
     "PDF margins were used to tell dialogue from action",
     body.meta?.diagnostics?.usedLayout === true,
@@ -268,6 +279,32 @@ try {
   await emptyStub.close();
 }
 
+// --- 2a. A run long enough to be dropped by a browser -------------------------
+const slowStub = await startStubOllama({ scenario: "slow" });
+server = await startDevServer({
+  OLLAMA_BASE_URL: slowStub.url,
+  OLLAMA_MODEL: "stub-model",
+  VERCEL: "",
+});
+
+try {
+  console.log("\nslow run (minutes on a real model)");
+  const { status, body, raw } = await analyze(screenplay, "the-long-way-down.pdf");
+  check("completes", status === 200 && (body.roles?.length ?? 0) > 0, `got ${status}`);
+  check(
+    "sends a heartbeat so the browser does not give up",
+    raw.startsWith("\n"),
+    `body starts with ${JSON.stringify(raw.slice(0, 4))} — a silent request is dropped as dead`,
+  );
+  check(
+    "the heartbeat still leaves one parseable JSON document",
+    JSON.parse(raw).roles.length === body.roles.length,
+  );
+} finally {
+  await stopDevServer(server);
+  await slowStub.close();
+}
+
 // --- 2b. A model too small for the job ----------------------------------------
 const smallStub = await startStubOllama({ scenario: "small-model" });
 server = await startDevServer({
@@ -322,8 +359,6 @@ try {
 } finally {
   await stopDevServer(server);
 }
-
-rmSync("local-evidence.txt", { force: true });
 
 console.log(failures ? `\n${failures} check(s) failed` : "\nall checks passed");
 process.exit(failures ? 1 : 0);

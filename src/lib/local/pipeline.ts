@@ -20,6 +20,7 @@
  * leaves the machine.
  */
 import { appendFileSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
 import { join } from "path";
 import {
   normalizeResult,
@@ -60,7 +61,15 @@ import {
   type Tier,
 } from "./screenplay";
 
-const EVIDENCE_FILE = join(process.cwd(), "local-evidence.txt");
+/**
+ * Outside the project folder, deliberately.
+ *
+ * This was written to the project root, where `next dev` is watching for file
+ * changes — a file being appended to forty times during a request is exactly
+ * the kind of churn that restarts a dev server mid-analysis and drops the
+ * connection the browser is waiting on.
+ */
+const EVIDENCE_FILE = join(tmpdir(), "scripttocast-evidence.txt");
 
 /** Roles described per run. Each one is its own model call. */
 const DEFAULT_MAX_ROLES = 40;
@@ -163,6 +172,8 @@ export interface LocalDiagnostics {
   rolesThin: string[];
   /** True when PDF margins were used to tell dialogue from action. */
   usedLayout: boolean;
+  /** Where the evidence dump for this run was written. */
+  evidenceFile: string;
   elapsedMs: number;
 }
 
@@ -483,6 +494,7 @@ export async function analyzeLocally(
       unsupportedEthnicityDropped: unsupportedEthnicity,
       rolesThin: thin,
       usedLayout: script.usedLayout,
+      evidenceFile: EVIDENCE_FILE,
       elapsedMs: Date.now() - startedAt,
     },
   };
@@ -678,13 +690,12 @@ export function composeDescription({
 }
 
 /**
- * Append one role's evidence to local-evidence.txt, next to package.json.
+ * Append one role's evidence to the debug dump.
  *
- * This is a debugging aid, and it is the one place the script's own words are
- * written to disk. It is the project folder on the user's own machine, never a
- * server or a bucket, and it is overwritten at the start of every run — but it
- * is still the script, so it is listed in .gitignore and worth deleting when
- * you are done.
+ * This is the one place the script's own words touch disk. It is the user's own
+ * temp folder, never a server or a bucket, and it is overwritten at the start of
+ * every run — but it is still the script, so it is worth deleting when you are
+ * done. The path is reported in diagnostics so it can be found.
  */
 function recordEvidence(name: string, roleType: string, evidence: string): void {
   try {

@@ -7,8 +7,10 @@
  * running Ollama does that.
  *
  * Scenarios:
- *   ok    — schema-shaped replies, as a well-behaved model would give
- *   empty  — {} for every call, as a model that ignores the schema would
+ *   ok          — schema-shaped replies, as a well-behaved model would give
+ *   empty       — {} for every call, as a model that ignores the schema would
+ *   small-model — reports 3.2B parameters, to check the undersized warning
+ *   slow        — pauses on every role, so a run outlives the heartbeat interval
  */
 import { createServer } from "node:http";
 
@@ -51,7 +53,16 @@ export function startStubOllama({ scenario = "ok", port = 0 } = {}) {
         return json(200, { message: { content: "{}" }, done_reason: "stop" });
       }
 
-      return json(200, { message: { content: JSON.stringify(reply(system, user)) }, done_reason: "stop" });
+      const send = () =>
+        json(200, { message: { content: JSON.stringify(reply(system, user)) }, done_reason: "stop" });
+
+      // A real 8B model takes seconds per role; a feature runs for minutes.
+      // This reproduces that without the wait being real.
+      if (scenario === "slow" && user.startsWith("Character: ")) {
+        setTimeout(send, 2500);
+        return;
+      }
+      return send();
     });
   });
 

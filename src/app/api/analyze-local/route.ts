@@ -9,6 +9,9 @@ import { analyzeLocally } from "@/lib/local/pipeline";
 import { pickBestModel, preflight, resolveConfig } from "@/lib/local/ollama";
 
 export const maxDuration = 300;
+
+/** How often to send a byte so the connection is not judged dead. */
+const HEARTBEAT_MS = 5000;
 export const runtime = "nodejs";
 
 /**
@@ -59,33 +62,84 @@ export async function POST(request: Request) {
       .update(documents.flatMap((d) => d.pages).join("\n"))
       .digest("hex");
 
-    const { result, diagnostics } = await analyzeLocally(
-      documents,
-      mode,
-      config,
-      (message, data) => console.log(message, data ?? {}),
-    );
+    // Stream, purely to keep the connection open.
+    //
+    // A feature script is forty roles and forty model calls — minutes of work
+    // with nothing sent back. A browser drops a request that quiet, and the
+    // user gets "Failed to fetch" after ten minutes and loses the whole run.
+    //
+    // Newlines are legal JSON whitespace, so a heartbeat costs nothing: the
+    // body is still one JSON document and res.json() parses it unchanged.
+    // Everything that can fail with a status code — preflight, extraction —
+    // has already run above, so anything failing from here is reported inside
+    // the body instead.
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        const heartbeat = setInterval(() => {
+          try {
+            controller.enqueue(encoder.encode("\n"));
+          } catch {
+            // Client hung up; the analysis below will finish and be discarded.
+          }
+        }, HEARTBEAT_MS);
 
-    // The hash identifies a run in the logs without recording the script.
-    console.log("analyze_local: done", {
-      script_sha256: scriptSha,
-      provider: "ollama",
-      model: config.model,
-      num_ctx: config.numCtx,
-      third_party_ai: false,
-      ...diagnostics,
+        try {
+          const { result, diagnostics } = await analyzeLocally(
+            documents,
+            mode,
+            config,
+            (message, data) => console.log(message, data ?? {}),
+          );
+
+          // The hash identifies a run in the logs without recording the script.
+          console.log("analyze_local: done", {
+            script_sha256: scriptSha,
+            provider: "ollama",
+            model: config.model,
+            num_ctx: config.numCtx,
+            third_party_ai: false,
+            ...diagnostics,
+          });
+
+          controller.enqueue(
+            encoder.encode(
+              JSON.stringify({
+                ...result,
+                meta: {
+                  provider: "ollama",
+                  model: config.model,
+                  numCtx: config.numCtx,
+                  third_party_ai: false,
+                  script_sha256: scriptSha,
+                  warning: config.warning,
+                  diagnostics,
+                },
+              }),
+            ),
+          );
+        } catch (error) {
+          const message =
+            error instanceof LocalAnalysisError
+              ? error.message
+              : error instanceof Error
+                ? error.message
+                : "Local analysis failed";
+          console.error("analyze_local: failed mid-run", error);
+          controller.enqueue(encoder.encode(JSON.stringify({ error: message })));
+        } finally {
+          clearInterval(heartbeat);
+          controller.close();
+        }
+      },
     });
 
-    return NextResponse.json({
-      ...result,
-      meta: {
-        provider: "ollama",
-        model: config.model,
-        numCtx: config.numCtx,
-        third_party_ai: false,
-        script_sha256: scriptSha,
-        warning: config.warning,
-        diagnostics,
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+        // Tell any proxy in the way not to buffer the heartbeat.
+        "X-Accel-Buffering": "no",
       },
     });
   } catch (error) {

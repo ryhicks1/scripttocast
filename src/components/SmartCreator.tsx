@@ -203,7 +203,11 @@ export default function SmartCreator({ isLoggedIn, initialResult, authUnavailabl
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error || `Analysis failed (${res.status})`);
       }
-      const data: AnalysisResult = await res.json();
+      const data: AnalysisResult & { error?: string } = await res.json();
+      // The private path streams a heartbeat to keep long runs alive, so a
+      // failure after the first byte arrives with a 200 and an error in the
+      // body rather than a status code.
+      if (data.error) throw new Error(data.error);
       setSaveWarning("");
       if (isLoggedIn && !privateMode) {
         const saved = await saveProject(data);
