@@ -86,21 +86,6 @@ export default function PrivateSetupGuide() {
             on your own machine, and never uploads it, stores it, or sends it to any online
             service.
           </p>
-          <p className="text-gray-400 text-xs max-w-xl mx-auto leading-relaxed mt-3">
-            It only works locally — this hosted page cannot reach a model on your laptop,
-            which is precisely the point.
-          </p>
-        </div>
-      </section>
-
-      <section className="bg-amber-50 border-b border-amber-100 px-6 py-3">
-        <div className="max-w-3xl mx-auto flex gap-3 text-sm text-amber-950">
-          <Shield size={18} className="shrink-0 mt-0.5" />
-          <p>
-            This applies to the local tool <strong>only</strong>. The public tool on this
-            site sends document text to a cloud AI service for analysis — see{" "}
-            <Link href="/privacy" className="underline underline-offset-2">Privacy</Link>.
-          </p>
         </div>
       </section>
 
@@ -168,6 +153,22 @@ npm run dev`}
             Get Ollama
             <ExternalLink size={12} />
           </a>
+        </div>
+      </section>
+
+      <section className="max-w-3xl mx-auto px-6 pb-14">
+        <div className="border-t border-gray-200 pt-6 flex gap-3 text-xs text-gray-400 leading-relaxed">
+          <Shield size={14} className="shrink-0 mt-0.5" />
+          <p>
+            It only works locally — this hosted page cannot reach a model on your laptop,
+            which is precisely the point. The guarantee above applies to the local tool{" "}
+            <strong className="font-medium text-gray-500">only</strong>: the public tool on
+            this site sends document text to a cloud AI service for analysis, described in{" "}
+            <Link href="/privacy" className="underline underline-offset-2 hover:text-gray-600">
+              Privacy
+            </Link>
+            .
+          </p>
         </div>
       </section>
 
