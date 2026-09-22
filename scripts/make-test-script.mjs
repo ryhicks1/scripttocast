@@ -135,11 +135,13 @@ export async function makeScannedPdf() {
  *
  * This one carries the four shapes a 147-page feature actually produced:
  *
- *   RENNA  — introduced properly on page 1, then named in two dozen blocking
- *            lines. The introduction survives; everything after it is movement.
- *   HOLT   — first named in a blocking line, described only on page 9. The six
- *            lines taken are all from before that, so the one line that says who
- *            he is never reaches the model.
+ *   RENNA  — introduced on page 1, but the age and the build are on the next
+ *            wrapped line, which does not repeat her name. Then she is named in
+ *            two dozen blocking lines.
+ *   HOLT   — a child, YOUNG HOLT, is described on page 1. That child is a
+ *            separate day player. The man himself is first named in a blocking
+ *            line and described only on page 9, and that description is wrapped
+ *            so "never once rises" is on the next line.
  *   SIKE   — speaks throughout and is never named in an action line at all. No
  *            description evidence exists for him in any quantity.
  *   BARMAN — a generic cue name. The word appears on page 1 about a different,
@@ -152,7 +154,9 @@ const BLOCKING_SCENES = [
   {
     heading: "INT. THE LOCKUP - NIGHT",
     items: [
-      ["action", "RENNA, thirty-four, hard through the shoulders from ten years of hauling other people's freight, shoulders the roller door up."],
+      ["action", "YOUNG HOLT, eight, runs the length of the dock and does not look back."],
+      ["action", "This is RENNA. She has been"],
+      ["action", "thirty-four for a week and already looks older, hard through the shoulders."],
       ["action", "HOLT drags the gate shut behind her and throws the bolt."],
       ["action", "A BARMAN two doors down is hosing off the footpath, uninterested."],
       ["cue", "RENNA"],
@@ -252,7 +256,8 @@ const BLOCKING_SCENES = [
   {
     heading: "INT. HOLT'S OFFICE - NIGHT",
     items: [
-      ["action", "HOLT, fifty, a wrestler's neck gone soft and a voice that never once rises, sets the ledger down and squares it to the desk edge."],
+      ["action", "HOLT, fifty, a wrestler's neck gone soft and a voice that"],
+      ["action", "never once rises, sets the ledger down and squares it to the desk edge."],
       ["cue", "HOLT"],
       ["dialogue", "I have signed every one of these for nine years."],
       ["cue", "RENNA"],

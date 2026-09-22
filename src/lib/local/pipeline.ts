@@ -386,10 +386,10 @@ export async function analyzeLocally(
     // afterwards; a model handed a number writes to it whatever it has to say.
     const lengthHint =
       budget <= 400
-        ? "Keep it short — a line or two. Stop where the evidence stops."
+        ? "A line or two. Use the age, look, job and manner the script states. Do not pad, and do not invent a look."
         : budget >= 650
-          ? "Go as far as the evidence carries you, and stop there. A lead can take a few lines."
-          : "A few lines, as far as the evidence carries you. Stop where it stops.";
+          ? "Several fragments. Use the age, look, job and manner the script states — a lead the script actually describes is more than one adjective. Do not retell scenes, and do not invent a look."
+          : "A few fragments. Use the age, look, job and manner the script states. Do not retell scenes, and do not invent a look.";
     const name = displayName(character.name);
     const evidence = buildEvidence(script, character, budgetFor(config, descriptionSystem, 2400));
 
