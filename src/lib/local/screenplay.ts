@@ -235,13 +235,16 @@ export function parseScript(pageLines: Line[][]): ParsedScript {
     flushRun();
   });
 
-  // A stray all-caps line can pick up the prose under it and look like a
-  // one-line role. A real character recurs: introduced in action, then speaks.
-  // Age-variant billings (YOUNG HOLT, OLDER MARA) are a different actor and
-  // are added even when they never speak — see promoteAgeVariants.
-  const speaking = [...byName.values()]
-    .filter((c) => c.dialogueChars >= 20)
-    .filter((c) => c.cues >= 2 || countOccurrences(fullText, c.name) >= 2);
+  // A title card can sit where a cue sits and pick up the line under it
+  // ("DUNE" over a sentence of opening action). Requiring every name to recur
+  // threw that away, and also threw away one-scene roles — a guard with one
+  // speech, a radioman, a fremen who speaks once. Those are day players. A
+  // casting breakdown that drops them is missing characters.
+  //
+  // A single word that never recurs is the title-card case. Two or more words
+  // and a real speech is a person. Dual cues ("PAUL & JESSICA") are not a
+  // third person. Age-variant billings are added even when they never speak.
+  const speaking = [...byName.values()].filter((c) => isSpeakingRole(c, fullText));
 
   for (const variant of promoteAgeVariants(actionLines, speaking)) {
     if (byName.has(variant.name)) continue;
@@ -250,9 +253,7 @@ export function parseScript(pageLines: Line[][]): ParsedScript {
 
   const characters = [...byName.values()]
     .filter((c) => {
-      if (c.dialogueChars >= 20 && (c.cues >= 2 || countOccurrences(fullText, c.name) >= 2)) {
-        return true;
-      }
+      if (isSpeakingRole(c, fullText)) return true;
       // Flashback / era doubles: billed in action, often without dialogue.
       return isAgeVariantName(c.name) && speaking.some((s) => samePersonBase(c.name, s.name));
     })
@@ -266,6 +267,18 @@ export function parseScript(pageLines: Line[][]): ParsedScript {
     looksLikeScreenplay: characters.length >= 2 && sceneHeadings.length >= 2,
     usedLayout: useLayout,
   };
+}
+
+/**
+ * A cue with speech is a role, including a day player who speaks once.
+ * A one-word name that shows up once is a title card, not a person.
+ */
+function isSpeakingRole(c: ParsedCharacter, fullText: string): boolean {
+  if (!c.name || c.dialogueChars < 1) return false;
+  if (c.name.includes("&") || /\bVISION\b/.test(c.name)) return false;
+  if (c.cues >= 2 || countOccurrences(fullText, c.name) >= 2) return true;
+  const words = c.name.split(/\s+/).filter(Boolean);
+  return words.length >= 2 && c.dialogueChars >= 20;
 }
 
 function countOccurrences(haystack: string, name: string): number {

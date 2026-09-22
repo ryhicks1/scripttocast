@@ -175,6 +175,40 @@ const scanned = await makeScannedPdf();
 // description on this path has started here: the bundle was blocking, a
 // wrapped fragment, or a different character, and the prompt forbids inventing
 // the rest.
+console.log("\none-scene roles stay in the cast");
+{
+  const cue = (text) => ({ text, indent: 160 });
+  const say = (text) => ({ text, indent: 80 });
+  const action = (text) => ({ text, indent: 0 });
+  const parsed = parseScript([
+    [
+      action("INT. GATE - DAY"),
+      cue("HARKONNEN GUARD"),
+      say("You will wait here until I say otherwise."),
+      cue("DUNE"),
+      say("The desert swallows the last of the light tonight."),
+      cue("PAUL & JESSICA"),
+      say("We cross together when the storm breaks."),
+      cue("CHANI'S VISION"),
+      say("No."),
+      cue("PAUL"),
+      say("Again."),
+      cue("JESSICA"),
+      say("Again."),
+      action("EXT. RIDGE - DAY"),
+      cue("PAUL"),
+      say("We hold the ridge."),
+      cue("JESSICA"),
+      say("We hold it."),
+    ],
+  ]);
+  const names = parsed.characters.map((c) => c.name);
+  check("a one-scene speaking role is kept", names.includes("HARKONNEN GUARD"), names.join(", "));
+  check("a one-off title card is not a role", !names.includes("DUNE"), names.join(", "));
+  check("a dual cue is not a third person", !names.includes("PAUL & JESSICA"), names.join(", "));
+  check("a vision label is not a role", !names.some((n) => /VISION/.test(n)), names.join(", "));
+}
+
 console.log("\nwhat the description is built from");
 const { extractDocument } = await import("../src/lib/local/extract.ts");
 const cleanDoc = await extractDocument(new File([screenplay], "clean.pdf", { type: "application/pdf" }));
