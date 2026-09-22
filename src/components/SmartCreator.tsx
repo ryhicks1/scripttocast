@@ -758,6 +758,13 @@ export default function SmartCreator({ isLoggedIn, initialResult, authUnavailabl
         </div>
       )}
 
+      {result?.meta?.notice && (
+        <div className="border border-amber-300 bg-amber-50 rounded-xl p-4">
+          <p className="text-sm font-semibold text-amber-900">This breakdown is not complete</p>
+          <p className="text-xs text-amber-800 mt-1">{result.meta.notice}</p>
+        </div>
+      )}
+
       {/* Which model actually produced this, stated on the result itself. The
           configured model and the one that ran can differ, and the difference
           is not visible in the copy. */}

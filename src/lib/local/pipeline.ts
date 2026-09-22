@@ -78,8 +78,16 @@ import {
 const EVIDENCE_FILE = join(tmpdir(), "scripttocast-evidence.txt");
 const EVIDENCE_ENABLED = Boolean(process.env.LOCAL_DEBUG_EVIDENCE);
 
-/** Roles described per run. Each one is its own model call. */
-const DEFAULT_MAX_ROLES = 40;
+/**
+ * Roles described per run. Each one is its own model call.
+ *
+ * Was 40, which a Dune script hit exactly — a larger ensemble would have lost
+ * the difference silently, and a breakdown missing roles is worse than a slow
+ * one. At roughly ten seconds a role this is twenty minutes at the ceiling,
+ * which the progress display now makes bearable. Anything still cut is
+ * reported on the page rather than only in diagnostics.
+ */
+const DEFAULT_MAX_ROLES = 120;
 
 /** Commercial descriptions are tighter than film/TV ones. */
 const COMMERCIAL_BUDGET = 420;
@@ -169,6 +177,8 @@ export interface LocalDiagnostics {
   rolesThin: string[];
   /** True when PDF margins were used to tell dialogue from action. */
   usedLayout: boolean;
+  /** The document page numbers refer to — the file sides are cut from. */
+  pagesFrom: string;
   /** Where the evidence dump was written, or null when it is off (the default). */
   evidenceFile: string | null;
   elapsedMs: number;
@@ -218,10 +228,20 @@ export async function analyzeLocally(
     }
   }
 
+  // Page numbers belong to ONE document: the first PDF, which is the file
+  // "Generate Sides" cuts from.
+  //
+  // Concatenating every upload numbered them continuously, so a three-page
+  // self-tape brief uploaded ahead of a script shifted every page in it by
+  // three — and the sides came out three pages off, with nothing on screen to
+  // say so. Secondary documents still inform the project details; they just do
+  // not move the numbering.
+  const primary =
+    documents.find((doc) => doc.kind === "pdf") ?? documents[0];
   const pages = documents.flatMap((doc) => doc.pages);
   if (!pages.length) throw new LocalAnalysisError("No readable pages in the upload.", 400);
 
-  const script = parseScript(documents.flatMap((doc) => doc.pageLines));
+  const script = parseScript(primary.pageLines);
   const mode: ResolvedMode =
     requestedMode === "film_tv" || requestedMode === "commercial"
       ? requestedMode
@@ -304,6 +324,7 @@ export async function analyzeLocally(
     allCharacters = found.characters;
   }
   const totalFound = allCharacters.length;
+  const omitted = Math.max(0, totalFound - Math.min(totalFound, maxRoles));
   onProgress({
     phase: "cast",
     message: `Found ${totalFound} character${totalFound === 1 ? "" : "s"} in the script`,
@@ -539,7 +560,7 @@ export async function analyzeLocally(
       charactersFound: totalFound,
       rolesDescribed: roles.length - failed.length,
       rolesFailed: failed,
-      rolesOmitted: Math.max(0, totalFound - roles.length),
+      rolesOmitted: omitted,
       modelCalls,
       narrativeVoiceFlagged: flagged,
       repeatedPhrases,
@@ -548,6 +569,7 @@ export async function analyzeLocally(
       unsupportedAgeDropped: unsupportedAge,
       rolesThin: thin,
       usedLayout: script.usedLayout,
+      pagesFrom: primary.name,
       evidenceFile: EVIDENCE_ENABLED ? EVIDENCE_FILE : null,
       elapsedMs: Date.now() - startedAt,
     },

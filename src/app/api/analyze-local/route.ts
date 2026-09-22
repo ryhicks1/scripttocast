@@ -127,6 +127,15 @@ export async function POST(request: Request) {
                 third_party_ai: false,
                 script_sha256: scriptSha,
                 warning: config.warning,
+                // Anything the run left out, said on the page rather than only
+                // in a log. A breakdown missing roles that looks complete is
+                // the worst thing this can hand a casting director.
+                notice:
+                  diagnostics.rolesOmitted > 0
+                    ? `${diagnostics.rolesOmitted} more speaking role${
+                        diagnostics.rolesOmitted === 1 ? "" : "s"
+                      } were found in this script than were described. Set OLLAMA_MAX_ROLES higher to include them.`
+                    : undefined,
                 diagnostics,
               },
             },

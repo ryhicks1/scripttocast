@@ -103,6 +103,8 @@ export interface AnalysisResult {
     provider?: string;
     model?: string;
     warning?: string;
+    /** Something the run left out, which the page must say. */
+    notice?: string;
   };
 }
 
