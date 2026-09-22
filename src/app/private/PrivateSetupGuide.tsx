@@ -114,17 +114,13 @@ export default function PrivateSetupGuide() {
       {/* First thing on the page, because most visits after the first one are
           someone looking for their tool rather than someone installing it. */}
       <section className="bg-gray-900 px-6 py-3">
-        <div className="max-w-3xl mx-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+        <div className="max-w-3xl mx-auto flex flex-wrap items-center justify-center gap-3 text-sm">
           <span className="font-medium text-white">Already set up?</span>
-          <span className="text-gray-400">
-            Double-click <strong className="text-gray-200 font-medium">Start ScriptToCast</strong>{" "}
-            in your scripttocast folder — it opens your tool by itself.
-          </span>
           <a
             href="http://localhost:3000/private"
-            className="ml-auto text-gray-300 hover:text-white underline underline-offset-2 whitespace-nowrap"
+            className="bg-white text-gray-900 px-4 py-1.5 rounded-lg text-xs font-semibold tracking-wide hover:bg-gray-100"
           >
-            Or go straight there
+            CLICK HERE
           </a>
         </div>
       </section>
