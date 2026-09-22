@@ -57,7 +57,7 @@ import {
   buildEvidence,
   parseScript,
   roleTypeLabel,
-  SENTENCE_CEILING,
+  DESCRIPTION_BUDGET,
   type ParsedCharacter,
   type ParsedScript,
   type Tier,
@@ -92,8 +92,8 @@ const DEFAULT_MAX_ROLES = 40;
  */
 const HOUSE_PROMPT_MIN_PARAMETERS_B = 7;
 
-/** Commercial descriptions are tighter than film/TV ones — three sentences. */
-const COMMERCIAL_SENTENCE_CEILING = 3;
+/** Commercial descriptions are tighter than film/TV ones. */
+const COMMERCIAL_BUDGET = 420;
 
 const PROJECT_SCHEMA = {
   type: "object",
@@ -176,6 +176,8 @@ export interface LocalDiagnostics {
   descriptionPrompt: "house" | "local";
   /** Ethnicity claims dropped because the script did not state them. */
   unsupportedEthnicityDropped: number;
+  /** Age claims dropped because the script gave nothing to base them on. */
+  unsupportedAgeDropped: number;
   /** Descriptions left with almost nothing — the sign that evidence was thin. */
   rolesThin: string[];
   /** True when PDF margins were used to tell dialogue from action. */
@@ -353,10 +355,13 @@ export async function analyzeLocally(
   const roles: Role[] = [];
   const failed: string[] = [];
   const leaked: string[] = [];
+  // Openings spent so far, fed into each subsequent prompt.
+  const usedOpenings: string[] = [];
   const thin: string[] = [];
   const castNames = characters.map((c) => displayName(c.name));
   let flagged = 0;
   let unsupportedEthnicity = 0;
+  let unsupportedAge = 0;
 
   for (const [index, character] of characters.entries()) {
     onProgress({
@@ -374,27 +379,19 @@ export async function analyzeLocally(
       : mode === "commercial"
         ? "PRINCIPAL"
         : "SUPPORTING";
-    const ceiling = isScreenplay
-      ? SENTENCE_CEILING[tier]
+    const budget = isScreenplay
+      ? DESCRIPTION_BUDGET[tier]
       : mode === "commercial"
-        ? COMMERCIAL_SENTENCE_CEILING
-        : SENTENCE_CEILING.SUPPORTING;
-    // Length, matched to what real breakdowns at this tier actually run to.
-    //
-    // This asked for two sentences until the corpus scorer was pointed at a
-    // real run: the reference median is 5 sentences and 59 words, and the run
-    // came in at 2.5 and 28. That instruction was written to stop a 3B model
-    // padding to a ceiling, and it was right then. On an 8B model with real
-    // evidence it starves the description instead.
-    //
-    // Still not the ceiling number, which the model would write up to
-    // regardless of what it has to say; still conditional on the evidence.
+        ? COMMERCIAL_BUDGET
+        : DESCRIPTION_BUDGET.SUPPORTING;
+    // Length, described rather than numbered. The budget is enforced in code
+    // afterwards; a model handed a number writes to it whatever it has to say.
     const lengthHint =
-      ceiling <= 2
-        ? "Write one sentence. Two at most."
-        : ceiling >= 5
-          ? "Write three to five sentences, as far as the evidence carries you. Stop where it stops."
-          : "Write two to four sentences, as far as the evidence carries you. Stop where it stops.";
+      budget <= 400
+        ? "Keep it short — a line or two. Stop where the evidence stops."
+        : budget >= 650
+          ? "Go as far as the evidence carries you, and stop there. A lead can take a few lines."
+          : "A few lines, as far as the evidence carries you. Stop where it stops.";
     const name = displayName(character.name);
     const evidence = buildEvidence(script, character, budgetFor(config, descriptionSystem, 2400));
 
@@ -409,7 +406,7 @@ export async function analyzeLocally(
     const askFor = async (system: string) =>
       chatJson<DescriptionReply>(config, {
         system,
-        user: descriptionUser(name, lengthHint, evidence.text),
+        user: descriptionUser(name, lengthHint, evidence.text, usedOpenings),
         schema: DESCRIPTION_SCHEMA,
         label: `role: ${name}`,
         maxOutputTokens: 400,
@@ -443,7 +440,7 @@ export async function analyzeLocally(
     });
 
     let body = reply
-      ? tightenDescription(stripEssayClauses(clean(reply.description)), ceiling, log, name)
+      ? tightenDescription(stripEssayClauses(clean(reply.description)), budget, log, name)
       : "";
 
     // Last resort: a retry that copied the prompt too is discarded outright.
@@ -462,7 +459,19 @@ export async function analyzeLocally(
     // pronouns are evidence, so read them rather than dropping the field.
     const gender = normalizeGender(clean(reply?.gender) || genderFromPronouns(evidence.identity));
     const ethnicity = statedIn(evidence.identity, clean(reply?.ethnicity));
-    const ageRange = normalizeAgeRange(clean(reply?.ageRange));
+
+    // Age, only where the script gives something to base it on.
+    //
+    // A Dune run put Paul's father at 20 to 30. Nothing in the evidence said
+    // so; the model filled the field because the field was there. A wrong age
+    // range is worse than a blank one — it is the first thing an agent filters
+    // on, so it decides who is never submitted.
+    const claimedAge = normalizeAgeRange(clean(reply?.ageRange));
+    const ageRange = hasAgeEvidence(evidence.identity) ? claimedAge : "";
+    if (claimedAge && !ageRange) {
+      log("local: dropped unsupported age", { role: name, claimed: claimedAge });
+      unsupportedAge++;
+    }
     if (reply?.ethnicity && !ethnicity) {
       log("local: dropped unsupported ethnicity", { role: name, claimed: reply.ethnicity });
       unsupportedEthnicity++;
@@ -474,6 +483,14 @@ export async function analyzeLocally(
     // counting: a run full of these means the evidence is the problem, not the
     // wording, and local-evidence.txt is where to look.
     if (body.split(/\s+/).filter(Boolean).length < 8) thin.push(name);
+
+    const opening = openingOf(body);
+    if (opening) {
+      // Keep the list short: a long ban list crowds out the evidence, and the
+      // openings that matter are the ones just used.
+      usedOpenings.push(opening);
+      if (usedOpenings.length > 8) usedOpenings.shift();
+    }
     if (
       body &&
       (findNarrativeVoice(body).length || findBookVoice(body).length || findEssayVoice(body).length)
@@ -548,6 +565,7 @@ export async function analyzeLocally(
       rolesCopiedPrompt: leaked,
       descriptionPrompt: useHousePrompt ? "house" : "local",
       unsupportedEthnicityDropped: unsupportedEthnicity,
+      unsupportedAgeDropped: unsupportedAge,
       rolesThin: thin,
       usedLayout: script.usedLayout,
       evidenceFile: EVIDENCE_ENABLED ? EVIDENCE_FILE : null,
@@ -832,6 +850,20 @@ function stripDemographicEcho(
   return stripped.charAt(0).toUpperCase() + stripped.slice(1);
 }
 
+/**
+ * Does the evidence carry any age signal at all?
+ *
+ * Deliberately loose — a bare number, a decade, a life stage. The model is
+ * allowed to turn "late forties" into "45 to 55 years old", which is the sort
+ * of reading a casting director would also make. What it may not do is produce
+ * an age range from a script that never indicated one.
+ */
+function hasAgeEvidence(identityEvidence: string): boolean {
+  return /\b(\d{1,2}s?\b|teen|twenties|thirties|forties|fifties|sixties|seventies|young|old|elderly|middle[- ]aged|boy|girl|kid|child|baby|infant|adolescent|senior|veteran of|retired)\b/i.test(
+    identityEvidence,
+  );
+}
+
 function genderFromPronouns(identityEvidence: string): string {
   const he = (identityEvidence.match(/\b(he|him|his)\b/gi) ?? []).length;
   const she = (identityEvidence.match(/\b(she|her|hers)\b/gi) ?? []).length;
@@ -890,6 +922,13 @@ function withoutOtherCharacters(body: string, self: string, cast: string[]): str
     return !(namesAnother && NARRATED_MOMENT.test(sentence));
   });
   return (kept.length ? kept : sentences.slice(0, 1)).join(" ");
+}
+
+/** The first few words of a description — what makes two roles read alike. */
+function openingOf(body: string): string {
+  if (!body) return "";
+  const words = body.split(/\s+/).filter(Boolean).slice(0, 4).join(" ");
+  return words.replace(/[.,;:]$/, "");
 }
 
 function clean(value: string | undefined | null): string {

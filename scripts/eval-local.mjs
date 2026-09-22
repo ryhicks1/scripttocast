@@ -122,6 +122,25 @@ function gatesFor(ref) {
       format: (v) => v.toFixed(3),
     },
     {
+      key: "fragmentRate",
+      label: "written in fragments",
+      value: (p) => p.fragmentRate,
+      ok: (v) => v >= ref.fragmentRate - 0.2,
+      expect: `≥ ${(ref.fragmentRate - 0.2).toFixed(2)}`,
+      format: (v) => v.toFixed(3),
+      note:
+        "62% of real prose sentences have no finite verb; a run near 30% reads thinner " +
+        "than a real breakdown of the same length",
+    },
+    {
+      key: "proseChars.median",
+      label: "median prose characters",
+      value: (p) => p.proseChars.median,
+      ok: (v) => v >= ref.proseChars.median * 0.5,
+      expect: `≥ ${Math.round(ref.proseChars.median * 0.5)}`,
+      format: (v) => String(v),
+    },
+    {
       key: "sentences.median",
       label: "median sentences",
       value: (p) => p.sentences.median,

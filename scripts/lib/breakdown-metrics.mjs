@@ -56,6 +56,16 @@ export function wordsOf(text) {
  * male, 18+ to play High School, Latino.", "Female, mid 50s – early 60s,
  * Latina.").
  */
+/**
+ * Sentences with no finite verb — the fragment style this house is written in.
+ *
+ * 62% of prose sentences in the reference corpus are fragments. A generated
+ * breakdown that sits near 30% reads thinner than a real one at the same
+ * length, which is measurable here rather than a matter of taste.
+ */
+const FINITE_VERB =
+  /\b(is|are|was|were|has|have|had|does|do|did|can|will|would|seems|shows|wants|works|lives|keeps|calls|treats|makes|gets|goes|comes|knows|thinks|feels|walks|holds|serves|runs|takes|gives)\b/i;
+
 export function measureDescription(description) {
   const text = (description ?? "").trim();
   const sentences = sentencesOf(text);
@@ -72,8 +82,13 @@ export function measureDescription(description) {
 
   const roleType = ROLE_TYPES.find((tier) => new RegExp(`\\b${tier}\\b`).test(text.toUpperCase())) ?? null;
 
+  const fragments = prose.filter((sentence) => !FINITE_VERB.test(sentence)).length;
+
   return {
     chars: text.length,
+    proseChars: prose.join(" ").length,
+    fragments,
+    proseSentenceCount: prose.length,
     words: wordsOf(text).length,
     proseWords: wordsOf(prose.join(" ")).length,
     sentences: sentences.length,
@@ -125,6 +140,13 @@ export function summarise(measurements) {
     words: distribution(measurements.map((m) => m.words)),
     proseWords: distribution(measurements.map((m) => m.proseWords)),
     sentences: distribution(measurements.map((m) => m.sentences)),
+    proseChars: distribution(measurements.map((m) => m.proseChars)),
+    fragmentRate: Number(
+      (
+        measurements.reduce((sum, m) => sum + m.fragments, 0) /
+        Math.max(1, measurements.reduce((sum, m) => sum + m.proseSentenceCount, 0))
+      ).toFixed(3),
+    ),
     proseSentences: distribution(measurements.map((m) => m.proseSentences)),
     demographicHeadRate: rate(measurements.filter((m) => m.hasHead).length, total),
     genderStatedRate: rate(measurements.filter((m) => m.gender).length, total),

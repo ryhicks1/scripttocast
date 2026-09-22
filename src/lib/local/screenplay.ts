@@ -81,12 +81,23 @@ function looksLikeCue(line: string): boolean {
   return true;
 }
 
-/** Cue name without qualifiers — the identity of a character. */
+/**
+ * Cue name without qualifiers — the identity of a character.
+ *
+ * A Dune run returned Paul and "Paul (V.O.)" as two roles, along with
+ * "Gurney (O.S.)" and "Reverend Mother Mohiam (O.C.)". The old version only
+ * stripped a parenthetical anchored to the end of the line, and extracted text
+ * routinely carries a trailing page number or a fragment of the next item, so
+ * the anchor failed and the qualifier survived into the cast list.
+ *
+ * Every parenthetical is stripped now, wherever it sits, along with anything
+ * after it. A character cue is a name; nothing in brackets is part of it.
+ */
 function cueName(line: string): string {
   return line
     .replace(CUE_QUALIFIER, "")
-    .replace(/\s*\(.*\)\s*$/, "")
-    .replace(/[\s*]+$/, "")
+    .replace(/\s*\([^)]*\)?.*$/, "")
+    .replace(/[\s*.,:;-]+$/, "")
     .trim();
 }
 
@@ -234,11 +245,24 @@ export function assignTiers(characters: ParsedCharacter[]): Map<string, Tier> {
   return tiers;
 }
 
-/** Sentence ceilings by tier, from the house style in the reference corpus. */
-export const SENTENCE_CEILING: Record<Tier, number> = {
-  LEAD: 5,
-  SUPPORTING: 4,
-  "DAY PLAYER": 2,
+/**
+ * How long a description runs, in characters, by tier.
+ *
+ * Characters rather than sentences, because a sentence is not a fixed unit of
+ * content: in the fragment style this house uses, a sentence averages 58
+ * characters; in clause style, 99. Capping sentences therefore caps how much
+ * can be said by a factor that swings with writing style, and penalises
+ * exactly the style we are trying to reach.
+ *
+ * Measured from the corpus, at roughly its p75 so the ceiling sits above the
+ * median rather than under it. The old sentence ceilings (5/4/2) were below the
+ * corpus median for every tier — day players were capped at half the length
+ * real ones run to, which no amount of prompt work would have fixed.
+ */
+export const DESCRIPTION_BUDGET: Record<Tier, number> = {
+  LEAD: 700,
+  SUPPORTING: 520,
+  "DAY PLAYER": 380,
 };
 
 /**
@@ -279,8 +303,10 @@ export function buildEvidence(
 ): { text: string; identity: string } {
   const parts: string[] = [];
 
-  const intro = findIntroduction(script, character.name);
-  if (intro) parts.push(`How the script introduces them:\n${intro}`);
+  const described = describedIn(script, character.name);
+  if (described.length) {
+    parts.push(`How the script describes them:\n${described.join("\n")}`);
+  }
 
   const mentions = mentionsOf(script, character);
   if (mentions.length) {
@@ -307,7 +333,7 @@ export function buildEvidence(
   // the script describes them, and what others say about them. Deliberately not
   // the settings — "INT. TOKYO OFFICE" is not evidence that a character is
   // Japanese, and treating it as such is how a lead got the wrong ethnicity.
-  const identity = [intro ?? "", ...mentions].join("\n");
+  const identity = [...described, ...mentions].join("\n");
 
   return { text: out, identity };
 }
@@ -375,15 +401,18 @@ function settingsFor(script: ParsedScript, character: ParsedCharacter): string[]
  * Searched in action lines only. A dialogue line that happens to name them is
  * somebody talking, not the script describing them.
  */
-export function findIntroduction(script: ParsedScript, name: string): string | null {
+export function describedIn(script: ParsedScript, name: string, limit = 6): string[] {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const capsMention = new RegExp(`\\b${escaped}\\b`);
+  const found: string[] = [];
+
   for (const line of script.actionLines) {
     if (!capsMention.test(line.text)) continue;
     if (!/[a-z]/.test(line.text)) continue; // all caps: a cue or a transition
-    return line.text.slice(0, 600);
+    found.push(`(p${line.page}) ${line.text.slice(0, 400)}`);
+    if (found.length >= limit) break;
   }
-  return null;
+  return found;
 }
 
 /** Title Case a cue name for display: "HAPPY GILMORE" -> "Happy Gilmore". */

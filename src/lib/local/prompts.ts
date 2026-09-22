@@ -86,14 +86,21 @@ Write in this order:
 2. What they are like to deal with, in concrete terms.
 
 HOW IT IS WRITTEN. This is the part that gets it wrong most often:
+- WRITE IN FRAGMENTS. Nearly two thirds of the sentences in professional
+  breakdowns have no verb in them at all. "Mexican field-hand." "Minimalist
+  presence." "Observant. Restrained." Each one is a whole sentence. A full
+  sentence spends its words on grammar; a fragment spends them on the person.
 - Open with a noun or an adjective. Never open with "He is", "She is",
-  "They are", or the character's name. Two thirds of professional breakdowns
-  open on a bare occupation or a run of adjectives.
-- Sentence fragments are correct here. A job title on its own is a sentence.
-  Three adjectives separated by commas is a sentence.
+  "They are", or the character's name.
+- You may write one line of direction to the actor, of the kind a casting
+  director writes: what the performance has to carry. "Face should carry life
+  experience." "Needs strong physical presence and emotional transparency."
+  One such line at most, and only where the evidence supports it.
 - Never explain your reasoning or cite the script. Do not write "as evidenced
   by", "which shows", "this suggests", "as seen when". State what they are
   like. Nothing has to be proved.
+- Never open with "A seasoned", "A skilled" or "A young". They say nothing, and
+  they end up on every role in the breakdown.
 - No hedging. Not "possibly", "perhaps", "seems", "a helper or assistant",
   "some kind of". If the evidence does not support it, leave it out.
 - Do not repeat their gender, age or ethnicity in your sentences. Those are
@@ -111,8 +118,9 @@ Rules:
 - Do not describe clothes, eyes, smiles or posture unless the part requires it.
 - Never write "carries himself", "carries herself", "an air of", "exudes",
   "a deep sense of", "a voice of reason", "moral compass", "driven by a desire",
-  "is able to", "is someone who", "in the story", "his journey", "we learn",
-  "by the end", "serves as", "represents" or "the audience".
+  "is able to", "is someone who", "a deep understanding of", "a commanding
+  presence", "in the story", "his journey", "we learn", "by the end",
+  "serves as" or "the audience".
 - Never copy wording from these instructions.
 
 Fill gender, ageRange and ethnicity only when the evidence states them outright.
@@ -169,13 +177,26 @@ export function descriptionUser(
   name: string,
   lengthHint: string,
   evidence: string,
+  usedOpenings: string[] = [],
 ): string {
+  // Openings already spent on other roles in this same breakdown.
+  //
+  // A Dune run opened 17 of 38 roles with "A seasoned...". Nothing in a
+  // single-role prompt can prevent that, because each call is blind to the
+  // others — so the ones already used are handed forward. Cheaper and more
+  // reliable than asking a model to be original.
+  const avoid = usedOpenings.length
+    ? `\n\nThese openings are already used by other roles in this same breakdown. Do not reuse them, and do not write a near-variant:\n${usedOpenings
+        .map((o) => `- "${o}"`)
+        .join("\n")}`
+    : "";
+
   return `Character: ${name}
 
 Evidence from the script:
 ${evidence}
 
-${lengthHint}`;
+${lengthHint}${avoid}`;
 }
 
 export const CAST_LIST_SYSTEM = `You list the roles that a casting document is asking to cast.

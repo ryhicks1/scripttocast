@@ -25,6 +25,13 @@
       "median": 5,
       "p90": 12
     },
+    "proseChars": {
+      "mean": 389.89,
+      "p10": 33,
+      "median": 316,
+      "p90": 772.8
+    },
+    "fragmentRate": 0.621,
     "proseSentences": {
       "mean": 5.29,
       "p10": 1,
