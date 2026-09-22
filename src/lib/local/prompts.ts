@@ -59,91 +59,18 @@ synopsis: three or four sentences.`;
 }
 
 /**
- * The rules both prompts need, in one place.
+ * The style addendum and the one-role wrapper that used to live here are gone.
  *
- * These once lived only in a second, leaner prompt kept for small models —
- * which is to say they were written, committed, and never sent, because every
- * run used the house prompt. A release went out with "A seasoned operative"
- * still in its output and not a fragment in sight. The lean prompt is gone and
- * these are appended to the one prompt there is.
+ * They appended "WRITE IN FRAGMENTS" and "stop where the evidence stops" to a
+ * house prompt that allows a lead about a hundred and ten words, and an 8B
+ * model obeyed the nearer instruction: leads came back four words long. The
+ * house prompt in src/lib/prompts.ts is now sent unmodified, and pipeline.ts
+ * appends the script to it.
+ *
+ * Deliberately deleted rather than left unused. Every regression on this path
+ * has come from rules that were written, committed, and then reconnected to a
+ * prompt by someone who found them lying here.
  */
-export const LOCAL_STYLE_RULES = `HOW IT IS WRITTEN — the part that goes wrong most often:
-
-- WRITE IN FRAGMENTS. Nearly two thirds of the sentences in professional
-  breakdowns have no verb in them at all: a job title alone, a run of two or
-  three adjectives alone. Each is a whole sentence. A full sentence spends its
-  words on grammar; a fragment spends them on the person.
-- Fragments are for density, not brevity. Say MORE about the person in shorter
-  units — not less. A description of four words is not a good fragment, it is
-  an empty one.
-- Open on a noun or an adjective. Never open with He is, She is, They are, or
-  the character's name.
-- Never open with the words seasoned, skilled or young. They say nothing, and
-  they end up on every role in the breakdown.
-
-PHYSICALITY. The evidence section that says how the script describes them is
-the description. Age, build, clothes, voice, job, manner — write each one that
-is there, near the front, in the script's own words. Do not compress a
-described person into a single adjective. Do not replace those lines with
-where they walk or what they do in a scene.
-
-Only what the evidence gives you. Never invent a look. Never carry a look
-across from another character, including a younger or older billing of the
-same name — that look belongs on its own card. If that section is missing,
-the script gave you no look: describe how they deal with people, and write
-nothing about appearance.
-
-WHAT THE PART DEMANDS. At most one line of the kind a casting director writes
-to an actor: what the performance has to carry, or what an actor must be able
-to do. Only where the evidence supports it.
-
-NEVER:
-- Explain your reasoning or cite the script. Nothing has to be proved.
-- Hedge. If the evidence does not support it, leave it out.
-- Reach for stock phrasing about presence, understanding, bearing or air.
-- Retell a scene, or describe what anyone is doing.
-- Use any wording from these instructions. Every phrase here is about writing,
-  not about your character. A phrase quoted above belongs to no one in your
-  script.`;
-
-/**
- * The house prompt, adapted to describing one role at a time.
- *
- * src/lib/prompts.ts is what the public path sends to claude-opus-5: the
- * canonical format, the tier ceilings, the banned constructions, the worked
- * examples, the cut test. The local path skipped it because a 3B model cannot
- * hold a hundred lines of layered rules — it drops the format or returns a
- * shape that parses and says nothing.
- *
- * That reasoning was about 3B. An 8B model can hold it, and the house style is
- * better written there than anywhere else, so it is reused verbatim rather than
- * paraphrased — one source of truth for what a breakdown sounds like. The
- * addendum narrows a whole-breakdown instruction to one role, which the
- * response schema enforces anyway.
- *
- * Its worked examples are a known hazard: a model short of evidence copies them
- * out as a character. pipeline.ts catches that and retries, saying so outright.
- */
-export function houseDescriptionSystem(mode: ResolvedMode, locale: Locale = "us"): string {
-  return `${buildSystemPrompt(mode, locale)}
-
-────────────────────────────────────────
-YOU ARE DOING ONE PART OF THAT JOB.
-
-You are given the evidence for a SINGLE character, gathered from the script.
-Return only that character's fields: gender, ageRange, ethnicity, description
-and traits. No project, no roles array, no self-tape, no form questions.
-
-The description follows the DESCRIPTION FORMAT above, except that you write only
-the [ROLE DESCRIPTION] part — the gender, age and ethnicity are returned as
-their own fields and printed before your text, so do not repeat them in it, and
-do not write the trailing role type. Both are added for you.
-
-${LOCAL_STYLE_RULES}
-
-Use only the evidence below. Do not use anything you already know about this
-film or these characters. Never copy wording from these instructions.`;
-}
 
 /**
  * The length instruction is a phrase, never the ceiling number.
@@ -155,7 +82,6 @@ film or these characters. Never copy wording from these instructions.`;
 export function descriptionUser(
   name: string,
   lengthHint: string,
-  evidence: string,
   usedOpenings: string[] = [],
 ): string {
   // Openings already spent on other roles in this same breakdown.
@@ -172,13 +98,15 @@ export function descriptionUser(
 
   return `Character: ${name}
 
-Evidence from the script:
-${evidence}
+Write this character's entry from the script above.
 
-If the evidence has a section on how the script describes them, that section is the description. Take age, station, build, clothes, voice, and manner from it, each as its own fragment, in the script's words. The same sentence may also say what they do in the moment — waking, sitting, staring, walking, fighting. Leave that out. A comparison to someone else ("as sour as his Duke is warm") — keep only the half about this character.
-If that section is absent, describe how they deal with people. Leave appearance out. Do not borrow a person from the instructions.
-Do not quote dialogue. Do not transcribe a line anyone says. Do not add an adjective the evidence does not use. Two accurate fragments beat a sentence you made up. A description that reads like a scene is a failure.
-Traits are single words the evidence supports. Never a list copied from the instructions.
+Use everything the script shows of them, wherever it appears — how they are
+introduced, what they do, how other people speak to and about them, what they
+say and how they say it. Their age, standing, look, clothing, voice and manner
+belong in it where the script gives them.
+
+Do not retell scenes. Do not quote dialogue. Do not state anything the script
+does not support.
 
 ${lengthHint}${avoid}`;
 }

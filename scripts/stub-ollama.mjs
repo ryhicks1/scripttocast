@@ -58,7 +58,13 @@ export function startStubOllama({ scenario = "ok", port = 0 } = {}) {
       const request = JSON.parse(body || "{}");
       const system = request.messages?.[0]?.content ?? "";
       const user = request.messages?.[1]?.content ?? "";
-      calls.push({ system, user, options: request.options, format: request.format });
+      calls.push({
+        system,
+        user,
+        options: request.options,
+        format: request.format,
+        keepAlive: request.keep_alive,
+      });
 
       if (scenario === "empty") {
         return json(200, { message: { content: "{}" }, done_reason: "stop" });

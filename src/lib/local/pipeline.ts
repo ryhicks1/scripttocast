@@ -36,15 +36,21 @@ import {
 import { findNarrativeVoice } from "../description-quality";
 import type { Locale } from "../locale";
 import { defaultFormQuestions, defaultSelfTape } from "./defaults";
+import { buildSystemPrompt } from "../prompts";
 import { LocalAnalysisError } from "./errors";
 import type { ExtractedDocument } from "./extract";
-import { chatJson, type OllamaConfig } from "./ollama";
+import {
+  chatJson,
+  contextFor,
+  kvCacheBytes,
+  promptCharBudgetFor,
+  type OllamaConfig,
+} from "./ollama";
 import { findBookVoice, findEssayVoice, findRepeatedPhrases, stripEssayClauses } from "./style";
 import {
   CAST_LIST_SYSTEM,
   castListUser,
   descriptionUser,
-  houseDescriptionSystem,
   PROJECT_SYSTEM,
   projectUser,
   STORY_SYSTEM,
@@ -88,6 +94,23 @@ const EVIDENCE_ENABLED = Boolean(process.env.LOCAL_DEBUG_EVIDENCE);
  * reported on the page rather than only in diagnostics.
  */
 const DEFAULT_MAX_ROLES = 120;
+
+/**
+ * Room reserved for one role's answer. A role entry is a demographic line,
+ * some prose and a few traits — a couple of hundred tokens. The chunked
+ * design reserved 3,500 per call and spent it forty times over.
+ */
+const ROLE_OUTPUT_RESERVE = 700;
+
+/**
+ * The longest script this path will read in one pass.
+ *
+ * llama3.1:8b offers 128k. This stops short of it because Ollama allocates the
+ * key/value cache up front — at 128 KiB per token, 96k tokens is about twelve
+ * gigabytes on top of the weights, and past that a laptop starts swapping and
+ * the run stops being worth waiting for.
+ */
+const MAX_ROLE_CTX = 98_304;
 
 /** Commercial descriptions are tighter than film/TV ones. */
 const COMMERCIAL_BUDGET = 420;
@@ -347,7 +370,64 @@ export async function analyzeLocally(
   const isScreenplay = script.looksLikeScreenplay;
   const tiers = assignTiers(characters);
 
-  const descriptionSystem = houseDescriptionSystem(mode, locale);
+  // --- The model reads the script. All of it. Once. ------------------------
+  //
+  // Three designs have now been tried here. A packet of extracted lines per
+  // role produced descriptions written from six lines of blocking. Splitting
+  // the script into fourteen-thousand-character chunks and asking for a whole
+  // breakdown from each produced a run that could not finish: twelve chunks
+  // each re-emitting the project, logline, synopsis, self-tape instructions
+  // and form questions is forty thousand output tokens, and output is the slow
+  // half of local inference. Reading is the cheap half.
+  //
+  // So the script goes in the system message, whole, and stays byte-identical
+  // across every call. llama.cpp reuses the cached attention state for the
+  // longest matching prefix, so the script is read on the first role and
+  // reused on all the rest; keep_alive holds that cache between calls. Each
+  // role then costs only what it writes — a couple of hundred tokens instead
+  // of thirty-five hundred.
+  //
+  // The style addendum is gone. It told an 8B model to write fragments and
+  // stop early, and that is why leads came back four words long while the
+  // house prompt it was appended to allows a lead about a hundred and ten.
+  const scriptText = documents
+    .map((doc) => `=== ${doc.name} ===\n${doc.pages.join("\n")}`)
+    .join("\n\n");
+  const descriptionSystem =
+    `${buildSystemPrompt(mode, locale)}\n\n` +
+    `────────────────────────────────────────\n` +
+    `You are writing ONE role's entry at a time. The full script is below. ` +
+    `Read it and answer about the character named in the request, using ` +
+    `everything the script shows of them across all of its pages.\n\n` +
+    `Return only that character's fields: gender, ageRange, ethnicity, ` +
+    `description and traits. No project, no roles array, no self-tape, no form ` +
+    `questions. Write only the [ROLE DESCRIPTION] part — gender, age and ` +
+    `ethnicity are printed for you from their own fields, so do not repeat ` +
+    `them in the prose and do not write the trailing role type.\n\n` +
+    `THE SCRIPT:\n${scriptText}`;
+
+  // Size the window to the script, and refuse rather than truncate. Ollama
+  // drops anything past num_ctx without saying so, and a breakdown written
+  // from a silently halved script is the failure that looks most like success.
+  const roleCtx = contextFor(descriptionSystem.length + 1200, ROLE_OUTPUT_RESERVE);
+  if (roleCtx > MAX_ROLE_CTX) {
+    throw new LocalAnalysisError(
+      `This script needs about ${Math.ceil(roleCtx / 1024)}k tokens of context to be read ` +
+        `in one pass, and this path will not split it into pieces small enough to ` +
+        `distort the result. Split the PDF and run the parts separately.`,
+      413,
+    );
+  }
+  const roleConfig: OllamaConfig = {
+    ...config,
+    numCtx: roleCtx,
+    promptCharBudget: promptCharBudgetFor(roleCtx),
+  };
+  log("local: whole-script context", {
+    scriptChars: scriptText.length,
+    numCtx: roleCtx,
+    kvCacheGiB: Number((kvCacheBytes(roleCtx) / 1024 ** 3).toFixed(1)),
+  });
 
   // --- Pass 3: one description per role, from that role's own lines. --------
   const roles: Role[] = [];
@@ -391,7 +471,7 @@ export async function analyzeLocally(
           ? "Several fragments. Use the age, look, job and manner the script states — a lead the script actually describes is more than one adjective. Do not retell scenes, and do not invent a look."
           : "A few fragments. Use the age, look, job and manner the script states. Do not retell scenes, and do not invent a look.";
     const name = displayName(character.name);
-    const evidence = buildEvidence(script, character, budgetFor(config, descriptionSystem, 2400));
+    const evidence = buildEvidence(script, character, 2400);
 
     // Off unless LOCAL_DEBUG_EVIDENCE is set — see EVIDENCE_FILE above. The
     // comment that stood here claimed the opposite ("always written, to the
@@ -405,10 +485,21 @@ export async function analyzeLocally(
     // same code with no model involved.
     recordEvidence(name, roleType, evidence.text);
 
-    const askFor = async (system: string) =>
-      chatJson<DescriptionReply>(config, {
-        system,
-        user: descriptionUser(name, lengthHint, evidence.text, usedOpenings),
+    // The evidence packet is no longer sent — the model has the whole script.
+    // It is still built, because it is the only thing that can CHECK a claim:
+    // the gates below refuse an age or an ethnicity the script never stated,
+    // and those gates need the script's own words about this person. The
+    // parser went from being the model's eyes to being its proofreader.
+    // The correction rides in the USER message, never the system one.
+    // Appending it to the system prompt — which is what this did — changes the
+    // cached prefix, so that one retry re-reads the entire script from scratch
+    // instead of reusing the attention state every other role shares. The
+    // check suite asserts every role call sends one identical system prompt
+    // for exactly this reason, and it caught this the first time it ran.
+    const askFor = async (correction = "") =>
+      chatJson<DescriptionReply>(roleConfig, {
+        system: descriptionSystem,
+        user: `${descriptionUser(name, lengthHint, usedOpenings)}${correction}`,
         schema: DESCRIPTION_SCHEMA,
         label: `role: ${name}`,
         maxOutputTokens: 400,
@@ -416,7 +507,7 @@ export async function analyzeLocally(
 
     let reply: DescriptionReply | null = null;
     try {
-      reply = await askFor(descriptionSystem);
+      reply = await askFor();
       modelCalls++;
 
       // The house prompt's worked examples are vivid, and a model short of
@@ -426,9 +517,9 @@ export async function analyzeLocally(
         log("local: description copied the prompt, retrying", { role: name });
         leaked.push(name);
         reply = await askFor(
-          `${descriptionSystem}\n\nYour previous answer copied wording from the worked ` +
-            `examples above. Those are other people. Describe ONLY the character in the ` +
-            `evidence below, using words that appear nowhere in these instructions.`,
+          `\n\nYour previous answer copied wording from the instructions above. ` +
+            `Those are other people. Describe ONLY ${name}, as the script shows them, ` +
+            `using words that appear nowhere in the instructions.`,
         );
         modelCalls++;
       }

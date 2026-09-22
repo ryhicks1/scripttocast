@@ -413,29 +413,48 @@ try {
   );
 
   const descriptionPrompts = stub.calls.filter((c) => c.user.startsWith("Character: "));
+  // The packet is gone: the model is handed the script, not a digest of it.
+  // These three replace the checks that asserted the digest's contents, which
+  // asserted a design that produced descriptions written from six lines of
+  // blocking.
   check(
-    "evidence includes where the character turns up",
-    descriptionPrompts.some((c) => c.user.includes("Where they turn up:")),
-    "scene headings are what tell a small model the character's world",
+    "the script itself reaches the model",
+    descriptionPrompts.every((c) => /THE SCRIPT:/.test(c.system)) &&
+      descriptionPrompts.some((c) => /MARA VOSS/.test(c.system)),
+    "a role described without the script is the packet design again",
   );
+
+  // The load-bearing one. Every role call shares one byte-identical prefix, so
+  // llama.cpp reuses the attention state it built for the script on the first
+  // role and each later role pays only for what it writes. Let the system
+  // prompt vary by even a character — a name interpolated into it, a counter,
+  // a timestamp — and every role re-reads the whole script instead. That is
+  // the difference between a run of minutes and a run that never finishes.
+  const systems = new Set(descriptionPrompts.map((c) => c.system));
   check(
-    "evidence includes what others say about them",
-    descriptionPrompts.some((c) => c.user.includes("What other characters say about them:")),
-    "this is where a script states a job or a relationship",
+    "every role call shares one identical system prompt",
+    descriptionPrompts.length > 1 && systems.size === 1,
+    `${descriptionPrompts.length} role calls produced ${systems.size} distinct prompts; ` +
+      `anything but 1 means the script is re-read per role`,
   );
+
   check(
-    "action lines stay out of what the character says",
-    descriptionPrompts.every((c) => {
-      const said = c.user.split("What they say:")[1] ?? "";
-      return !/kills the engine|watches her go|wipes his hands|crosses a bridge/i.test(said);
-    }),
-    "action following a speech used to be captured as part of it",
+    "the model is kept resident so the cache survives between roles",
+    stub.calls.every((c) => c.keepAlive),
+    "without keep_alive Ollama may unload between calls and discard the cached script",
   );
+
+  // The addendum told an 8B to write fragments and stop, under a house prompt
+  // that allows a lead about a hundred and ten words. That is why leads came
+  // back four words long, and it must not come back.
   check(
-    "there is one prompt, and it carries the local style rules",
-    descriptionPrompts.every((c) => /WRITE IN FRAGMENTS/.test(c.system) && /PHYSICALITY/.test(c.system)),
-    "rules that only reach the lean prompt never reach a model anyone uses",
+    "nothing tells the model to stop early",
+    descriptionPrompts.every(
+      (c) => !/WRITE IN FRAGMENTS/.test(c.system) && !/Two accurate fragments/.test(c.user),
+    ),
+    "the fragments addendum is what produced four-word leads",
   );
+
   const otis = (body.roles ?? []).find((r) => r.name === "Otis")?.description ?? "";
   check(
     "a description copied from the prompt is regenerated, not printed",

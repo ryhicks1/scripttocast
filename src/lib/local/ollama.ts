@@ -96,6 +96,36 @@ export function promptCharBudgetFor(numCtx: number): number {
   return Math.max(1500, Math.floor((numCtx - OUTPUT_RESERVE_TOKENS) * CHARS_PER_TOKEN));
 }
 
+/**
+ * A context window sized to hold this exact prompt, rounded up to 4k.
+ *
+ * The private path reads the whole script in one prefill and then writes one
+ * role at a time against it. That only works if num_ctx actually holds the
+ * script: Ollama truncates silently, so a window one token short does not
+ * error, it just returns a breakdown written from a fragment — which is how
+ * this path shipped descriptions of a film the model had mostly not read.
+ *
+ * Capped by the caller against the model's own reported limit. If it does not
+ * fit, the caller refuses rather than sending it.
+ */
+export function contextFor(promptChars: number, outputReserve: number): number {
+  const needed = Math.ceil(promptChars / CHARS_PER_TOKEN) + outputReserve;
+  return Math.max(MIN_NUM_CTX, Math.ceil(needed / 4096) * 4096);
+}
+
+/**
+ * KV cache cost of a context window, in bytes, for a llama3.1-8B-shaped model.
+ *
+ * 32 layers, 8 key/value heads, 128 dimensions, keys and values, two bytes
+ * each: 128 KiB per token. Ollama allocates it up front, so this is the number
+ * that decides whether a script fits on someone's laptop or swaps it to death.
+ * Reported rather than enforced — the machine's free memory is not knowable
+ * from here, and a user with 64GB should not be held to an Air's budget.
+ */
+export function kvCacheBytes(numCtx: number): number {
+  return numCtx * 128 * 1024;
+}
+
 function envNumber(name: string): number | null {
   const raw = process.env[name];
   if (!raw) return null;
@@ -366,6 +396,13 @@ export interface ChatJsonOptions {
   label: string;
   timeoutMs?: number;
   maxOutputTokens?: number;
+  /**
+   * How long Ollama keeps the model — and its prompt cache — resident after
+   * the call. The whole-script design depends on this: the script is read once
+   * and every later role reuses that work. Default it to nothing and the cache
+   * can be evicted between roles, which turns one prefill into forty.
+   */
+  keepAlive?: string;
 }
 
 /**
@@ -375,7 +412,15 @@ export interface ChatJsonOptions {
  */
 export async function chatJson<T>(
   config: OllamaConfig,
-  { system, user, schema, label, timeoutMs = 180_000, maxOutputTokens = 1024 }: ChatJsonOptions,
+  {
+    system,
+    user,
+    schema,
+    label,
+    timeoutMs = 180_000,
+    maxOutputTokens = 1024,
+    keepAlive = "30m",
+  }: ChatJsonOptions,
 ): Promise<T> {
   const promptChars = system.length + user.length;
   if (promptChars > config.promptCharBudget) {
@@ -396,6 +441,7 @@ export async function chatJson<T>(
       model: config.model,
       stream: false,
       format: schema,
+      keep_alive: keepAlive,
       options: {
         temperature: 0,
         num_ctx: config.numCtx,
