@@ -134,10 +134,9 @@ export default function PrivateSetupGuide() {
             Setting this up for the first time
           </h1>
           <p className="text-gray-600 text-sm max-w-xl mx-auto leading-relaxed">
-            Set this up and <strong>your scripts never leave your computer</strong>. The
-            private path reads a document in your browser, analyses it with a model running
-            on your own machine, and never uploads it, stores it, or sends it to any online
-            service.
+            Most AI tools send your document off to a company&apos;s computers to be read.
+            This one doesn&apos;t. The AI sits on your Mac, so{" "}
+            <strong>your script never leaves it</strong>.
           </p>
         </div>
       </section>
