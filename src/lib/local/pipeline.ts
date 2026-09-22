@@ -860,17 +860,44 @@ function statedIn(identityEvidence: string, claim: string): string {
   return words.some((word) => haystack.includes(word)) ? claim : "";
 }
 
+const normalise = (text: string) =>
+  text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
+
+/**
+ * Phrases the prompt puts in quotation marks.
+ *
+ * Every leak so far has come from one. Worked examples became two characters'
+ * whole descriptions; later, an illustration of physicality — two words long —
+ * landed on three separate roles in the same breakdown. The six-word rule below
+ * cannot catch a two-word phrase, and lowering it to two words would reject
+ * ordinary English.
+ *
+ * Quotation marks are the signal: inside this prompt they always mark an
+ * example of how to write, never a fact about anyone's character. So they are
+ * pulled out and matched exactly. All-caps quotes are skipped — those are trade
+ * vocabulary and submission notes, which a breakdown is supposed to contain.
+ */
+function quotedExamples(prompt: string): string[] {
+  const quotes = prompt.match(/"[^"\n]{4,80}"/g) ?? [];
+  return quotes
+    .map((q) => q.slice(1, -1).trim())
+    .filter((q) => q !== q.toUpperCase())
+    .map((q) => normalise(q).join(" "))
+    .filter((q) => q.split(" ").length >= 2);
+}
+
 /** Six consecutive words in common — enough to call it copied, not coincidence. */
 function sharesWording(candidate: string, source: string): boolean {
-  const normalise = (text: string) =>
-    text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
   const words = normalise(candidate);
   const haystack = ` ${normalise(source).join(" ")} `;
   const WINDOW = 6;
   for (let i = 0; i + WINDOW <= words.length; i++) {
     if (haystack.includes(` ${words.slice(i, i + WINDOW).join(" ")} `)) return true;
   }
-  return false;
+
+  // Anything the prompt quoted, at any length.
+  const candidateText = ` ${words.join(" ")} `;
+  return quotedExamples(source).some((example) => candidateText.includes(` ${example} `));
 }
 
 /**
