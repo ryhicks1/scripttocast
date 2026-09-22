@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "check:local": "node scripts/check-local-pipeline.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
