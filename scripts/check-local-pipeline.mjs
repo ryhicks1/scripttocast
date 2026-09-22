@@ -13,7 +13,7 @@
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
-import { startStubOllama } from "./stub-ollama.mjs";
+import { RECOMMENDED, startStubOllama } from "./stub-ollama.mjs";
 import { makeScannedPdf, makeScreenplayPdf } from "./make-test-script.mjs";
 import { roleTypeLabel } from "../src/lib/local/screenplay.ts";
 
@@ -150,7 +150,7 @@ const scanned = await makeScannedPdf();
 const stub = await startStubOllama({ scenario: "ok" });
 let server = await startDevServer({
   OLLAMA_BASE_URL: stub.url,
-  OLLAMA_MODEL: "stub-model",
+
   VERCEL: "",
   LOCAL_DEBUG_EVIDENCE: "1",
 });
@@ -193,13 +193,14 @@ try {
   const page = await fetch(`${BASE}/private`).then((r) => r.text());
   check(
     "the page names the model before you run anything",
-    page.includes("stub-model"),
+    page.includes(RECOMMENDED),
     "a wrong model is invisible in the output, so it has to be on the page",
   );
   check(
-    "picks the largest model that fits, not the first or the biggest",
-    body.meta?.model === "stub-model",
-    `${body.meta?.model} — 70B must be declined, 1.1B must be beaten`,
+    "runs the recommended model, not merely the biggest one that fits",
+    body.meta?.model === RECOMMENDED,
+    `${body.meta?.model} — an 11B that fits must still lose to the recommendation, ` +
+      `or moving to a better same-size model would change nothing`,
   );
   const evidenceFile = body.meta?.diagnostics?.evidenceFile ?? "";
   check(
@@ -309,7 +310,7 @@ try {
 const emptyStub = await startStubOllama({ scenario: "empty" });
 server = await startDevServer({
   OLLAMA_BASE_URL: emptyStub.url,
-  OLLAMA_MODEL: "stub-model",
+
   VERCEL: "",
 });
 
@@ -333,7 +334,7 @@ try {
 const auStub = await startStubOllama({ scenario: "ok" });
 server = await startDevServer({
   OLLAMA_BASE_URL: auStub.url,
-  OLLAMA_MODEL: "stub-model",
+
   VERCEL: "",
 });
 
@@ -359,7 +360,7 @@ try {
 const quietStub = await startStubOllama({ scenario: "ok" });
 server = await startDevServer({
   OLLAMA_BASE_URL: quietStub.url,
-  OLLAMA_MODEL: "stub-model",
+
   VERCEL: "",
 });
 
@@ -380,7 +381,7 @@ try {
 const slowStub = await startStubOllama({ scenario: "slow" });
 server = await startDevServer({
   OLLAMA_BASE_URL: slowStub.url,
-  OLLAMA_MODEL: "stub-model",
+
   VERCEL: "",
 });
 
@@ -406,7 +407,7 @@ try {
 const smallStub = await startStubOllama({ scenario: "small-model" });
 server = await startDevServer({
   OLLAMA_BASE_URL: smallStub.url,
-  OLLAMA_MODEL: "stub-model",
+
   VERCEL: "",
 });
 
@@ -432,7 +433,7 @@ try {
 // --- 3. Ollama not running ---------------------------------------------------
 server = await startDevServer({
   OLLAMA_BASE_URL: "http://127.0.0.1:11999",
-  OLLAMA_MODEL: "stub-model",
+
   VERCEL: "",
 });
 
