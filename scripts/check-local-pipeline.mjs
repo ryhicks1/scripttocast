@@ -237,6 +237,11 @@ try {
     JSON.stringify(roleProgress.at(-1)?.progress),
   );
   check(
+    "the page says which build it is",
+    /[0-9a-f]{7} · \d/.test(page),
+    "a page that has not been updated looks exactly like one that has",
+  );
+  check(
     "the page promises what the code actually enforces",
     page.includes("your script never leaves it") &&
       page.includes("will not run at all if the AI is anywhere but here") &&
