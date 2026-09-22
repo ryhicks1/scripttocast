@@ -242,6 +242,23 @@ export const SENTENCE_CEILING: Record<Tier, number> = {
 };
 
 /**
+ * What a tier is called in the market being cast for.
+ *
+ * Australian breakdowns have no CO-STAR or DAY PLAYER — per lib/locale.ts, BIT
+ * PLAYER is an MEAA engagement class rather than something a casting director
+ * writes, so small speaking roles sit under SUPPORTING and the vocabulary is
+ * flatter than the US set.
+ *
+ * The tier stays internal either way, because it also sets the sentence
+ * ceiling: a one-scene Australian SUPPORTING role still wants a sentence or
+ * two rather than four, which is exactly what the tier already encodes.
+ */
+export function roleTypeLabel(tier: Tier, locale: "us" | "au"): string {
+  if (locale === "au" && tier === "DAY PLAYER") return "SUPPORTING";
+  return tier;
+}
+
+/**
  * The evidence a model needs to describe one character.
  *
  * A casting description answers: what do they do, who are they to the other

@@ -1,4 +1,5 @@
 import type { ResolvedMode } from "../breakdown";
+import type { Locale } from "../locale";
 import { buildSystemPrompt } from "../prompts";
 
 /**
@@ -138,8 +139,8 @@ like "35 to 45 years old" or "40s" — never a word like "young".`;
  * out as a character. pipeline.ts catches that and retries on DESCRIPTION_SYSTEM,
  * which has no examples to lift.
  */
-export function houseDescriptionSystem(mode: ResolvedMode): string {
-  return `${buildSystemPrompt(mode)}
+export function houseDescriptionSystem(mode: ResolvedMode, locale: Locale = "us"): string {
+  return `${buildSystemPrompt(mode, locale)}
 
 ────────────────────────────────────────
 YOU ARE DOING ONE PART OF THAT JOB.

@@ -51,6 +51,20 @@ const SCENES = [
     closer: "OTIS BRAND wipes his hands on a napkin and turns back to the screens.",
   },
   {
+    // Small parts, so tier assignment is actually exercised: with only leads in
+    // the fixture every role came back LEAD and a DAY PLAYER bug would pass.
+    heading: "INT. ALL NIGHT DINER - LATER",
+    action:
+      "A tired room. WALT the COOK, sixties, scrapes the grill. A BARMAN leans on the counter. A TOW TRUCK DRIVER eats alone.",
+    lines: [
+      ["WALT", "Kitchen closes in ten whether you are eating or not."],
+      ["BARMAN", "He has been saying that since nine."],
+      ["TOW TRUCK DRIVER", "Rig out front is mine. Nobody touch it."],
+      ["MARA", "Nobody wants it."],
+    ],
+    closer: "WALT turns the sign to CLOSED and keeps cooking anyway.",
+  },
+  {
     heading: "EXT. HIGHWAY - PRE-DAWN",
     action: "The rig moves fast through empty lanes.",
     lines: [

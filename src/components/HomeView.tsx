@@ -62,12 +62,21 @@ export default async function HomeView({ locale = "us" }: { locale?: Locale }) {
         <div className="flex items-center gap-3 text-sm">
           {isLoggedIn ? (
             <>
+              <Link href="/private" className="text-gray-400 hover:text-gray-900 text-xs">
+                Private (runs on your Mac)
+              </Link>
               <Link href="/dashboard" className="text-gray-500 hover:text-gray-900">Dashboard</Link>
               <span className="text-gray-400 text-xs">{userEmail}</span>
             </>
           ) : (
             <>
-              <Link href={copy.switchHref} className="text-gray-400 hover:text-gray-900 text-xs">{copy.switchLabel}</Link>
+              {/* The market is chosen in the tool itself now, so the nav no
+                  longer offers a second "version" to switch to. /au still works
+                  as a direct link. This slot goes to the private path, which
+                  had no route in from the public site at all. */}
+              <Link href="/private" className="text-gray-400 hover:text-gray-900 text-xs">
+                Private (runs on your Mac)
+              </Link>
               <Link href="/login" className="text-gray-500 hover:text-gray-900">Login</Link>
               <Link href="/signup" className="bg-gray-900 text-white px-4 py-1.5 rounded-lg text-xs font-medium hover:bg-gray-800">Sign Up</Link>
             </>
