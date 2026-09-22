@@ -76,14 +76,15 @@ function reply(system, user) {
   if (system.includes("list the roles")) {
     return { roles: ["HERO DAD", "BARISTA"] };
   }
-  // Description. The trailing sentence is deliberately in narrative-summary
-  // voice, to prove the quality gate drops it.
+  // Description. The last two sentences are deliberately in the two voices the
+  // quality gate exists to remove — plot summary, then novel — so the harness
+  // can prove they are dropped.
   const name = /Character: (.+)/.exec(user)?.[1] ?? "role";
   return {
     gender: "Woman",
     ageRange: "30 to 40 years old",
     ethnicity: "",
-    description: `Blunt and unhurried, ${name} has stopped being impressed by emergencies. Dry with colleagues, unexpectedly gentle with patients. In the story she learns to trust someone again.`,
+    description: `Blunt and unhurried, ${name} has stopped being impressed by emergencies. Dry with colleagues, unexpectedly gentle with patients. In the story she learns to trust someone again. She carries herself with an air of quiet authority.`,
     traits: ["dry wit", "driving"],
   };
 }

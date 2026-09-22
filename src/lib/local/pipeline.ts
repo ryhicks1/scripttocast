@@ -35,6 +35,7 @@ import { defaultFormQuestions, defaultSelfTape } from "./defaults";
 import { LocalAnalysisError } from "./errors";
 import type { ExtractedDocument } from "./extract";
 import { chatJson, type OllamaConfig } from "./ollama";
+import { findBookVoice } from "./style";
 import {
   CAST_LIST_SYSTEM,
   castListUser,
@@ -133,7 +134,7 @@ export interface LocalDiagnostics {
   rolesOmitted: number;
   /** Model calls made, for a sense of what a run costs locally. */
   modelCalls: number;
-  /** Descriptions that still tripped the narrative-voice check after trimming. */
+  /** Descriptions that still trip a style check after trimming. */
   narrativeVoiceFlagged: number;
   elapsedMs: number;
 }
@@ -272,6 +273,12 @@ export async function analyzeLocally(
       : mode === "commercial"
         ? COMMERCIAL_SENTENCE_CEILING
         : SENTENCE_CEILING.SUPPORTING;
+    // The model is asked for a short answer and never told the ceiling, which
+    // it would otherwise write up to. The ceiling is applied afterwards.
+    const lengthHint =
+      ceiling <= 2
+        ? "Write one sentence. Two at most."
+        : "Write two or three sentences.";
     const name = displayName(character.name);
     const excerpts = excerptsFor(script, character, budgetFor(config, DESCRIPTION_SYSTEM, 2400));
 
@@ -279,7 +286,7 @@ export async function analyzeLocally(
     try {
       reply = await chatJson<DescriptionReply>(config, {
         system: DESCRIPTION_SYSTEM,
-        user: descriptionUser(name, ceiling, excerpts),
+        user: descriptionUser(name, lengthHint, excerpts),
         schema: DESCRIPTION_SCHEMA,
         label: `role: ${name}`,
         maxOutputTokens: 400,
@@ -292,8 +299,8 @@ export async function analyzeLocally(
 
     log("local: role done", { index: index + 1, of: characters.length, role: name });
 
-    const body = reply ? tighten(clean(reply.description), ceiling, log, name) : "";
-    if (body && findNarrativeVoice(body).length) flagged++;
+    const body = reply ? tightenDescription(clean(reply.description), ceiling, log, name) : "";
+    if (body && (findNarrativeVoice(body).length || findBookVoice(body).length)) flagged++;
 
     roles.push({
       name,
@@ -470,41 +477,49 @@ function fitLines(lines: string[], budget: number, maxLines: number): string[] {
 }
 
 /**
- * Enforce the sentence ceiling, and drop sentences written in narrative-summary
- * voice — "in the story", "his journey", "we learn".
+ * Enforce the sentence ceiling and drop sentences written in plot-summary or
+ * book voice.
  *
- * The public prompt bans these constructions in prose and a frontier model
- * complies. A 3B model does not, reliably, so the rule is applied here instead
- * of asked for. At least one sentence always survives: a thin description beats
- * an empty one, and the count of what still trips the check is reported in
- * diagnostics rather than hidden.
+ * The ceiling is a cap, not an instruction: the model is never told the number
+ * (see prompts.ts). A 3B model handed "at most 5 sentences" writes exactly
+ * five, padding to reach it, which is how a LEAD came back as five sentences of
+ * atmosphere. It is asked for two or three instead, and this trims the rest.
+ *
+ * At least one sentence always survives. A thin description beats an empty one,
+ * and a role whose every sentence trips a filter is worth seeing rather than
+ * blanking.
  */
-export function tighten(
+export function tightenDescription(
   description: string,
   maxSentences: number,
   log: Logger = () => {},
   roleName = "",
 ): string {
   if (!description) return "";
+
   const sentences = description
     .split(/(?<=[.!?])\s+/)
-    .map((s) => s.trim())
+    .map((sentence) => sentence.trim())
     .filter(Boolean);
 
-  const kept: string[] = [];
-  const dropped: string[] = [];
-  for (const sentence of sentences) {
-    if (kept.length >= maxSentences) break;
-    if (findNarrativeVoice(sentence).length && kept.length) {
-      dropped.push(sentence);
-      continue;
-    }
-    kept.push(sentence);
-  }
-  if (!kept.length && sentences.length) kept.push(sentences[0]);
-  if (dropped.length) log("local: dropped narrative-voice sentences", { roleName, dropped });
+  const flagged = (sentence: string) => [
+    ...findNarrativeVoice(sentence),
+    ...findBookVoice(sentence),
+  ];
 
-  return kept.join(" ");
+  const kept: string[] = [];
+  const dropped: { sentence: string; why: string[] }[] = [];
+  for (const sentence of sentences) {
+    const hits = flagged(sentence);
+    if (hits.length) dropped.push({ sentence, why: hits });
+    else kept.push(sentence);
+  }
+
+  // Everything tripped a filter — keep the opening line rather than nothing.
+  const surviving = kept.length ? kept : sentences.slice(0, 1);
+  if (dropped.length) log("local: dropped sentences", { roleName, dropped });
+
+  return surviving.slice(0, maxSentences).join(" ");
 }
 
 /**

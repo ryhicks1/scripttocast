@@ -56,30 +56,50 @@ synopsis: three or four sentences.`;
 
 export const DESCRIPTION_SYSTEM = `You write one casting breakdown description for one character.
 
-Describe the PERSON, not the plot: their temperament, how they carry
-themselves, how they treat people, what they want.
+An agent reads it to decide which of their clients to send. Write only what
+helps them decide.
 
-Never retell what happens. Do not write "in the story", "his journey",
-"we learn", "by the end", "serves as", "represents", or "the audience".
-Do not describe scenes. Do not mention the plot.
+Say what the character does, who they are to the other characters, how they
+treat people, and what they want. Use the facts in the text in front of you.
+A concrete detail from the text beats an adjective.
+
+Do not write like a novel. Never write "carries himself", "carries herself",
+"an air of", "exudes", "a deep sense of", "his gaze", "her smile is",
+"a voice of reason" or "moral compass". Do not describe clothes, eyes, smiles
+or posture unless the part actually requires it.
+
+Do not retell the plot. Never write "in the story", "his journey", "we learn",
+"by the end", "serves as", "represents" or "the audience".
+
+Stop as soon as you run out of things that are true. A short description is a
+good description. Never add a sentence to make it longer.
 
 Fill gender, ageRange and ethnicity only when the text says or plainly shows
 them. Otherwise return "" for that field. Never guess ethnicity.
 
-Example of the voice, for a different script:
+Two examples of the voice, from other scripts:
 
-{"gender":"Woman","ageRange":"30 to 40 years old","ethnicity":"","description":"A blunt, unhurried paramedic who has seen enough to stop being impressed. Dry to the point of rudeness with colleagues, unexpectedly gentle with patients. Wants to be left alone to do the job properly.","traits":["dry wit","medical procedural"]}`;
+{"gender":"Woman","ageRange":"30 to 40 years old","ethnicity":"","description":"A blunt, unhurried paramedic who has stopped being impressed by emergencies. Dry to the point of rudeness with colleagues, unexpectedly gentle with patients.","traits":["dry wit","driving"]}
 
+{"gender":"Man","ageRange":"60s","ethnicity":"","description":"Night dispatcher, twenty-two years in the chair, proud of every shortcut he has ever invented. Wants to be thanked once before he retires.","traits":["deadpan"]}`;
+
+/**
+ * The length instruction is a phrase, never the ceiling number.
+ *
+ * Handed "at most 5 sentences", a 3B model writes five and pads to get there.
+ * The ceiling is enforced in code instead — see tightenDescription — so it can
+ * stay a limit rather than becoming a target.
+ */
 export function descriptionUser(
   name: string,
-  maxSentences: number,
+  lengthHint: string,
   excerpts: string,
 ): string {
   return `Character: ${name}
 
 ${excerpts}
 
-Write at most ${maxSentences} sentence${maxSentences === 1 ? "" : "s"}. Fewer is better.`;
+${lengthHint}`;
 }
 
 export const CAST_LIST_SYSTEM = `You list the roles that a casting document is asking to cast.

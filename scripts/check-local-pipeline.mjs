@@ -151,6 +151,17 @@ try {
     !/in the story/i.test(mara?.description ?? ""),
     mara?.description,
   );
+  check(
+    "book-voice sentence was dropped",
+    !/carries herself|an air of/i.test(mara?.description ?? ""),
+    mara?.description,
+  );
+  check(
+    "model was never handed the sentence ceiling",
+    stub.calls.filter((c) => c.system.includes("casting breakdown description"))
+      .every((c) => !/at most \d+ sentence/i.test(c.user)),
+    "a number in the prompt becomes a target",
+  );
   check("self-tape instructions per role", body.selfTapeInstructions?.length === body.roles?.length);
   check("form questions per role", body.formQuestions?.length === body.roles?.length);
   check("logline written", Boolean(body.project?.logline), body.project?.logline);

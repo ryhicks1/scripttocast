@@ -42,6 +42,11 @@ and the scorer use, so the two sides are always measured the same way.
 | `sentences.median` | 5 | with a p90 of 12: long entries are normal |
 | `words.median` | 59 | prose only (after the demographic line): 50 |
 
+`scripts/check-style-filters.mjs` measures the style filters against the same
+corpus, since a filter that drops sentences has to be checked against
+professional copy or it quietly deletes good writing. Current false-positive
+rates on real entries: narrative voice 6.5%, book voice 2.9%.
+
 Two of these deserve care when reading a score:
 
 - **Ethnicity is reported but never gated.** The corpus states an ethnic
