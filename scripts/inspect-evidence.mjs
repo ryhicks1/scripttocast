@@ -19,16 +19,20 @@
  * The script is read into memory and never written anywhere.
  *
  * The classifier below is a diagnostic, not a filter. It sorts the lines in
- * "How the script describes them" into:
+ * "How the script describes them" into `look` (carries appearance, age, build,
+ * dress or voice vocabulary) and `moves` (everything else: blocking — "He
+ * crosses to the window"). A role whose evidence is all `moves` cannot produce
+ * a castable description, no matter what the prompt says.
  *
- *   intro   — the character's name in CAPS, which is the screenplay convention
- *             for a described entrance and the one line that reliably says who
- *             a person is;
- *   look    — carries appearance, age, build, dress or voice vocabulary;
- *   moves   — everything else: blocking. "He crosses to the window."
+ * Three other columns matter as much:
  *
- * A role whose evidence is all `moves` cannot produce a castable description,
- * no matter what the prompt says. That is the number to watch.
+ *   N of M mentions — how many action lines name this character in the whole
+ *                     script, against the six describedIn() stops at. A lead
+ *                     with 200 and a cap of 6 is being described from act one.
+ *   entrance        — whether the FIRST action line naming them says anything
+ *                     about the person. If it does not, nothing downstream can.
+ *   taken / pool    — the page span the six came from, against the span they
+ *                     were drawn from.
  */
 import { readFileSync } from "node:fs";
 import { registerHooks } from "node:module";
@@ -76,14 +80,37 @@ function parseArgs(argv) {
  * what the model sees, so a false positive costs nothing but a number.
  */
 const LOOK =
-  /\b(\d{1,2}s?\b|teen|twenties|thirties|forties|fifties|sixties|seventies|eighties|young|old|elderly|middle[- ]aged|aged|boy|girl|kid|child|baby|man|woman|guy|lady|gentleman|tall|short|thin|thick|slim|slight|lean|heavy|stocky|broad|small|big|wiry|gaunt|weathered|handsome|beautiful|pretty|plain|grey|gray|greying|blonde?|brunette|red[- ]haired|bald|beard|moustache|mustache|stubble|hair|eyes|face|skin|scar|tattoo|limp|suit|uniform|dress|coat|jacket|boots|glasses|voice|accent|drawl|growl|whisper)\b/i;
+  /\b(\d{1,2}s?\b|teen|twenty|thirty|forty|fifty|sixty|seventy|eighty|twenties|thirties|forties|fifties|sixties|seventies|eighties|young|old|elderly|middle[- ]aged|aged|boy|girl|kid|child|baby|man|woman|guy|lady|gentleman|tall|short|thin|thick|slim|slight|lean|heavy|stocky|broad|small|big|wiry|gaunt|weathered|handsome|beautiful|pretty|plain|grey|gray|greying|blonde?|brunette|red[- ]haired|bald|beard|moustache|mustache|stubble|hair|eyes|face|skin|scar|tattoo|limp|suit|uniform|dress|coat|jacket|boots|glasses|voice|accent|drawl|growl|whisper)\b/i;
 
-function classify(line, name) {
-  const body = line.replace(/^\(p\d+\)\s*/, "");
-  const caps = new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(body);
-  if (caps) return "intro";
-  if (LOOK.test(body)) return "look";
-  return "moves";
+/**
+ * Does this line say anything about the person, or only move them around?
+ *
+ * The first version of this asked whether the character's name appeared in
+ * caps, on the theory from the brief that caps marks a described entrance. It
+ * cannot: describedIn() SELECTS lines by a case-sensitive match on the caps cue
+ * name, so every line it returns carries the name in caps by construction. The
+ * column read 100% intro on a synthetic fixture and 100% intro on a 147-page
+ * feature, which is what a tautology looks like from the outside.
+ *
+ * What actually separates an introduction from blocking is the vocabulary: an
+ * introduction says how old someone is, what they look like, what they are
+ * wearing, how they sound. Blocking says where they walked.
+ */
+function classify(line) {
+  return LOOK.test(line.replace(/^\(p\d+\)\s*/, "")) ? "look" : "moves";
+}
+
+/**
+ * Every action line naming this character, not just the six that fit.
+ *
+ * describedIn() takes the first six in document order and stops. Whether that
+ * is a reasonable sample or an act-one crop depends entirely on how many there
+ * were, which is the number nobody has had.
+ */
+function allMentions(script, name) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const caps = new RegExp(`\\b${escaped}\\b`);
+  return script.actionLines.filter((line) => caps.test(line.text) && /[a-z]/.test(line.text));
 }
 
 function section(evidence, heading) {
@@ -97,8 +124,11 @@ function pagesOf(lines) {
   return lines.map((line) => Number(line.match(/^\(p(\d+)\)/)?.[1] ?? 0)).filter(Boolean);
 }
 
-function bar(counts) {
-  return `${String(counts.intro).padStart(2)} intro  ${String(counts.look).padStart(2)} look  ${String(counts.moves).padStart(2)} moves`;
+function span(pages) {
+  if (!pages.length) return "none";
+  const low = Math.min(...pages);
+  const high = Math.max(...pages);
+  return low === high ? `p${low}` : `p${low}-${high}`;
 }
 
 async function main() {
@@ -132,34 +162,45 @@ async function main() {
   }
   if (options.limit) characters = characters.slice(0, options.limit);
 
-  const totals = { intro: 0, look: 0, moves: 0 };
+  const totals = { look: 0, moves: 0 };
   let noDescription = 0;
-  let movesOnly = 0;
+  let bareEntrance = 0;
+  let truncated = 0;
 
   for (const character of characters) {
     const tier = tiers.get(character.name) ?? "DAY PLAYER";
     const evidence = buildEvidence(script, character, 2400);
     const described = section(evidence.text, "How the script describes them");
-    const counts = { intro: 0, look: 0, moves: 0 };
-    for (const line of described) counts[classify(line, character.name)]++;
-    totals.intro += counts.intro;
+    const counts = { look: 0, moves: 0 };
+    for (const line of described) counts[classify(line)]++;
     totals.look += counts.look;
     totals.moves += counts.moves;
-    if (!described.length) noDescription++;
-    else if (!counts.intro && !counts.look) movesOnly++;
 
-    const evidencePages = pagesOf(described);
-    const span = evidencePages.length
-      ? `p${Math.min(...evidencePages)}-${Math.max(...evidencePages)}`
-      : "none";
-    const appears = character.pages.length
-      ? `p${Math.min(...character.pages)}-${Math.max(...character.pages)}`
-      : "none";
+    // The whole pool, against the six that were taken from it.
+    const mentions = allMentions(script, character.name);
+
+    // The entrance is the first action line that names them, and it is the one
+    // line a screenplay reliably spends on saying who somebody is. If it says
+    // nothing about the person, nothing downstream can.
+    const entrance = !mentions.length
+      ? "none"
+      : LOOK.test(mentions[0].text)
+        ? "described"
+        : "bare";
+
+    if (!described.length) noDescription++;
+    if (entrance === "bare") bareEntrance++;
+    if (mentions.length > described.length) truncated++;
 
     console.log(
-      `${displayName(character.name).padEnd(24)} ${tier.padEnd(11)} ` +
-        `${String(character.cues).padStart(4)} cues  ${bar(counts)}  ` +
-        `describes ${span.padEnd(11)} speaks ${appears}`,
+      `${displayName(character.name).padEnd(22)} ${tier.padEnd(11)} ` +
+        `${String(character.cues).padStart(4)} cues  ` +
+        `${String(described.length).padStart(2)} of ${String(mentions.length).padEnd(4)} mentions  ` +
+        `entrance ${entrance.padEnd(10)} ` +
+        `${String(counts.look).padStart(2)} look ${String(counts.moves).padStart(2)} moves  ` +
+        `taken ${span(pagesOf(described)).padEnd(10)} ` +
+        `pool ${span(mentions.map((m) => m.page)).padEnd(10)} ` +
+        `speaks ${span(character.pages)}`,
     );
 
     const showFull = options.full || options.role;
@@ -167,7 +208,7 @@ async function main() {
       console.log(`\n--- evidence handed to the model for ${displayName(character.name)} ` +
         `(budget ${DESCRIPTION_BUDGET[tier]} chars of description) ---`);
       for (const line of described) {
-        console.log(`  [${classify(line, character.name).padEnd(5)}] ${line}`);
+        console.log(`  [${classify(line).padEnd(5)}] ${line}`);
       }
       const rest = evidence.text.split("\n\n").filter((b) => !b.startsWith("How the script describes them"));
       for (const block of rest) console.log(`\n  ${block.split("\n").join("\n  ")}`);
@@ -175,13 +216,14 @@ async function main() {
     }
   }
 
-  const lines = totals.intro + totals.look + totals.moves;
+  const lines = totals.look + totals.moves;
   console.log(
     `\n${characters.length} roles, ${lines} description lines: ` +
-      `${totals.intro} intro, ${totals.look} look, ${totals.moves} moves ` +
+      `${totals.look} carry a look, ${totals.moves} are blocking ` +
       `(${lines ? Math.round((totals.moves / lines) * 100) : 0}% blocking).\n` +
-      `${noDescription} roles with no description evidence at all, ` +
-      `${movesOnly} with nothing but blocking.`,
+      `${noDescription} roles with no description evidence at all.\n` +
+      `${bareEntrance} roles whose first action line says nothing about the person.\n` +
+      `${truncated} roles with more mentions in the script than were taken.`,
   );
 }
 
