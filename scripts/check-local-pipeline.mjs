@@ -283,6 +283,11 @@ try {
     "action following a speech used to be captured as part of it",
   );
   check(
+    "the house prompt carries the local style rules",
+    descriptionPrompts.every((c) => /WRITE IN FRAGMENTS/.test(c.system) && /PHYSICALITY/.test(c.system)),
+    "rules that only reach the lean prompt never reach a model anyone uses",
+  );
+  check(
     "the house prompt is used on a model big enough for it",
     body.meta?.diagnostics?.descriptionPrompt === "house",
     body.meta?.diagnostics?.descriptionPrompt,
@@ -296,6 +301,11 @@ try {
     `${JSON.stringify(body.meta?.diagnostics?.rolesCopiedPrompt)} -> ${otis}`,
   );
   const devlin = (body.roles ?? []).find((r) => r.name === "Devlin");
+  check(
+    "hair colour is not accepted as an ethnicity",
+    !(body.roles ?? []).some((r) => /blonde|redhead|brunette/i.test(r.ethnicity ?? "")),
+    (body.roles ?? []).map((r) => r.ethnicity).filter(Boolean).join(", "),
+  );
   check(
     "an ethnicity the script never states is dropped",
     devlin?.ethnicity === null && (body.meta?.diagnostics?.unsupportedEthnicityDropped ?? 0) >= 1,

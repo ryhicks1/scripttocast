@@ -59,6 +59,50 @@ synopsis: three or four sentences.`;
 }
 
 /**
+ * The rules both prompts need, in one place.
+ *
+ * These lived only in DESCRIPTION_SYSTEM, which runs below 7B. Every model
+ * anyone actually uses gets the house prompt instead — so the fragment rule,
+ * the banned openings and the actor-direction line were written, committed,
+ * and never sent. A run came back with "A seasoned operative" still in it and
+ * not a fragment in sight, which is exactly what a prompt that never arrives
+ * looks like.
+ */
+export const LOCAL_STYLE_RULES = `HOW IT IS WRITTEN — the part that goes wrong most often:
+
+- WRITE IN FRAGMENTS. Nearly two thirds of the sentences in professional
+  breakdowns have no verb in them at all. "Mexican field-hand." "Minimalist
+  presence." "Observant. Restrained." Each is a whole sentence. A full sentence
+  spends its words on grammar; a fragment spends them on the person.
+- Open on a noun or an adjective. Never open with "He is", "She is", "They
+  are", or the character's name.
+- Never open with "A seasoned", "A skilled" or "A young". They say nothing, and
+  they end up on every role in the breakdown.
+
+PHYSICALITY. When the script says how someone looks, moves, carries themselves
+or sounds, put it in — in the script's own terms, near the front. "Gaunt,
+weathered." "Mountainous, corpulent." "A rangy wolf of a man with a bristling
+beard." That is what an agent pictures, and it is the difference between a
+description someone can cast from and a list of adjectives.
+
+Only what the evidence gives you. Do not invent a look, and do not write around
+one novelistically — no "his tailored suit accentuating his lean physique". If
+the script never describes them, say nothing about their appearance.
+
+WHAT THE PART DEMANDS. One line, at most, of the kind a casting director writes
+to an actor: what the performance has to carry. "Face should carry life
+experience." "Needs strong physical presence and emotional transparency."
+Only where the evidence supports it.
+
+NEVER:
+- Explain your reasoning or cite the script: no "as evidenced by", "which
+  shows", "as seen when". Nothing has to be proved.
+- Hedge: no "possibly", "perhaps", "seems", "some kind of".
+- "carries himself", "an air of", "exudes", "a deep sense of", "is able to",
+  "is someone who", "a deep understanding of", "a commanding presence".
+- Retell a scene, or describe what anyone is doing.`;
+
+/**
  * No worked examples, deliberately.
  *
  * The grammar rules below stand in for them. Two thirds of real breakdowns open
@@ -85,26 +129,7 @@ Write in this order:
 1. What they are — their job, their rank, or what they are to another character.
 2. What they are like to deal with, in concrete terms.
 
-HOW IT IS WRITTEN. This is the part that gets it wrong most often:
-- WRITE IN FRAGMENTS. Nearly two thirds of the sentences in professional
-  breakdowns have no verb in them at all. "Mexican field-hand." "Minimalist
-  presence." "Observant. Restrained." Each one is a whole sentence. A full
-  sentence spends its words on grammar; a fragment spends them on the person.
-- Open with a noun or an adjective. Never open with "He is", "She is",
-  "They are", or the character's name.
-- You may write one line of direction to the actor, of the kind a casting
-  director writes: what the performance has to carry. "Face should carry life
-  experience." "Needs strong physical presence and emotional transparency."
-  One such line at most, and only where the evidence supports it.
-- Never explain your reasoning or cite the script. Do not write "as evidenced
-  by", "which shows", "this suggests", "as seen when". State what they are
-  like. Nothing has to be proved.
-- Never open with "A seasoned", "A skilled" or "A young". They say nothing, and
-  they end up on every role in the breakdown.
-- No hedging. Not "possibly", "perhaps", "seems", "a helper or assistant",
-  "some kind of". If the evidence does not support it, leave it out.
-- Do not repeat their gender, age or ethnicity in your sentences. Those are
-  printed immediately before your text and saying them twice reads as a fault.
+${LOCAL_STYLE_RULES}
 
 Rules:
 - Use only the evidence given below. Do not use anything you already know about
@@ -112,15 +137,7 @@ Rules:
 - If the evidence does not say what they do or who they are to other people,
   write only what it does support, in one sentence, and stop. Do not fill the
   space with adjectives.
-- Never describe a scene, a moment, or what anyone is doing. Nothing "turns",
-  "watches", "walks in", "stares", "is taken aback" or "pauses".
 - Never mention another character except as a relationship, like "X's sister".
-- Do not describe clothes, eyes, smiles or posture unless the part requires it.
-- Never write "carries himself", "carries herself", "an air of", "exudes",
-  "a deep sense of", "a voice of reason", "moral compass", "driven by a desire",
-  "is able to", "is someone who", "a deep understanding of", "a commanding
-  presence", "in the story", "his journey", "we learn", "by the end",
-  "serves as" or "the audience".
 - Never copy wording from these instructions.
 
 Fill gender, ageRange and ethnicity only when the evidence states them outright.
@@ -161,6 +178,8 @@ The description follows the DESCRIPTION FORMAT above, except that you write only
 the [ROLE DESCRIPTION] part — the gender, age and ethnicity are returned as
 their own fields and printed before your text, so do not repeat them in it, and
 do not write the trailing role type. Both are added for you.
+
+${LOCAL_STYLE_RULES}
 
 Use only the evidence below. Do not use anything you already know about this
 film or these characters. Never copy wording from these instructions.`;
