@@ -394,25 +394,134 @@ function settingsFor(script: ParsedScript, character: ParsedCharacter): string[]
 }
 
 /**
- * A character's introduction — the action line that first names them in caps,
- * which in a screenplay is where age, look and occupation are written down
- * ("MARA VOSS, late thirties, an unhurried paramedic...").
+ * Words a screenplay uses when it is describing a person rather than moving
+ * them. Shared with the evidence inspector so the lines it counts as a look
+ * are the lines this selector keeps.
+ *
+ * Broad on purpose. A line that says "tall" and then crosses a room is still
+ * a line about the person; missing it is worse than spending a slot on it.
+ */
+const APPEARANCE =
+  /\b(\d{1,2}s?\b|teen|twenty|thirty|forty|fifty|sixty|seventy|eighty|twenties|thirties|forties|fifties|sixties|seventies|eighties|young|old|elderly|middle[- ]aged|aged|boy|girl|kid|child|baby|man|woman|guy|lady|gentleman|tall|short|thin|thick|slim|slight|lean|heavy|stocky|broad|small|big|wiry|gaunt|weathered|handsome|beautiful|pretty|plain|grey|gray|greying|blonde?|brunette|red[- ]haired|bald|beard|moustache|mustache|stubble|hair|eyes|face|skin|scar|tattoo|limp|suit|uniform|dress|coat|jacket|boots|glasses|voice|accent|drawl|growl|whisper)\b/i;
+
+/** True when an action line carries age, build, dress, or voice — a look. */
+export function hasAppearance(text: string): boolean {
+  return APPEARANCE.test(text);
+}
+
+/**
+ * Every action line that names this character in caps and is not itself all
+ * caps (a cue or a transition). Document order. This is the pool; describedIn
+ * chooses which of them fit in the evidence.
+ */
+export function actionMentions(
+  script: ParsedScript,
+  name: string,
+): { page: number; text: string }[] {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const capsMention = new RegExp(`\\b${escaped}\\b`);
+  return script.actionLines.filter(
+    (line) => capsMention.test(line.text) && /[a-z]/.test(line.text),
+  );
+}
+
+/**
+ * Action lines that tell the model who this person is.
+ *
+ * The first version kept the first six mentions in document order and stopped.
+ * On a feature that is almost all blocking: the entrance is "HOLT drags the
+ * gate shut", the next five are more of the same, and the line that actually
+ * says what he looks like — page 9, the eleventh mention — never reaches the
+ * model. A diagnostic that then asked "does this line contain the name in
+ * caps?" reported every one of those six as an introduction, so look and
+ * moves both read as zero even though the lines were real. The name is in
+ * caps because that is how the line was selected.
+ *
+ * Selection is by content once the pool is longer than the cap:
+ *   - the first mention is always kept (the introduction, even when it is
+ *     only blocking);
+ *   - lines with appearance, age, build, dress, or voice vocabulary are kept
+ *     ahead of later blocking;
+ *   - remaining slots are blocking, spread across the script rather than
+ *     taken from the first pages only.
+ * Under the cap, nothing is dropped: a one-line introduction still comes
+ * through whole.
  *
  * Searched in action lines only. A dialogue line that happens to name them is
  * somebody talking, not the script describing them.
  */
 export function describedIn(script: ParsedScript, name: string, limit = 6): string[] {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const capsMention = new RegExp(`\\b${escaped}\\b`);
-  const found: string[] = [];
+  return selectDescribed(actionMentions(script, name), limit).map(
+    (line) => `(p${line.page}) ${line.text.slice(0, 400)}`,
+  );
+}
 
-  for (const line of script.actionLines) {
-    if (!capsMention.test(line.text)) continue;
-    if (!/[a-z]/.test(line.text)) continue; // all caps: a cue or a transition
-    found.push(`(p${line.page}) ${line.text.slice(0, 400)}`);
-    if (found.length >= limit) break;
+function selectDescribed(
+  mentions: { page: number; text: string }[],
+  limit: number,
+): { page: number; text: string }[] {
+  if (mentions.length <= limit) return mentions.slice();
+
+  const intro = mentions[0];
+  const looks = mentions.filter((line) => hasAppearance(line.text));
+  const moves = mentions.filter((line) => !hasAppearance(line.text));
+  const introIsLook = hasAppearance(intro.text);
+  // A bare entrance has to survive even when later lines are full of looks.
+  // One blocking line has to survive when the entrance itself is the look,
+  // otherwise a lead who is described once and then only moves still comes
+  // back with no movement.
+  const reserveIntro = introIsLook ? 0 : 1;
+  const laterMoves = moves.some((line) => line !== intro);
+  const reserveMove = laterMoves && limit - reserveIntro >= 2 ? 1 : 0;
+  const lookBudget = Math.min(
+    looks.length,
+    Math.max(0, limit - reserveIntro - (introIsLook ? reserveMove : 0)),
+  );
+
+  const picked: { page: number; text: string }[] = [];
+  const seen = new Set<{ page: number; text: string }>();
+  const add = (line: { page: number; text: string } | undefined) => {
+    if (!line || seen.has(line) || picked.length >= limit) return false;
+    seen.add(line);
+    picked.push(line);
+    return true;
+  };
+
+  add(intro);
+  let lookCount = introIsLook ? 1 : 0;
+  for (const line of looks) {
+    if (lookCount >= lookBudget || picked.length >= limit) break;
+    if (add(line)) lookCount++;
   }
-  return found;
+
+  const remaining = limit - picked.length;
+  for (const line of spread(moves.filter((line) => !seen.has(line)), remaining)) {
+    add(line);
+  }
+
+  const order = new Map(mentions.map((line, index) => [line, index]));
+  picked.sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
+  return picked;
+}
+
+/** `n` items spread across the list, so act one does not fill every slot. */
+function spread<T>(items: T[], n: number): T[] {
+  if (n <= 0 || items.length === 0) return [];
+  if (n >= items.length) return items.slice();
+  const used = new Set<number>();
+  const out: T[] = [];
+  for (let i = 0; i < n; i++) {
+    let idx = Math.round((i * (items.length - 1)) / (n - 1));
+    let guard = 0;
+    while (used.has(idx) && guard < items.length) {
+      idx = (idx + 1) % items.length;
+      guard++;
+    }
+    if (used.has(idx)) break;
+    used.add(idx);
+    out.push(items[idx]);
+  }
+  return out;
 }
 
 /** Title Case a cue name for display: "HAPPY GILMORE" -> "Happy Gilmore". */

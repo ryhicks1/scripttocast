@@ -303,12 +303,12 @@ const BLOCKING_SCENES = [
  * line instead of assumed, because the failures above are about which action
  * lines fall where.
  */
-export async function makeBlockingPdf() {
+async function drawElementPdf(scenes) {
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Courier);
   const X = { action: ACTION_X, cue: CUE_X, dialogue: DIALOGUE_X };
 
-  for (const scene of BLOCKING_SCENES) {
+  for (const scene of scenes) {
     const page = pdf.addPage([612, 792]);
     let y = 720;
     const rows = [["action", scene.heading], ...scene.items];
@@ -320,4 +320,95 @@ export async function makeBlockingPdf() {
   }
 
   return Buffer.from(await pdf.save());
+}
+
+/**
+ * A movement-heavy screenplay whose look line sits past the old cap of six.
+ *
+ * Written for this repository. Calder is named in blocking from the first
+ * scene — hauling rope, crossing the deck, climbing into the hold — and is
+ * not described until the wheelhouse, his eighth action mention. The previous
+ * selector kept the first six mentions and stopped, so the evidence was six
+ * blocking lines: look 0. An intro-first classifier made that look even worse,
+ * because every selected line contains the caps name and was therefore counted
+ * as an introduction: look 0, moves 0.
+ *
+ * Vess is the control. She is introduced on page 1 with hair, a coat, and an
+ * age, then named in blocking after that. Her introduction has to survive the
+ * same selector that reaches back for Calder.
+ */
+const MOVEMENT_SCENES = [
+  {
+    heading: "INT. DECK - NIGHT",
+    items: [
+      ["action", "CALDER hauls the rope over the cleat and kicks the hatch shut."],
+      ["action", "VESS, twenty-eight, rain-dark hair and a thin coat, drops onto the deck."],
+      ["cue", "VESS"],
+      ["dialogue", "You left the hatch open on a falling tide."],
+      ["cue", "CALDER"],
+      ["dialogue", "I left it open so I could see the water."],
+      ["action", "CALDER crosses the deck and checks the winch."],
+      ["action", "VESS follows him and stays clear of the rope."],
+    ],
+  },
+  {
+    heading: "EXT. BOW - CONTINUOUS",
+    items: [
+      ["action", "CALDER drops to one knee and works the knot loose."],
+      ["action", "VESS crosses to the rail and points at the channel marker."],
+      ["cue", "VESS"],
+      ["dialogue", "That light is not where it was an hour ago."],
+      ["cue", "CALDER"],
+      ["dialogue", "Then we are drifting, or it is."],
+      ["action", "CALDER stands and walks the line back toward the bow."],
+      ["action", "VESS climbs the ladder two rungs at a time."],
+    ],
+  },
+  {
+    heading: "INT. HOLD - NIGHT",
+    items: [
+      ["action", "CALDER climbs down into the hold and starts on the crates."],
+      ["action", "VESS stays on the ladder with the torch aimed down."],
+      ["cue", "CALDER"],
+      ["dialogue", "The count is off before we have even left the dock."],
+      ["cue", "VESS"],
+      ["dialogue", "Off against whose list, Calder."],
+      ["action", "CALDER shoves a crate until it meets the stack."],
+      ["action", "VESS comes down the rest of the way and does not touch them."],
+    ],
+  },
+  {
+    heading: "INT. WHEELHOUSE - LATER",
+    items: [
+      ["action", "CALDER leans on the chart table and taps the pencil once."],
+      ["action", "VESS shuts the door behind her and waits."],
+      ["cue", "VESS"],
+      ["dialogue", "Say what you would not say on deck."],
+      ["cue", "CALDER"],
+      ["dialogue", "The count was off last week too. I signed it anyway."],
+      ["action", "CALDER, early forties, a burn scar on the jaw, voice kept flat."],
+      ["action", "VESS watches his hands, which stay still while he talks."],
+    ],
+  },
+  {
+    heading: "EXT. DECK - PRE-DAWN",
+    items: [
+      ["action", "CALDER folds the chart and switches the radio off."],
+      ["action", "VESS takes the pencil he set down and puts it back."],
+      ["cue", "CALDER"],
+      ["dialogue", "We go at first light. Not before."],
+      ["cue", "VESS"],
+      ["dialogue", "Then sleep. I will wake you when the tide turns."],
+      ["action", "CALDER nods once and leaves the lamp burning."],
+      ["action", "VESS stays at the wheel and does not sit."],
+    ],
+  },
+];
+
+export async function makeMovementPdf() {
+  return drawElementPdf(MOVEMENT_SCENES);
+}
+
+export async function makeBlockingPdf() {
+  return drawElementPdf(BLOCKING_SCENES);
 }
