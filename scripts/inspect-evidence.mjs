@@ -166,6 +166,8 @@ async function main() {
   let noDescription = 0;
   let bareEntrance = 0;
   let truncated = 0;
+  let fixableByRanking = 0;
+  let starved = 0;
 
   for (const character of characters) {
     const tier = tiers.get(character.name) ?? "DAY PLAYER";
@@ -188,9 +190,29 @@ async function main() {
         ? "described"
         : "bare";
 
+    // The decisive number, and the one the entrance column cannot give.
+    //
+    // A role whose taken lines are all blocking is in one of two situations
+    // that need opposite fixes. Either the script DOES describe them somewhere
+    // and document-order selection walked past it — in which case ranking the
+    // pool fixes the role and nothing else has to change. Or no action line
+    // anywhere in the script says a word about them, and no amount of
+    // reselection will help: that role's description has to come from what
+    // other characters say, or it cannot be written.
+    const lookInPool = mentions.filter((line) => LOOK.test(line.text));
+    const firstLookRank = mentions.findIndex((line) => LOOK.test(line.text)) + 1;
+
+    const verdict = counts.look
+      ? "ok"
+      : lookInPool.length
+        ? "RANKING"
+        : "STARVED";
+
     if (!described.length) noDescription++;
     if (entrance === "bare") bareEntrance++;
     if (mentions.length > described.length) truncated++;
+    if (verdict === "RANKING") fixableByRanking++;
+    if (verdict === "STARVED" && described.length) starved++;
 
     console.log(
       `${displayName(character.name).padEnd(22)} ${tier.padEnd(11)} ` +
@@ -198,6 +220,9 @@ async function main() {
         `${String(described.length).padStart(2)} of ${String(mentions.length).padEnd(4)} mentions  ` +
         `entrance ${entrance.padEnd(10)} ` +
         `${String(counts.look).padStart(2)} look ${String(counts.moves).padStart(2)} moves  ` +
+        `pool look ${String(lookInPool.length).padStart(2)}` +
+        `${firstLookRank ? `@${String(firstLookRank).padEnd(3)}` : "    "}  ` +
+        `${verdict.padEnd(8)} ` +
         `taken ${span(pagesOf(described)).padEnd(10)} ` +
         `pool ${span(mentions.map((m) => m.page)).padEnd(10)} ` +
         `speaks ${span(character.pages)}`,
@@ -223,7 +248,13 @@ async function main() {
       `(${lines ? Math.round((totals.moves / lines) * 100) : 0}% blocking).\n` +
       `${noDescription} roles with no description evidence at all.\n` +
       `${bareEntrance} roles whose first action line says nothing about the person.\n` +
-      `${truncated} roles with more mentions in the script than were taken.`,
+      `${truncated} roles with more mentions in the script than were taken.\n` +
+      `${fixableByRanking} RANKING — all six taken lines are blocking, but the script ` +
+      `describes them somewhere in the pool. Selecting on content rather than ` +
+      `document order fixes these.\n` +
+      `${starved} STARVED — no action line anywhere in the script says a word about ` +
+      `them. Reselection cannot help; their description has to come from what ` +
+      `other characters say, or it cannot be written.`,
   );
 }
 
