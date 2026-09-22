@@ -11,6 +11,7 @@
  *   node scripts/check-local-pipeline.mjs
  */
 import { spawn } from "node:child_process";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
 import { startStubOllama } from "./stub-ollama.mjs";
 import { makeScannedPdf, makeScreenplayPdf } from "./make-test-script.mjs";
@@ -157,6 +158,12 @@ try {
     mara?.description,
   );
   check(
+    "evidence is written to local-evidence.txt",
+    existsSync("local-evidence.txt") &&
+      readFileSync("local-evidence.txt", "utf8").includes("===== Mara"),
+    "this is how a bad run gets diagnosed without guessing",
+  );
+  check(
     "PDF margins were used to tell dialogue from action",
     body.meta?.diagnostics?.usedLayout === true,
     "without this, action lines leak into the evidence as dialogue",
@@ -274,6 +281,8 @@ try {
 } finally {
   await stopDevServer(server);
 }
+
+rmSync("local-evidence.txt", { force: true });
 
 console.log(failures ? `\n${failures} check(s) failed` : "\nall checks passed");
 process.exit(failures ? 1 : 0);

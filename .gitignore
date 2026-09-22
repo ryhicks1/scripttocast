@@ -40,3 +40,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .secrets
+
+# Debug dump of script text handed to the local model. Never commit this.
+local-evidence.txt

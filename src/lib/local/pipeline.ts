@@ -19,6 +19,8 @@
  * and there must not be one: the point of this path is that the script never
  * leaves the machine.
  */
+import { appendFileSync, writeFileSync } from "fs";
+import { join } from "path";
 import {
   normalizeResult,
   PROJECT_TYPES,
@@ -56,6 +58,8 @@ import {
   type ParsedScript,
   type Tier,
 } from "./screenplay";
+
+const EVIDENCE_FILE = join(process.cwd(), "local-evidence.txt");
 
 /** Roles described per run. Each one is its own model call. */
 const DEFAULT_MAX_ROLES = 40;
@@ -142,6 +146,8 @@ export interface LocalDiagnostics {
   rolesCopiedPrompt: string[];
   /** Ethnicity claims dropped because the script did not state them. */
   unsupportedEthnicityDropped: number;
+  /** Descriptions left with almost nothing — the sign that evidence was thin. */
+  rolesThin: string[];
   /** True when PDF margins were used to tell dialogue from action. */
   usedLayout: boolean;
   elapsedMs: number;
@@ -162,6 +168,12 @@ export async function analyzeLocally(
 ): Promise<LocalAnalysis> {
   const startedAt = Date.now();
   let modelCalls = 0;
+
+  try {
+    writeFileSync(EVIDENCE_FILE, `evidence handed to ${config.model}, ${new Date().toISOString()}\n`, "utf8");
+  } catch {
+    // Not fatal — see recordEvidence.
+  }
 
   const pages = documents.flatMap((doc) => doc.pages);
   if (!pages.length) throw new LocalAnalysisError("No readable pages in the upload.", 400);
@@ -269,6 +281,7 @@ export async function analyzeLocally(
   const roles: Role[] = [];
   const failed: string[] = [];
   const leaked: string[] = [];
+  const thin: string[] = [];
   const castNames = characters.map((c) => displayName(c.name));
   let flagged = 0;
   let unsupportedEthnicity = 0;
@@ -293,13 +306,13 @@ export async function analyzeLocally(
     const name = displayName(character.name);
     const evidence = buildEvidence(script, character, budgetFor(config, DESCRIPTION_SYSTEM, 2400));
 
-    // Set LOCAL_DEBUG_EVIDENCE=1 to print exactly what the model is handed for
-    // each role. Every bad description so far has been the model faithfully
-    // reporting bad evidence, and this is the only way to see that from the
-    // outside without a ten-minute run and a guess.
-    if (process.env.LOCAL_DEBUG_EVIDENCE) {
-      console.log(`\n===== evidence for ${name} (${roleType}) =====\n${evidence.text}\n`);
-    }
+    // Always written, to local-evidence.txt in the project folder.
+    //
+    // Every bad description in this project has been the model faithfully
+    // reporting bad evidence. Reading that back was buried behind an
+    // environment variable and a terminal window, which made the fastest way to
+    // diagnose a run the hardest thing to reach. It is a plain file now.
+    recordEvidence(name, roleType, evidence.text);
 
     let reply: DescriptionReply | null = null;
     try {
@@ -331,11 +344,20 @@ export async function analyzeLocally(
     }
 
     body = withoutOtherCharacters(body, name, castNames);
+    // Under about eight words there is nothing an agent can act on. Worth
+    // counting: a run full of these means the evidence is the problem, not the
+    // wording, and local-evidence.txt is where to look.
+    if (body.split(/\s+/).filter(Boolean).length < 8) thin.push(name);
     if (body && (findNarrativeVoice(body).length || findBookVoice(body).length)) flagged++;
 
     // Ethnicity only where the script says so. The model claimed a lead was
     // Japanese because he shares scenes with a Japanese character; a wrong
     // ethnic background on a breakdown is worse than a blank one.
+    // Gender comes back blank a lot now that the model is told to state only
+    // what the evidence supports — and a breakdown without it is much less
+    // useful, since real ones state it 93% of the time. The script's own
+    // pronouns are evidence, so read them rather than dropping the field.
+    const gender = clean(reply?.gender) || genderFromPronouns(evidence.identity);
     const ethnicity = statedIn(evidence.identity, clean(reply?.ethnicity));
     if (reply?.ethnicity && !ethnicity) {
       log("local: dropped unsupported ethnicity", { role: name, claimed: reply.ethnicity });
@@ -345,14 +367,14 @@ export async function analyzeLocally(
     roles.push({
       name,
       description: composeDescription({
-        gender: clean(reply?.gender),
+        gender,
         ageRange: clean(reply?.ageRange),
         ethnicity,
         body,
         roleType,
       }),
       ageRange: clean(reply?.ageRange) || null,
-      gender: clean(reply?.gender) || null,
+      gender: gender || null,
       ethnicity: ethnicity || null,
       roleType,
       // Without cue lines there is nothing to infer from, and a cast list on a
@@ -405,6 +427,7 @@ export async function analyzeLocally(
       repeatedPhrases,
       rolesCopiedPrompt: leaked,
       unsupportedEthnicityDropped: unsupportedEthnicity,
+      rolesThin: thin,
       usedLayout: script.usedLayout,
       elapsedMs: Date.now() - startedAt,
     },
@@ -601,10 +624,39 @@ export function composeDescription({
 }
 
 /**
+ * Append one role's evidence to local-evidence.txt, next to package.json.
+ *
+ * This is a debugging aid, and it is the one place the script's own words are
+ * written to disk. It is the project folder on the user's own machine, never a
+ * server or a bucket, and it is overwritten at the start of every run — but it
+ * is still the script, so it is listed in .gitignore and worth deleting when
+ * you are done.
+ */
+function recordEvidence(name: string, roleType: string, evidence: string): void {
+  try {
+    appendFileSync(
+      EVIDENCE_FILE,
+      `\n===== ${name} (${roleType}) =====\n${evidence}\n`,
+      "utf8",
+    );
+  } catch {
+    // A read-only checkout is not a reason to fail an analysis.
+  }
+}
+
+/**
  * Does the evidence actually state this? Used for ethnicity, where a wrong
  * answer is worse than none: the claim has to appear in the script's own words
  * about this character, not be inferred from anything around them.
  */
+function genderFromPronouns(identityEvidence: string): string {
+  const he = (identityEvidence.match(/\b(he|him|his)\b/gi) ?? []).length;
+  const she = (identityEvidence.match(/\b(she|her|hers)\b/gi) ?? []).length;
+  if (he >= 2 && he > she * 2) return "Man";
+  if (she >= 2 && she > he * 2) return "Woman";
+  return "";
+}
+
 function statedIn(identityEvidence: string, claim: string): string {
   if (!claim) return "";
   const haystack = identityEvidence.toLowerCase();
@@ -627,26 +679,33 @@ function sharesWording(candidate: string, source: string): boolean {
 }
 
 /**
- * Drop sentences that name another character other than as a relationship.
+ * Drop sentences that recount a scene involving another character.
  *
- * "Cobb's wife" is exactly what a breakdown should say. "She is taken aback
- * when Cobb traces the solution to a maze she drew" is a scene, and it arrives
- * whenever the model starts recounting instead of describing. The possessive is
- * the difference between the two.
+ * "Cobb's wife" is exactly what a breakdown should say, and so is "works the
+ * job with Cobb". "She is taken aback when Cobb traces the solution to a maze
+ * she drew" is a scene.
+ *
+ * The first version of this dropped any sentence naming another character, and
+ * on an ensemble script that deleted most of every description — a lead came
+ * back as "Ariadne is a young woman". Naming someone is normal; recounting a
+ * moment with them is the fault. So both signals are now required: another
+ * character AND a temporal or event construction.
  */
+const NARRATED_MOMENT = /\b(when|then|after|as|before|while|until|once)\b|\b\w+(s|ed|ing)\b(?=\s+(him|her|them|it)\b)/i;
+
 function withoutOtherCharacters(body: string, self: string, cast: string[]): string {
   if (!body) return body;
   const others = cast.filter((name) => name && name !== self);
   if (!others.length) return body;
 
   const sentences = body.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
-  const kept = sentences.filter((sentence) =>
-    !others.some((other) => {
+  const kept = sentences.filter((sentence) => {
+    const namesAnother = others.some((other) => {
       const escaped = other.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const bare = new RegExp(`\\b${escaped}\\b(?!['’]s)`, "i");
-      return bare.test(sentence);
-    }),
-  );
+      return new RegExp(`\\b${escaped}\\b(?!['’]s)`, "i").test(sentence);
+    });
+    return !(namesAnother && NARRATED_MOMENT.test(sentence));
+  });
   return (kept.length ? kept : sentences.slice(0, 1)).join(" ");
 }
 
