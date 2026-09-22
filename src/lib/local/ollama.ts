@@ -184,13 +184,23 @@ export async function pickBestModel(
   const fits = (parameters: number | null) =>
     parameters === null || parameters * GB_PER_BILLION_PARAMS <= budgetGb;
 
+  const matches = (name: string, wanted: string) =>
+    name === wanted || name.replace(/:latest$/, "") === wanted.replace(/:latest$/, "");
+
   // A model named outright still wins, as long as it is actually installed.
   if (pinned) {
-    const match = installed.find(
-      (m) => m.name === pinned || m.name.replace(/:latest$/, "") === pinned.replace(/:latest$/, ""),
-    );
+    const match = installed.find((m) => matches(m.name, pinned));
     if (match) return { model: match.name, reason: "set by OLLAMA_MODEL" };
   }
+
+  // The recommendation beats size.
+  //
+  // Preferring the largest installed model quietly defeats the update path:
+  // move the recommendation to a better model of the same size or smaller, the
+  // launcher downloads it, and then this picks the old larger one anyway. The
+  // update succeeds and changes nothing, which is the worst of both.
+  const wanted = installed.find((m) => matches(m.name, DEFAULT_MODEL) && fits(m.parameters));
+  if (wanted) return { model: wanted.name, reason: "the recommended model" };
 
   const best = installed
     .filter((m) => fits(m.parameters))
@@ -278,8 +288,15 @@ export async function preflight(config: OllamaConfig): Promise<OllamaConfig> {
     );
   }
 
-  const warning =
-    parameters !== null && parameters < MIN_USEFUL_PARAMETERS_B
+  const runningRecommended =
+    config.model === DEFAULT_MODEL ||
+    config.model.replace(/:latest$/, "") === DEFAULT_MODEL.replace(/:latest$/, "");
+
+  const warning = !runningRecommended
+    ? `Running ${config.model}. This version is built for ${DEFAULT_MODEL}, which is not ` +
+      `installed — close this, double-click "Start ScriptToCast" and say yes when it ` +
+      `offers the download. Until then the descriptions are not what they should be.`
+    : parameters !== null && parameters < MIN_USEFUL_PARAMETERS_B
       ? `Running ${config.model}, which has ${parameters}B parameters. This path needs ` +
         `about ${MIN_USEFUL_PARAMETERS_B}B to write usable descriptions — below that they come ` +
         `back thin or generic however the prompt is written. Close this, double-click ` +

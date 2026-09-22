@@ -13,6 +13,11 @@
  *   slow        — pauses on every role, so a run outlives the heartbeat interval
  */
 import { createServer } from "node:http";
+import { createRequire } from "node:module";
+
+/** The stub answers as the model this version actually recommends. */
+const RECOMMENDED = createRequire(import.meta.url)("../recommended-model.json").model;
+export { RECOMMENDED };
 
 export function startStubOllama({ scenario = "ok", port = 0 } = {}) {
   const calls = [];
@@ -30,8 +35,14 @@ export function startStubOllama({ scenario = "ok", port = 0 } = {}) {
         return json(200, {
           models: [
             { name: "tiny-model", details: { parameter_size: "1.1B" } },
-            { name: "stub-model", details: { parameter_size: scenario === "small-model" ? "3.2B" : "8.0B" } },
-            // Larger than a 16GB machine should run: must not be chosen.
+            // Named as the recommended model, so the "recommendation beats
+            // size" rule is actually exercised rather than reached by accident.
+            { name: RECOMMENDED, details: { parameter_size: scenario === "small-model" ? "3.2B" : "8.0B" } },
+            // Bigger than the recommendation AND small enough to fit the
+            // memory budget, so it would win on size alone. It must not:
+            // preferring size defeats the whole update path.
+            { name: "older-bigger-model", details: { parameter_size: "11B" } },
+            // Larger than any laptop should run: must not be chosen.
             { name: "huge-model", details: { parameter_size: "70B" } },
           ],
         });
