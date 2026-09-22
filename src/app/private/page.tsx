@@ -45,11 +45,10 @@ function PrivateLocalTool({ model }: { model: string }) {
           <Shield size={18} className="shrink-0 mt-0.5" />
           <div>
             <p>
-              <strong>Nothing you upload leaves this computer.</strong> Your script is read
-              in this browser, analysed by a model running on this machine
-              (<code className="text-xs bg-white/80 px-1 rounded">127.0.0.1</code>), and never
-              uploaded, stored in a database, or sent to any online service. This page refuses
-              to run if that model is not local.
+              Most AI tools send your document off to a company&apos;s computers to be read.
+              This one doesn&apos;t. The AI sits on this Mac, so{" "}
+              <strong>your script never leaves it</strong> — and this page will not run at
+              all if the AI is anywhere but here.
             </p>
             <p className="mt-1.5 text-emerald-800/90">
               Model: <code className="text-xs bg-white/80 px-1 rounded">{model}</code>
