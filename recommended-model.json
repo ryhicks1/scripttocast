@@ -1,0 +1,7 @@
+{
+  "model": "llama3.1:8b",
+  "minParametersB": 7,
+  "approxMemoryGb": 6,
+  "smallerAlternative": "llama3.2",
+  "_comment": "The recommended local model, read by both the app and Start ScriptToCast.command. Changing it here is what updates every user: the launcher pulls the new model on next launch, and the app's warning points at it. Nothing else should hardcode a model name."
+}

@@ -8,6 +8,7 @@
  * the one thing the private path exists to prevent.
  */
 
+import recommended from "../../../recommended-model.json";
 import { LocalAnalysisError } from "./errors";
 
 /** Raised for every Ollama failure we can explain to the user. */
@@ -54,21 +55,19 @@ export function assertLocalOllama(url: string): void {
 
 export const DEFAULT_BASE_URL = "http://127.0.0.1:11434";
 /**
- * The default local model.
+ * The recommended local model, from recommended-model.json.
  *
- * This was llama3.2 (3B), inherited rather than chosen. On real scripts it
- * produced descriptions that read as atmosphere rather than casting copy — it
- * could follow the format but had no room left to be specific. 8B is the
- * smallest size that reliably holds "name what they are, then one concrete
- * thing about them" while also returning schema-shaped JSON.
+ * It lives in a JSON file rather than here because the launcher script reads it
+ * too. That is the whole update path for someone running this on their own Mac:
+ * they double-click the launcher, it pulls the latest code, sees the
+ * recommendation has changed, and downloads the new model. A model name
+ * hardcoded in TypeScript could never reach them.
  *
- * The cost is RAM and time, not money: ~6GB resident against ~2GB, and roughly
- * two to three times slower per role. On a machine that cannot spare that,
- * OLLAMA_MODEL=llama3.2 still works and the pipeline is unchanged — the output
- * is just thinner. Bigger is also one variable away: qwen2.5:14b or larger is
- * worth trying on 32GB.
+ * The cost of a larger model is memory and time, not money — nothing here bills
+ * per token. A smaller one still works; the descriptions just come out thinner.
  */
-export const DEFAULT_MODEL = "llama3.1:8b";
+export const DEFAULT_MODEL = recommended.model;
+export const SMALLER_ALTERNATIVE = recommended.smallerAlternative;
 
 /**
  * Context window to ask for when the model's own limit is unknown or larger.
@@ -283,9 +282,9 @@ export async function preflight(config: OllamaConfig): Promise<OllamaConfig> {
     parameters !== null && parameters < MIN_USEFUL_PARAMETERS_B
       ? `Running ${config.model}, which has ${parameters}B parameters. This path needs ` +
         `about ${MIN_USEFUL_PARAMETERS_B}B to write usable descriptions — below that they come ` +
-        `back thin or generic no matter how the prompt is written. Run ` +
-        `"ollama pull llama3.1:8b", then set OLLAMA_MODEL=llama3.1:8b in .env.local ` +
-        `(an OLLAMA_MODEL already in that file overrides the app's default).`
+        `back thin or generic however the prompt is written. Close this, double-click ` +
+        `"Start ScriptToCast" again and it will offer to download ${DEFAULT_MODEL}, ` +
+        `or run "ollama pull ${DEFAULT_MODEL}" yourself.`
       : undefined;
 
   if (warning) console.warn(`analyze_local: ${warning}`);
@@ -294,7 +293,7 @@ export async function preflight(config: OllamaConfig): Promise<OllamaConfig> {
 }
 
 /**
- * Smallest model that writes usable casting copy.
+ * Smallest model that writes usable casting copy, from the same JSON.
  *
  * Below this the format survives but the substance does not: descriptions come
  * back as adjectives, or as whatever the prompt last said. Worth saying out
@@ -302,7 +301,7 @@ export async function preflight(config: OllamaConfig): Promise<OllamaConfig> {
  * default — which happened here, and cost three rounds of tuning prompts
  * against a model that had supposedly been replaced.
  */
-const MIN_USEFUL_PARAMETERS_B = 7;
+const MIN_USEFUL_PARAMETERS_B = recommended.minParametersB;
 
 /** Parameter count in billions, from /api/show ("3.2B", "8.0B"). */
 function parameterBillions(details: Record<string, unknown> | undefined): number | null {
