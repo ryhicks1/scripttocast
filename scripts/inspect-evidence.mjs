@@ -148,7 +148,23 @@ async function main() {
   console.log(
     `${basename(path)}: ${doc.pages.length} pages, ${script.characters.length} characters, ` +
       `${script.actionLines.length} action lines, layout ${script.usedLayout ? "read" : "UNAVAILABLE"}, ` +
-      `screenplay ${script.looksLikeScreenplay ? "yes" : "no"}\n`,
+      `screenplay ${script.looksLikeScreenplay ? "yes" : "no"}`,
+  );
+
+  // What it would cost to hand this whole script to a local model in one
+  // prompt, which is the recurring proposal. Ollama allocates the KV cache for
+  // num_ctx up front, and on llama3.1:8b (32 layers, 8 KV heads, 128 dim) that
+  // is 128 KiB per token at fp16 — so the context window is a RAM decision on
+  // the user's own machine, not a config line.
+  const scriptChars = doc.pages.join("\n").length;
+  const scriptTokens = Math.round(scriptChars / 3.2);
+  const needed = scriptTokens + 4600; // + the house prompt and its addendum
+  const kvGiB = (needed * 131072) / 1024 ** 3;
+  console.log(
+    `whole script in one prompt: ${scriptChars.toLocaleString()} chars, ~${scriptTokens.toLocaleString()} tokens, ` +
+      `needs num_ctx ~${Math.ceil(needed / 1024)}k (currently 8k) = ` +
+      `~${kvGiB.toFixed(1)} GiB of KV cache at fp16, ~${(kvGiB / 2).toFixed(1)} GiB at q8_0,\n` +
+      `on top of the model weights.\n`,
   );
 
   let characters = script.characters;
