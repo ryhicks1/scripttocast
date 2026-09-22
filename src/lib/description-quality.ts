@@ -29,6 +29,40 @@ const NARRATIVE_VOICE: RegExp[] = [
   /\bembodies the theme\b/i,
 ];
 
+/**
+ * Constructions that read as machine-written. Each appears in 0% of the 310
+ * real Breakdown Services entries, so any hit is a genuine tell.
+ *
+ * Deliberately absent: em dashes, which 13.5% of real entries use (median one
+ * per entry), and lists of three, which 24.5% use. Flagging either would push
+ * output away from house style, not towards it.
+ */
+const MACHINE_TELLS: RegExp[] = [
+  /\bdelve/i,
+  /\btapestry\b/i,
+  /\ba testament to\b/i,
+  /\bunderscore/i,
+  /\bresonat/i,
+  /\bin a world where\b/i,
+  /\bnot (just|merely|only)\b[^.]{0,40}\b(but|it'?s)\b/i,
+  /\bpart \w+, ?part \w+/i,
+  /^(Having|Being|Driven|Armed|Caught|Torn)\b/,
+];
+
+/** Returns machine-written tells found in a description. */
+export function findMachineTells(description: string): string[] {
+  if (!description) return [];
+  return MACHINE_TELLS.flatMap((pattern) => {
+    const match = description.match(pattern);
+    return match ? [match[0].toLowerCase()] : [];
+  });
+}
+
+/** Em dashes beyond the one that real breakdowns typically allow. */
+export function countEmDashes(description: string): number {
+  return (description.match(/—/g) ?? []).length;
+}
+
 /** Returns the narrative-voice phrases found in a description. */
 export function findNarrativeVoice(description: string): string[] {
   if (!description) return [];

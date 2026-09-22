@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Upload, Copy, Check, ChevronDown, ChevronRight, FileDown, RotateCcw, Sparkles, Download } from "lucide-react";
 import type { AnalysisResult, BreakdownMode, Project, Role, SelfTapeInstruction } from "@/lib/breakdown";
+import type { Locale } from "@/lib/locale";
 
 const PROGRESS_STEPS = [
   { pct: 3, msg: "Uploading documents..." },
@@ -209,7 +210,7 @@ function projectFields(p: Project | null | undefined): { label: string; value: s
     .map(([label, value]) => ({ label, value }));
 }
 
-export default function SmartCreator({ isLoggedIn, initialResult, authUnavailable = false, analyzeEndpoint = "/api/analyze", privateMode = false }: { isLoggedIn: boolean; initialResult?: AnalysisResult; authUnavailable?: boolean; analyzeEndpoint?: string; privateMode?: boolean }) {
+export default function SmartCreator({ isLoggedIn, initialResult, authUnavailable = false, analyzeEndpoint = "/api/analyze", privateMode = false, locale = "us" }: { isLoggedIn: boolean; initialResult?: AnalysisResult; authUnavailable?: boolean; analyzeEndpoint?: string; privateMode?: boolean; locale?: Locale }) {
   const [stage, setStage] = useState<"upload" | "analyzing" | "results">(initialResult ? "results" : "upload");
   const [liveProgress, setLiveProgress] = useState<LiveProgress | null>(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -225,6 +226,7 @@ export default function SmartCreator({ isLoggedIn, initialResult, authUnavailabl
   const [opts, setOpts] = useState({ project: true, roles: true, instructions: true, forms: true, sides: true, cnAutoFill: true });
   const [mode, setMode] = useState<BreakdownMode>("auto");
   const [saveWarning, setSaveWarning] = useState("");
+  const [openCasting, setOpenCasting] = useState({ omitGender: false, omitEthnicity: false });
 
   function copyText(text: string, key: string) {
     navigator.clipboard.writeText(text);
@@ -284,6 +286,9 @@ export default function SmartCreator({ isLoggedIn, initialResult, authUnavailabl
       files.forEach(f => formData.append("files", f));
       formData.append("options", JSON.stringify(opts));
       formData.append("mode", mode);
+      formData.append("locale", locale);
+      formData.append("omitGender", String(openCasting.omitGender));
+      formData.append("omitEthnicity", String(openCasting.omitEthnicity));
       const res = await fetch(analyzeEndpoint, { method: "POST", body: formData });
       if (!res.ok) {
         // A gateway timeout returns an HTML error page, not JSON, so the
@@ -633,6 +638,29 @@ export default function SmartCreator({ isLoggedIn, initialResult, authUnavailabl
               <span className="block text-[11px] font-semibold">{m.label}</span>
               <span className={`block text-[9px] leading-tight mt-0.5 ${mode === m.key ? "text-gray-300" : "text-gray-400"}`}>{m.hint}</span>
             </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mb-6">
+        <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mb-2">Open casting</p>
+        <div className="space-y-2">
+          {([
+            { key: "omitGender", label: "Don't specify gender", hint: "Leaves gender out of every role, including the wording" },
+            { key: "omitEthnicity", label: "Don't specify ethnicity", hint: "Leaves ethnic background out of every role" },
+          ] as const).map(o => (
+            <label key={o.key} className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={openCasting[o.key]}
+                onChange={() => setOpenCasting(p => ({ ...p, [o.key]: !p[o.key] }))}
+                className="accent-gray-900 w-4 h-4 mt-0.5"
+              />
+              <span>
+                {o.label}
+                <span className="block text-[10px] text-gray-400 leading-tight">{o.hint}</span>
+              </span>
+            </label>
           ))}
         </div>
       </div>

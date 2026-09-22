@@ -13,7 +13,9 @@ import {
   type SelfTapeInstruction,
 } from "@/lib/breakdown";
 import { buildSystemPrompt } from "@/lib/prompts";
-import { findNarrativeVoice } from "@/lib/description-quality";
+import { isLocale, type Locale } from "@/lib/locale";
+import type { CastingOptions } from "@/lib/prompts";
+import { countEmDashes, findMachineTells, findNarrativeVoice } from "@/lib/description-quality";
 
 export const maxDuration = 300;
 
@@ -127,6 +129,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No files provided" }, { status: 400 });
     }
 
+    // The Australian tool is served from /au and posts locale=au. Anything
+    // else falls back to US terminology rather than guessing.
+    const requestedLocale = formData.get("locale");
+    const locale: Locale = isLocale(requestedLocale) ? requestedLocale : "us";
+
+    const castingOptions: CastingOptions = {
+      omitGender: formData.get("omitGender") === "true",
+      omitEthnicity: formData.get("omitEthnicity") === "true",
+    };
+
     const requestedMode = (formData.get("mode") as BreakdownMode) || "auto";
     const mode: BreakdownMode = ["film_tv", "commercial", "auto"].includes(requestedMode)
       ? requestedMode
@@ -148,7 +160,7 @@ export async function POST(request: Request) {
 
     const system: Anthropic.TextBlockParam[] = [{
       type: "text",
-      text: buildSystemPrompt(mode),
+      text: buildSystemPrompt(mode, locale, castingOptions),
       cache_control: { type: "ephemeral" },
     }];
 
@@ -203,6 +215,8 @@ export async function POST(request: Request) {
       console.log("analyze: claude call finished", {
         elapsedSeconds: Math.round(elapsedMs / 1000),
         effort: EFFORT,
+        locale,
+        openCasting: castingOptions,
         stopReason: message.stop_reason,
         inputTokens: message.usage?.input_tokens,
         outputTokens: message.usage?.output_tokens,
@@ -251,10 +265,16 @@ export async function POST(request: Request) {
     // Log narrative-summary phrasing so the description prompt can be judged
     // against real output. Descriptions are returned unchanged either way.
     const flagged = (result.roles ?? [])
-      .map((role) => ({ name: role.name, phrases: findNarrativeVoice(role.description) }))
-      .filter((entry) => entry.phrases.length > 0);
+      .map((role) => ({
+        name: role.name,
+        narrativeVoice: findNarrativeVoice(role.description),
+        machineTells: findMachineTells(role.description),
+        // Real breakdowns average one em dash where they use them at all.
+        excessEmDashes: Math.max(0, countEmDashes(role.description) - 1),
+      }))
+      .filter((e) => e.narrativeVoice.length || e.machineTells.length || e.excessEmDashes);
     if (flagged.length) {
-      console.log("analyze: narrative voice in descriptions", {
+      console.log("analyze: description quality flags", {
         flaggedRoles: flagged.length,
         totalRoles: result.roles?.length ?? 0,
         examples: flagged.slice(0, 5),
