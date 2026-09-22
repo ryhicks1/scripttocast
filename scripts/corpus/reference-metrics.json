@@ -1,0 +1,52 @@
+{
+  "generatedAt": "2026-09-22",
+  "source": {
+    "description": "Breakdown Services / Actors Access breakdowns, parsed from a private Google Doc export.",
+    "roleEntries": 310,
+    "note": "Derived statistics only. The breakdown text is copyright Breakdown Services, Ltd. and is deliberately not stored in this repository."
+  },
+  "profile": {
+    "count": 310,
+    "words": {
+      "mean": 72.14,
+      "p10": 25,
+      "median": 59,
+      "p90": 132.1
+    },
+    "proseWords": {
+      "mean": 62.25,
+      "p10": 6,
+      "median": 50,
+      "p90": 124.2
+    },
+    "sentences": {
+      "mean": 6.2,
+      "p10": 2,
+      "median": 5,
+      "p90": 12
+    },
+    "proseSentences": {
+      "mean": 5.29,
+      "p10": 1,
+      "median": 4,
+      "p90": 11
+    },
+    "demographicHeadRate": 0.906,
+    "genderStatedRate": 0.932,
+    "ageStatedRate": 0.971,
+    "ethnicityStatedRate": 0.968,
+    "roleTypeStatedRate": 0.758,
+    "narrativeVoiceRate": 0.065,
+    "emptyRate": 0,
+    "roleTypes": {
+      "AEP SERIES REGULAR": 1,
+      "SUPPORTING": 106,
+      "LEAD": 76,
+      "DAY PLAYER": 46,
+      "(none stated)": 75,
+      "RECURRING": 1,
+      "LARGE CO-STAR": 2,
+      "SERIES REGULAR": 3
+    }
+  }
+}
