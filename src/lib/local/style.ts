@@ -10,9 +10,9 @@
  *    accentuating his lean physique. His smile is quick and disarming, but his
  *    gaze can be unnerving."
  *
- * Nothing there is castable. It is atmosphere, and llama3.2 produces it by
- * default because that is what character description looks like in its training
- * data. The public prompt suppresses this on a frontier model by argument — a
+ * Nothing there is castable. It is atmosphere, and a small local model produces
+ * it by default because that is what character description looks like in its
+ * training data. The public prompt suppresses this on a frontier model by argument — a
  * cut test, a list of banned constructions, worked examples. A 3B model does
  * not hold that, so the rule is applied here after generation instead.
  *

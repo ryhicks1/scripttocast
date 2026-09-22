@@ -26,7 +26,10 @@ const STEPS = [
     body: (
       <>
         In Terminal:{" "}
+        <code className="text-[11px] bg-gray-100 px-1.5 py-0.5 rounded">ollama pull llama3.1:8b</code>
+        . It needs about 6GB of free memory. On a machine that cannot spare it,{" "}
         <code className="text-[11px] bg-gray-100 px-1.5 py-0.5 rounded">ollama pull llama3.2</code>
+        {" "}works too — descriptions come out thinner.
       </>
     ),
   },

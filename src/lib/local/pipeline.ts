@@ -3,7 +3,7 @@
  *
  * Why not one call, the way the public path works: the public path hands a
  * whole PDF and a ~100-line prompt to claude-opus-5 and gets one nested object
- * back. Locally the model is llama3.2 — 3B parameters, and served by Ollama
+ * back. Locally the model is llama3.1:8b by default, served by Ollama
  * with a context window measured in single-digit thousands of tokens. A feature
  * script is ~30,000 tokens. Sending it whole did not overflow loudly; Ollama
  * truncated the prompt and the model answered from a fragment, producing valid

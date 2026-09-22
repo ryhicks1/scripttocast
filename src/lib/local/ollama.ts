@@ -49,7 +49,22 @@ export function assertLocalOllama(url: string): void {
 }
 
 export const DEFAULT_BASE_URL = "http://127.0.0.1:11434";
-export const DEFAULT_MODEL = "llama3.2";
+/**
+ * The default local model.
+ *
+ * This was llama3.2 (3B), inherited rather than chosen. On real scripts it
+ * produced descriptions that read as atmosphere rather than casting copy — it
+ * could follow the format but had no room left to be specific. 8B is the
+ * smallest size that reliably holds "name what they are, then one concrete
+ * thing about them" while also returning schema-shaped JSON.
+ *
+ * The cost is RAM and time, not money: ~6GB resident against ~2GB, and roughly
+ * two to three times slower per role. On a machine that cannot spare that,
+ * OLLAMA_MODEL=llama3.2 still works and the pipeline is unchanged — the output
+ * is just thinner. Bigger is also one variable away: qwen2.5:14b or larger is
+ * worth trying on 32GB.
+ */
+export const DEFAULT_MODEL = "llama3.1:8b";
 
 /**
  * Context window to ask for when the model's own limit is unknown or larger.
@@ -159,7 +174,7 @@ export async function preflight(config: OllamaConfig): Promise<OllamaConfig> {
   if (numCtx < MIN_NUM_CTX) {
     throw new OllamaError(
       `"${config.model}" offers only ${numCtx} tokens of context, and this needs at least ` +
-        `${MIN_NUM_CTX}. Use a model with a larger context window (llama3.2 has 128k), ` +
+        `${MIN_NUM_CTX}. Use a model with a larger context window (llama3.1:8b has 128k), ` +
         `or raise OLLAMA_NUM_CTX if you lowered it.`,
       502,
     );
@@ -247,6 +262,17 @@ export async function chatJson<T>(
     if (res.status === 404) {
       throw new OllamaError(
         `Ollama does not have the model "${config.model}". Run: ollama pull ${config.model}`,
+        502,
+        detail,
+      );
+    }
+    if (/memory|out of memory|insufficient|system memory/i.test(detail)) {
+      // The failure a larger default model makes likely, and the one whose
+      // raw message ("model requires more system memory") tells a user
+      // nothing about what to do next.
+      throw new OllamaError(
+        `"${config.model}" needs more free memory than this Mac has right now. ` +
+          `Close some apps and retry, or run a smaller model: OLLAMA_MODEL=llama3.2 npm run dev`,
         502,
         detail,
       );
