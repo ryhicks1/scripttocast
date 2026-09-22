@@ -8,8 +8,7 @@
  * code does not enforce is a promise this product cannot keep.
  */
 export const GUARANTEES = [
-  "One outbound request, to 127.0.0.1. A non-local address is refused rather than used — the analysis stops instead.",
-  "Your document is held in memory for the length of the request and then dropped. It is not written to disk.",
-  "No account, no database, no upload. There is nowhere for a script to be stored.",
-  "Sides and reports are generated on your machine too, from the file you already have.",
+  "Your script is read, used, and forgotten. It is never saved to your hard drive or anywhere else.",
+  "No account, no sign-in, nothing uploaded. There is nowhere for a script to be kept.",
+  "Sides and reports are made on your machine too, from the file you already have.",
 ];

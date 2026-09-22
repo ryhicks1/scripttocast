@@ -2,13 +2,23 @@ import Link from "next/link";
 import { GUARANTEES } from "./guarantees";
 import { Shield, Laptop, Download, Terminal, ArrowRight, ExternalLink } from "lucide-react";
 
+/**
+ * Setup, written for someone who has never opened Terminal.
+ *
+ * The previous version said "clone the repo" and "npm install", and skipped
+ * Node.js altogether — so on a Mac that did not already have it, following the
+ * steps exactly could not work. Two double-click installers and one pasted
+ * line is the smallest honest version of this.
+ */
+const SETUP_COMMAND = `cd ~ && git clone https://github.com/ryhicks1/scripttocast.git; cd ~/scripttocast && ollama pull llama3.1:8b && npm install && npm run dev`;
+
 const STEPS = [
   {
     n: "1",
     title: "Install Ollama",
     body: (
       <>
-        Download Ollama for macOS from{" "}
+        Go to{" "}
         <a
           href="https://ollama.com"
           target="_blank"
@@ -16,44 +26,73 @@ const STEPS = [
           className="text-gray-900 underline underline-offset-2 hover:text-emerald-700"
         >
           ollama.com
-        </a>
-        . It listens on <code className="text-[11px] bg-gray-100 px-1 rounded">127.0.0.1:11434</code> on this computer only.
+        </a>{" "}
+        and click Download. Open the file that downloads, and drag the Ollama icon into
+        your Applications folder. Then open it from Applications. A small llama appears
+        in the menu bar at the top of your screen — that means it&apos;s running.
+        <span className="block mt-1.5 text-gray-400">
+          This is the part that reads your script. It runs on your Mac, not online.
+        </span>
       </>
     ),
   },
   {
     n: "2",
-    title: "Pull a model",
+    title: "Install Node",
     body: (
       <>
-        In Terminal:{" "}
-        <code className="text-[11px] bg-gray-100 px-1.5 py-0.5 rounded">ollama pull llama3.1:8b</code>
-        . It needs about 6GB of free memory. On a machine that cannot spare it,{" "}
-        <code className="text-[11px] bg-gray-100 px-1.5 py-0.5 rounded">ollama pull llama3.2</code>
-        {" "}works too — descriptions come out thinner.
+        Go to{" "}
+        <a
+          href="https://nodejs.org"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-gray-900 underline underline-offset-2 hover:text-emerald-700"
+        >
+          nodejs.org
+        </a>{" "}
+        and click the green button marked <strong>LTS</strong>. Open the file that
+        downloads and click Continue until it finishes.
+        <span className="block mt-1.5 text-gray-400">
+          You never open this one. The app uses it behind the scenes.
+        </span>
       </>
     ),
   },
   {
     n: "3",
-    title: "Run this app on your Mac",
+    title: "Copy the line below into Terminal",
     body: (
       <>
-        Clone the repo, then{" "}
-        <code className="text-[11px] bg-gray-100 px-1.5 py-0.5 rounded">npm install</code>
-        {" "}and{" "}
-        <code className="text-[11px] bg-gray-100 px-1.5 py-0.5 rounded">npm run dev</code>.
+        Hold down <strong>Command</strong> and press the <strong>space bar</strong>, type{" "}
+        <strong>Terminal</strong>, and press Return. A plain window full of text opens —
+        that&apos;s normal. Copy the line below, click into that window, paste it
+        (<strong>Command</strong> and <strong>V</strong>), and press Return.
+        <span className="block mt-1.5 text-gray-400">
+          The first time takes ten minutes or so — it&apos;s downloading the model, which
+          is a big file. Leave it alone until the text stops scrolling. If a box appears
+          asking to install developer tools, click Install, wait for it, then paste the
+          line again.
+        </span>
       </>
     ),
   },
   {
     n: "4",
-    title: "Open the private tool",
+    title: "Open the tool",
     body: (
       <>
-        Go to{" "}
-        <code className="text-[11px] bg-gray-100 px-1.5 py-0.5 rounded">http://localhost:3000/private</code>
-        . That localhost page talks to Ollama on your machine.
+        When the Terminal window says <strong>Ready</strong>, open Safari or Chrome and go
+        to{" "}
+        <code className="text-[11px] bg-gray-100 px-1.5 py-0.5 rounded">
+          localhost:3000/private
+        </code>
+        . That&apos;s the tool.
+        <span className="block mt-1.5 text-gray-400">
+          Leave the Terminal window open while you use it — closing it switches the app
+          off. Next time, open your <strong>scripttocast</strong> folder in Finder and
+          double-click <strong>Start ScriptToCast</strong> instead of doing any of this
+          again.
+        </span>
       </>
     ),
   },
@@ -123,14 +162,14 @@ export default function PrivateSetupGuide() {
           ))}
         </ol>
 
-        <div className="mt-8 bg-gray-50 border border-gray-200 rounded-xl p-5">
+        <p className="text-center text-xs text-gray-400 uppercase tracking-wider mt-10 mb-3 font-medium">
+          The line to copy, for step 3
+        </p>
+        <div className="bg-gray-50 border border-gray-200 rounded-xl p-5">
           <div className="flex items-start gap-3">
             <Terminal size={16} className="text-gray-400 mt-0.5 shrink-0" />
             <pre className="text-[12px] text-gray-700 leading-relaxed overflow-x-auto font-mono">
-{`git clone https://github.com/ryhicks1/scripttocast.git
-cd scripttocast
-npm install
-npm run dev`}
+{SETUP_COMMAND}
             </pre>
           </div>
         </div>
@@ -157,6 +196,12 @@ npm run dev`}
       </section>
 
       <section className="max-w-3xl mx-auto px-6 pb-14">
+        <p className="text-xs text-gray-400 leading-relaxed mb-4">
+          The model needs about 6GB of free memory. If your Mac has 8GB or less, swap{" "}
+          <code className="text-[11px] bg-gray-100 px-1 rounded">llama3.1:8b</code> for{" "}
+          <code className="text-[11px] bg-gray-100 px-1 rounded">llama3.2</code> in the line
+          above — it runs on less, and the descriptions come out shorter.
+        </p>
         <div className="border-t border-gray-200 pt-6 flex gap-3 text-xs text-gray-400 leading-relaxed">
           <Shield size={14} className="shrink-0 mt-0.5" />
           <p>
