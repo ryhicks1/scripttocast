@@ -1,13 +1,14 @@
 {
   "name": "scripttocast",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "check:local": "node --no-warnings scripts/check-local-pipeline.mjs",
+    "check:local": "node --no-warnings --experimental-transform-types scripts/check-local-pipeline.mjs",
     "eval:local": "node --no-warnings scripts/eval-local.mjs",
+    "evidence:local": "node --no-warnings --experimental-transform-types scripts/inspect-evidence.mjs",
     "corpus:metrics": "node --no-warnings scripts/corpus/parse-corpus.mjs"
   },
   "dependencies": {

@@ -8,14 +8,30 @@
  * What it does NOT check: the quality of what a real model writes. Only
  * `ollama serve` with a real model does that. Run:
  *
- *   node scripts/check-local-pipeline.mjs
+ *   npm run check:local
  */
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
+import { registerHooks } from "node:module";
 import { RECOMMENDED, startStubOllama } from "./stub-ollama.mjs";
-import { makeScannedPdf, makeScreenplayPdf } from "./make-test-script.mjs";
-import { roleTypeLabel } from "../src/lib/local/screenplay.ts";
+import { makeBlockingPdf, makeScannedPdf, makeScreenplayPdf } from "./make-test-script.mjs";
+import { describedIn, parseScript, roleTypeLabel } from "../src/lib/local/screenplay.ts";
+
+// extract.ts imports "./errors" with no extension. The hook has to be in place
+// before that module is loaded, which is why this is not a static import.
+registerHooks({
+  resolve(specifier, context, next) {
+    if (specifier.startsWith(".") && !/\.[a-z]+$/.test(specifier)) {
+      try {
+        return next(`${specifier}.ts`, context);
+      } catch {
+        // Fall through to the specifier as written.
+      }
+    }
+    return next(specifier, context);
+  },
+});
 
 const PORT = Number(process.env.CHECK_PORT || 3111);
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -154,6 +170,105 @@ check("LEAD and SUPPORTING are the same in both",
 
 const screenplay = await makeScreenplayPdf();
 const scanned = await makeScannedPdf();
+
+// What the model is handed, with no model in the loop. Every thin or wrong
+// description on this path has started here: the bundle was blocking, a
+// wrapped fragment, or a different character, and the prompt forbids inventing
+// the rest.
+console.log("\nwhat the description is built from");
+const { extractDocument } = await import("../src/lib/local/extract.ts");
+const cleanDoc = await extractDocument(new File([screenplay], "clean.pdf", { type: "application/pdf" }));
+const cleanScript = parseScript(cleanDoc.pageLines);
+const maraEvidence = describedIn(cleanScript, "MARA").join("\n");
+check(
+  "a straightforward introduction still comes through whole",
+  /late thirties/.test(maraEvidence) && /unhurried/.test(maraEvidence),
+  maraEvidence,
+);
+check(
+  "a billing with a lowercase title still counts",
+  /sixties/.test(describedIn(cleanScript, "WALT").join("\n")),
+  describedIn(cleanScript, "WALT").join("\n"),
+);
+
+const blockingDoc = await extractDocument(
+  new File([await makeBlockingPdf()], "blocking.pdf", { type: "application/pdf" }),
+);
+const blockingScript = parseScript(blockingDoc.pageLines);
+const holt = describedIn(blockingScript, "HOLT").join("\n");
+const renna = describedIn(blockingScript, "RENNA").join("\n");
+check(
+  "a description buried under blocking still reaches the model",
+  /fifty/.test(holt) && /never once rises/.test(holt),
+  holt,
+);
+check(
+  "a wrapped line keeps the words that do not repeat the name",
+  /thirty-four/.test(renna) && /shoulders/.test(renna),
+  renna,
+);
+check("the adult does not take the child's look", !/\bYOUNG\b|\beight\b/.test(holt), holt);
+check(
+  "the child is cast as their own role",
+  blockingScript.characters.some((c) => c.name === "YOUNG HOLT"),
+  blockingScript.characters.map((c) => c.name).join(", "),
+);
+const youngHolt = describedIn(blockingScript, "YOUNG HOLT").join("\n");
+check(
+  "the child keeps the flashback description",
+  /\beight\b/.test(youngHolt) && /YOUNG HOLT/.test(youngHolt),
+  youngHolt,
+);
+
+// Happy Gilmore shape: the flashback child is billed in parentheses on an
+// action line and never speaks under that cue. Still a separate day player.
+const flashback = parseScript([
+  [
+    { text: "EXT. HOCKEY RINK - DAY", indent: 0 },
+    { text: "A tiny six year old kid (YOUNG HAPPY GILMORE) wearing hockey pads.", indent: 0 },
+    { text: "HAPPY", indent: 140 },
+    { text: "Hey, uh, Coach. What about me?", indent: 50 },
+    { text: "COACH", indent: 140 },
+    { text: "Sit down, kid.", indent: 50 },
+  ],
+  [
+    { text: "EXT. GOLF COURSE - DAY", indent: 0 },
+    { text: "HAPPY GILMORE, thirties, a hockey player in the wrong sport, addresses the ball.", indent: 0 },
+    { text: "HAPPY", indent: 140 },
+    { text: "No problemo.", indent: 50 },
+    { text: "HAPPY", indent: 140 },
+    { text: "Free?", indent: 50 },
+    { text: "COACH", indent: 140 },
+    { text: "Keep your head down.", indent: 50 },
+  ],
+]);
+check(
+  "a flashback billing becomes its own role",
+  flashback.characters.some((c) => c.name === "YOUNG HAPPY GILMORE"),
+  flashback.characters.map((c) => c.name).join(", "),
+);
+check(
+  "the adult lead does not wear the flashback look",
+  /thirties/.test(describedIn(flashback, "HAPPY").join("\n")) &&
+    !/six year|YOUNG HAPPY/.test(describedIn(flashback, "HAPPY").join("\n")),
+  describedIn(flashback, "HAPPY").join("\n"),
+);
+check(
+  "the flashback child keeps the parenthetical introduction",
+  /six year|hockey pads/.test(describedIn(flashback, "YOUNG HAPPY GILMORE").join("\n")),
+  describedIn(flashback, "YOUNG HAPPY GILMORE").join("\n"),
+);
+check(
+  "blocking is not passed off as the description",
+  !/drags the gate|crosses to the shelving|boots hanging/.test(`${holt}\n${renna}`),
+  `${holt} || ${renna}`,
+);
+check("a character the script never describes gets no invented look", describedIn(blockingScript, "SIKE").length === 0);
+check(
+  "an extra's action line is not the speaking role",
+  describedIn(blockingScript, "BARMAN").length === 0,
+  describedIn(blockingScript, "BARMAN").join(" | "),
+);
 
 // --- 1. A well-behaved model -------------------------------------------------
 const stub = await startStubOllama({ scenario: "ok" });

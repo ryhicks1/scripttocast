@@ -123,3 +123,206 @@ export async function makeScannedPdf() {
   pdf.addPage([612, 792]);
   return Buffer.from(await pdf.save());
 }
+
+/**
+ * A second fixture, built to fail the way real scripts fail.
+ *
+ * The screenplay above is a clean one: every character is introduced in an
+ * action line that says who they are, and almost nothing else names them. It
+ * cannot reproduce anything that has gone wrong on this path — run the evidence
+ * inspector over it and every role looks perfect, which is exactly how a fixture
+ * misleads you.
+ *
+ * This one carries the four shapes a 147-page feature actually produced:
+ *
+ *   RENNA  — introduced on page 1, but the age and the build are on the next
+ *            wrapped line, which does not repeat her name. Then she is named in
+ *            two dozen blocking lines.
+ *   HOLT   — a child, YOUNG HOLT, is described on page 1. That child is a
+ *            separate day player. The man himself is first named in a blocking
+ *            line and described only on page 9, and that description is wrapped
+ *            so "never once rises" is on the next line.
+ *   SIKE   — speaks throughout and is never named in an action line at all. No
+ *            description evidence exists for him in any quantity.
+ *   BARMAN — a generic cue name. The word appears on page 1 about a different,
+ *            unnamed man; the character himself turns up on page 10 and is never
+ *            named in action. His entire evidence is about somebody else.
+ *
+ * Everything here is written for this repository. No script text is reproduced.
+ */
+const BLOCKING_SCENES = [
+  {
+    heading: "INT. THE LOCKUP - NIGHT",
+    items: [
+      ["action", "YOUNG HOLT, eight, runs the length of the dock and does not look back."],
+      ["action", "This is RENNA. She has been"],
+      ["action", "thirty-four for a week and already looks older, hard through the shoulders."],
+      ["action", "HOLT drags the gate shut behind her and throws the bolt."],
+      ["action", "A BARMAN two doors down is hosing off the footpath, uninterested."],
+      ["cue", "RENNA"],
+      ["dialogue", "Count them before you tell me the number."],
+      ["cue", "HOLT"],
+      ["dialogue", "I counted them twice on the way in."],
+      ["action", "RENNA crosses to the shelving and starts on the far crates."],
+      ["action", "HOLT stays by the door with his hands in his pockets."],
+    ],
+  },
+  {
+    heading: "INT. THE LOCKUP - LATER",
+    items: [
+      ["action", "RENNA works down the row, marking each lid with a wax pencil."],
+      ["cue", "RENNA"],
+      ["dialogue", "Forty on the manifest. Thirty-six on the floor."],
+      ["cue", "HOLT"],
+      ["dialogue", "Then the manifest is wrong, because I was here."],
+      ["action", "HOLT takes the clipboard off the hook and holds it out."],
+      ["action", "RENNA does not take it. She goes back to the crates."],
+    ],
+  },
+  {
+    heading: "EXT. LOADING DOCK - DAWN",
+    items: [
+      ["action", "RENNA sits on the edge of the dock with her boots hanging."],
+      ["action", "HOLT comes out with two cups and puts one down beside her."],
+      ["cue", "HOLT"],
+      ["dialogue", "You can walk away from this one. Nobody would say anything."],
+      ["cue", "RENNA"],
+      ["dialogue", "Somebody would say something. That is the whole business."],
+      ["action", "RENNA drinks and watches the gulls work the water."],
+    ],
+  },
+  {
+    heading: "INT. DISPATCH OFFICE - DAY",
+    items: [
+      ["action", "A room with one window and too many chairs for it."],
+      ["cue", "SIKE"],
+      ["dialogue", "The run sheets came back short again. Third week."],
+      ["cue", "RENNA"],
+      ["dialogue", "Short is a word people use when they mean taken."],
+      ["action", "RENNA pulls the drawer out and tips the sheets onto the desk."],
+      ["cue", "SIKE"],
+      ["dialogue", "I am not going to be the one who writes that down."],
+      ["action", "HOLT reads over her shoulder without touching anything."],
+    ],
+  },
+  {
+    heading: "EXT. YARD - DAY",
+    items: [
+      ["action", "RENNA walks the fence line and stops where the wire is cut."],
+      ["action", "HOLT crouches and puts two fingers through the gap."],
+      ["cue", "HOLT"],
+      ["dialogue", "Somebody came in the easy way and left the hard way."],
+      ["cue", "RENNA"],
+      ["dialogue", "Or they left the way they came and we are slow."],
+      ["action", "RENNA photographs the cut, then the ground under it."],
+    ],
+  },
+  {
+    heading: "INT. BACK CORRIDOR - NIGHT",
+    items: [
+      ["action", "RENNA moves along the wall with the torch held low."],
+      ["cue", "SIKE"],
+      ["dialogue", "There is a door at the end that nobody has a key for."],
+      ["action", "HOLT tries the handle anyway and it turns."],
+      ["cue", "RENNA"],
+      ["dialogue", "That is worse than locked."],
+      ["action", "RENNA goes through first and HOLT follows her in."],
+    ],
+  },
+  {
+    heading: "INT. COLD STORE - CONTINUOUS",
+    items: [
+      ["action", "RENNA breathes out and watches it hang in the air."],
+      ["action", "HOLT pulls the chain and the bulb does nothing."],
+      ["cue", "RENNA"],
+      ["dialogue", "Prop it. If it shuts on us we are here until Monday."],
+      ["cue", "HOLT"],
+      ["dialogue", "It is a Thursday. Somebody would come."],
+      ["action", "RENNA wedges the door with a crate and goes deeper in."],
+    ],
+  },
+  {
+    heading: "INT. COLD STORE - LATER",
+    items: [
+      ["action", "RENNA finds the pallet that does not match the others."],
+      ["action", "HOLT gets the corner up and they both look at what is under it."],
+      ["cue", "RENNA"],
+      ["dialogue", "Put it back exactly how it was."],
+      ["cue", "HOLT"],
+      ["dialogue", "And then what, we go home and sleep."],
+      ["action", "RENNA sets the corner down and wipes the dust back over it."],
+    ],
+  },
+  {
+    heading: "INT. HOLT'S OFFICE - NIGHT",
+    items: [
+      ["action", "HOLT, fifty, a wrestler's neck gone soft and a voice that"],
+      ["action", "never once rises, sets the ledger down and squares it to the desk edge."],
+      ["cue", "HOLT"],
+      ["dialogue", "I have signed every one of these for nine years."],
+      ["cue", "RENNA"],
+      ["dialogue", "I know. That is what I keep getting stuck on."],
+      ["action", "RENNA stays standing. HOLT does not ask her to sit."],
+    ],
+  },
+  {
+    heading: "INT. THE ANCHOR - NIGHT",
+    items: [
+      ["action", "A narrow bar with the television on and nobody watching it."],
+      ["cue", "BARMAN"],
+      ["dialogue", "He has been in that seat since I opened."],
+      ["cue", "RENNA"],
+      ["dialogue", "Has he been drinking since you opened."],
+      ["cue", "BARMAN"],
+      ["dialogue", "He has been sitting. There is a difference and I respect it."],
+      ["action", "RENNA takes the stool at the end and orders nothing."],
+    ],
+  },
+  {
+    heading: "EXT. CAR PARK - NIGHT",
+    items: [
+      ["action", "RENNA sits in the car with the keys in her hand and does not start it."],
+      ["cue", "SIKE"],
+      ["dialogue", "You are going to ask me to say it in a room with a recorder."],
+      ["cue", "RENNA"],
+      ["dialogue", "I am going to ask you once and then not again."],
+      ["action", "RENNA starts the engine. HOLT watches from the doorway."],
+    ],
+  },
+  {
+    heading: "INT. THE LOCKUP - DAWN",
+    items: [
+      ["action", "RENNA rolls the door up on an empty floor."],
+      ["action", "HOLT is already inside, sitting on an upturned crate."],
+      ["cue", "HOLT"],
+      ["dialogue", "You were right about the manifest."],
+      ["cue", "RENNA"],
+      ["dialogue", "I would rather have been slow."],
+      ["action", "RENNA sits down on the crate opposite him and they wait."],
+    ],
+  },
+];
+
+/**
+ * The same layout as makeScreenplayPdf, but with the element order given per
+ * line instead of assumed, because the failures above are about which action
+ * lines fall where.
+ */
+export async function makeBlockingPdf() {
+  const pdf = await PDFDocument.create();
+  const font = await pdf.embedFont(StandardFonts.Courier);
+  const X = { action: ACTION_X, cue: CUE_X, dialogue: DIALOGUE_X };
+
+  for (const scene of BLOCKING_SCENES) {
+    const page = pdf.addPage([612, 792]);
+    let y = 720;
+    const rows = [["action", scene.heading], ...scene.items];
+    for (const [kind, text] of rows) {
+      const safe = text.replace(/[^\x20-\x7E]/g, "-");
+      page.drawText(safe, { x: X[kind], y, size: 11, font });
+      y -= 16;
+    }
+  }
+
+  return Buffer.from(await pdf.save());
+}

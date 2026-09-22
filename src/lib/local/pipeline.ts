@@ -386,19 +386,23 @@ export async function analyzeLocally(
     // afterwards; a model handed a number writes to it whatever it has to say.
     const lengthHint =
       budget <= 400
-        ? "Keep it short — a line or two. Stop where the evidence stops."
+        ? "A line or two. Use the age, look, job and manner the script states. Do not pad, and do not invent a look."
         : budget >= 650
-          ? "Go as far as the evidence carries you, and stop there. A lead can take a few lines."
-          : "A few lines, as far as the evidence carries you. Stop where it stops.";
+          ? "Several fragments. Use the age, look, job and manner the script states — a lead the script actually describes is more than one adjective. Do not retell scenes, and do not invent a look."
+          : "A few fragments. Use the age, look, job and manner the script states. Do not retell scenes, and do not invent a look.";
     const name = displayName(character.name);
     const evidence = buildEvidence(script, character, budgetFor(config, descriptionSystem, 2400));
 
-    // Always written, to local-evidence.txt in the project folder.
+    // Off unless LOCAL_DEBUG_EVIDENCE is set — see EVIDENCE_FILE above. The
+    // comment that stood here claimed the opposite ("always written, to the
+    // project folder"), which is the privacy promise this path is sold on read
+    // backwards.
     //
     // Every bad description in this project has been the model faithfully
-    // reporting bad evidence. Reading that back was buried behind an
-    // environment variable and a terminal window, which made the fastest way to
-    // diagnose a run the hardest thing to reach. It is a plain file now.
+    // reporting bad evidence, so reading the evidence back is the fastest way
+    // to diagnose a run — but it does not have to cost a run to do it:
+    // `npm run evidence:local -- script.pdf` prints the same blocks from the
+    // same code with no model involved.
     recordEvidence(name, roleType, evidence.text);
 
     const askFor = async (system: string) =>

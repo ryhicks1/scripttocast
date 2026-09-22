@@ -39,8 +39,12 @@ export interface ParsedCharacter {
 
 export interface ParsedScript {
   pages: string[];
-  /** Action lines only, per page — where a script describes people. */
-  actionLines: { page: number; text: string }[];
+  /**
+   * Action, as sentences. Wrapped PDF lines of one sentence are joined first,
+   * so a look written on the next line is not thrown away because the name
+   * was on the line above.
+   */
+  actionLines: { page: number; text: string; run: number }[];
   characters: ParsedCharacter[];
   sceneHeadings: { page: number; text: string }[];
   looksLikeScreenplay: boolean;
@@ -130,26 +134,53 @@ export function parseScript(pageLines: Line[][]): ParsedScript {
 
   const byName = new Map<string, ParsedCharacter>();
   const sceneHeadings: { page: number; text: string }[] = [];
-  const actionLines: { page: number; text: string }[] = [];
+  const actionLines: { page: number; text: string; run: number }[] = [];
   const pages = pageLines.map((lines) => lines.map((line) => line.text).join("\n"));
   const fullText = pages.join("\n");
+
+  // Consecutive action lines are one paragraph that the PDF wrapped. A blank
+  // line, a cue, or a scene heading ends it. Joining before the length check
+  // is what keeps "This is RENNA." (14 characters) attached to the age and
+  // the build written on the line below.
+  let runParts: string[] = [];
+  let runPage = 1;
+  let nextRun = 0;
+
+  const flushRun = () => {
+    if (!runParts.length) return;
+    const text = runParts.join(" ").replace(/\s+/g, " ").trim();
+    runParts = [];
+    const run = nextRun++;
+    for (const sentence of text.split(/(?<=[.!?])\s+/)) {
+      const trimmed = sentence.trim();
+      if (trimmed.length < 8 || !/[a-z]/.test(trimmed)) continue;
+      actionLines.push({ page: runPage, text: trimmed, run });
+    }
+  };
 
   pageLines.forEach((lines, index) => {
     const pageNumber = index + 1;
 
     for (let i = 0; i < lines.length; i++) {
       const text = lines[i].text.trim();
-      if (!text) continue;
+      if (!text) {
+        flushRun();
+        continue;
+      }
       const kind = classify(lines[i], useLayout);
+      if (kind !== "action") flushRun();
 
       if (kind === "scene") {
         sceneHeadings.push({ page: pageNumber, text: text.slice(0, 120) });
         continue;
       }
       if (kind === "action") {
-        if (text.length >= 20 && !TRANSITION.test(text) && !PAGE_MARKER.test(text)) {
-          actionLines.push({ page: pageNumber, text });
+        if (TRANSITION.test(text) || PAGE_MARKER.test(text)) {
+          flushRun();
+          continue;
         }
+        runPage = pageNumber;
+        runParts.push(text);
         continue;
       }
       if (kind !== "cue") continue;
@@ -200,13 +231,31 @@ export function parseScript(pageLines: Line[][]): ParsedScript {
 
       i = j - 1;
     }
+
+    flushRun();
   });
 
   // A stray all-caps line can pick up the prose under it and look like a
   // one-line role. A real character recurs: introduced in action, then speaks.
-  const characters = [...byName.values()]
+  // Age-variant billings (YOUNG HOLT, OLDER MARA) are a different actor and
+  // are added even when they never speak — see promoteAgeVariants.
+  const speaking = [...byName.values()]
     .filter((c) => c.dialogueChars >= 20)
-    .filter((c) => c.cues >= 2 || countOccurrences(fullText, c.name) >= 2)
+    .filter((c) => c.cues >= 2 || countOccurrences(fullText, c.name) >= 2);
+
+  for (const variant of promoteAgeVariants(actionLines, speaking)) {
+    if (byName.has(variant.name)) continue;
+    byName.set(variant.name, variant);
+  }
+
+  const characters = [...byName.values()]
+    .filter((c) => {
+      if (c.dialogueChars >= 20 && (c.cues >= 2 || countOccurrences(fullText, c.name) >= 2)) {
+        return true;
+      }
+      // Flashback / era doubles: billed in action, often without dialogue.
+      return isAgeVariantName(c.name) && speaking.some((s) => samePersonBase(c.name, s.name));
+    })
     .sort((a, b) => b.cues - a.cues || b.dialogueChars - a.dialogueChars);
 
   return {
@@ -344,7 +393,11 @@ export function buildEvidence(
  * distinctive word of the cue name — "PELL" out of "NURSE PELL".
  */
 function mentionToken(name: string): string | null {
-  const words = name.split(/\s+/).filter((w) => w.length >= 3 && /^[A-Z][A-Z'’.-]*$/.test(w));
+  // Drop YOUNG / OLDER so "YOUNG HOLT" does not key off YOUNG and match every
+  // line that says "young". The personal name is what other characters use.
+  const words = withoutAgePrefix(name)
+    .split(/\s+/)
+    .filter((w) => w.length >= 3 && /^[A-Z][A-Z'’.-]*$/.test(w));
   if (!words.length) return null;
   const token = words.reduce((a, b) => (b.length > a.length ? b : a));
   const GENERIC = new Set(["MAN", "BOY", "GIRL", "COP", "KID", "GUY", "DOC", "MOM", "DAD", "SON"]);
@@ -363,11 +416,21 @@ function mentionsOf(script: ParsedScript, character: ParsedCharacter): string[] 
   const token = mentionToken(character.name);
   if (!token) return [];
   const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const pattern = new RegExp(`\\b${escaped}\\b`, "i");
+  // Age-variant cards: only lines that also mark the age, so the adult's
+  // dialogue does not fill the child's "what others say" section.
+  const pattern = isAgeVariantName(character.name)
+    ? new RegExp(
+        `\\b(?:${VERSION_PREFIXES.join("|")})\\s+[^.!?]{0,40}\\b${escaped}\\b|\\b${escaped}\\b[^.!?]{0,40}\\b(?:${VERSION_PREFIXES.join("|").toLowerCase()}|kid|child|boy|girl)\\b`,
+        "i",
+      )
+    : new RegExp(`\\b${escaped}\\b`, "i");
 
   const found: string[] = [];
   for (const other of script.characters) {
     if (other.name === character.name) continue;
+    // The adult and the child are the same person at different ages — do not
+    // quote one on the other's card.
+    if (samePersonBase(other.name, character.name)) continue;
     for (const block of other.blocks) {
       if (!pattern.test(block.text)) continue;
       found.push(`${other.name}: "${block.text.slice(0, 160)}"`);
@@ -394,25 +457,254 @@ function settingsFor(script: ParsedScript, character: ParsedCharacter): string[]
 }
 
 /**
- * A character's introduction — the action line that first names them in caps,
- * which in a screenplay is where age, look and occupation are written down
- * ("MARA VOSS, late thirties, an unhurried paramedic...").
- *
- * Searched in action lines only. A dialogue line that happens to name them is
- * somebody talking, not the script describing them.
+ * Words a screenplay uses when it is describing a person rather than moving
+ * them. Shared with the evidence inspector so the two don't drift.
  */
-export function describedIn(script: ParsedScript, name: string, limit = 6): string[] {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const capsMention = new RegExp(`\\b${escaped}\\b`);
-  const found: string[] = [];
+const LOOK =
+  /\b(\d{1,2}s?\b|teen|twenty|thirty|forty|fifty|sixty|seventy|eighty|twenties|thirties|forties|fifties|sixties|seventies|eighties|young|old|elderly|middle[- ]aged|aged|boy|girl|kid|child|baby|man|woman|guy|lady|gentleman|tall|short|thin|thick|slim|slight|lean|heavy|stocky|broad|small|big|wiry|gaunt|weathered|handsome|beautiful|pretty|plain|grey|gray|greying|blonde?|brunette|red[- ]haired|bald|beard|moustache|mustache|stubble|hair|eyes|face|skin|scar|tattoo|limp|suit|uniform|dress|coat|jacket|boots|glasses|voice|accent|drawl|growl|whisper)\b/i;
 
-  for (const line of script.actionLines) {
-    if (!capsMention.test(line.text)) continue;
-    if (!/[a-z]/.test(line.text)) continue; // all caps: a cue or a transition
-    found.push(`(p${line.page}) ${line.text.slice(0, 400)}`);
-    if (found.length >= limit) break;
+/**
+ * A caps billing for a different actor playing the same character at another
+ * age. YOUNG HOLT is not HOLT — Happy Gilmore as a child in a flashback is a
+ * separate day player from the adult lead. The adult's evidence must not take
+ * the child's look, and the child must still appear as their own role.
+ */
+const VERSION_PREFIX = /^(YOUNG|OLDER|OLD|LITTLE|BABY|TEENAGE|TEEN)$/;
+const VERSION_PREFIXES = ["YOUNG", "OLDER", "OLD", "LITTLE", "BABY", "TEENAGE", "TEEN"] as const;
+
+const CAPS_RUN = /\b[A-Z][A-Z0-9'’.-]*(?:\s+[A-Z][A-Z0-9'’.-]*)*\b/g;
+
+/** Strip a leading YOUNG / OLDER / … so the personal name can be compared. */
+function withoutAgePrefix(name: string): string {
+  const words = name.split(/\s+/);
+  while (words.length > 1 && VERSION_PREFIX.test(words[0])) words.shift();
+  return words.join(" ");
+}
+
+export function isAgeVariantName(name: string): boolean {
+  const words = name.split(/\s+/);
+  return words.length >= 2 && VERSION_PREFIX.test(words[0]);
+}
+
+/** True when YOUNG HAPPY GILMORE and HAPPY (or HAPPY GILMORE) are the same person at different ages. */
+function samePersonBase(a: string, b: string): boolean {
+  const left = withoutAgePrefix(a);
+  const right = withoutAgePrefix(b);
+  if (!left || !right) return false;
+  if (left === right) return true;
+  if (left.startsWith(`${right} `) || right.startsWith(`${left} `)) return true;
+  const leftFirst = left.split(/\s+/)[0];
+  const rightFirst = right.split(/\s+/)[0];
+  return leftFirst.length >= 3 && leftFirst === rightFirst;
+}
+
+/**
+ * Billings like YOUNG HOLT or YOUNG HAPPY GILMORE found in action, for people
+ * who already speak under the adult cue. They often never get a dialogue cue
+ * of their own — the flashback is silent, or they share a cue name — but a
+ * casting breakdown still needs a separate card.
+ */
+function promoteAgeVariants(
+  actionLines: { page: number; text: string }[],
+  speaking: ParsedCharacter[],
+): ParsedCharacter[] {
+  if (!speaking.length) return [];
+
+  const prefixAlt = VERSION_PREFIXES.join("|");
+  // YOUNG HOLT / YOUNG HAPPY GILMORE — one or more caps words after the prefix.
+  const billing = new RegExp(`\\b(?:${prefixAlt})(?:\\s+[A-Z][A-Z0-9'’.-]+){1,4}\\b`, "g");
+  const byVariant = new Map<string, ParsedCharacter>();
+
+  for (const line of actionLines) {
+    billing.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = billing.exec(line.text))) {
+      const name = match[0].replace(/\s+/g, " ").trim();
+      if (!isAgeVariantName(name)) continue;
+      if (!speaking.some((s) => samePersonBase(name, s.name))) continue;
+      if (speaking.some((s) => s.name === name)) continue;
+
+      const existing = byVariant.get(name) ?? {
+        name,
+        pages: [],
+        cues: 0,
+        dialogueChars: 0,
+        blocks: [],
+      };
+      if (!existing.pages.includes(line.page)) existing.pages.push(line.page);
+      // Seed one block from the introduction so buildEvidence has pages and
+      // describedIn has something to score. Not dialogue — just presence.
+      if (existing.blocks.length < 3 && passageScore(line.text, name) > 0) {
+        existing.blocks.push({ page: line.page, text: line.text.slice(0, 400) });
+      }
+      byVariant.set(name, existing);
+    }
   }
-  return found;
+
+  return [...byVariant.values()].filter((c) => c.pages.length > 0);
+}
+
+const NOT_A_NAME = new Set([
+  "THE", "AND", "BUT", "FOR", "HER", "HIS", "SHE", "HIM", "YOU", "ARE", "WAS",
+  "NOT", "INT", "EXT", "DAY", "NIGHT", "LATER", "MOMENTS", "CONTINUOUS", "SAME",
+  "BACK", "ANGLE", "POV", "CLOSE", "WIDE", "NEW", "NOW", "THEN", "ALL", "OFF",
+  "OUT", "INTO", "FROM", "WITH", "THAT", "THIS", "THEY", "THEM", "HAVE", "BEEN",
+]);
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * True when this sentence is about this character's billing, not another age
+ * of them. HOLT does not match YOUNG HOLT; YOUNG HOLT matches only that form
+ * (or the same words with an extra surname).
+ */
+export function mentionsCharacter(text: string, name: string): boolean {
+  const re = new RegExp(`\\b${escapeRegExp(name)}\\b`, "g");
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text))) {
+    const before = text.slice(Math.max(0, match.index - 40), match.index);
+    const tail = before.match(/([A-Z][A-Z'’.-]*(?:\s+[A-Z][A-Z'’.-]*)*)\s*$/);
+    const prior = tail?.[1].split(/\s+/) ?? [];
+    // Adult role: skip a match that is really YOUNG HOLT / LITTLE MARA.
+    if (!isAgeVariantName(name) && prior.some((word) => VERSION_PREFIX.test(word))) continue;
+    // Age-variant role: the match is already the full YOUNG HOLT billing.
+    return true;
+  }
+
+  // YOUNG HAPPY should also take "YOUNG HAPPY GILMORE" when the cue was short.
+  if (isAgeVariantName(name)) {
+    const longer = new RegExp(
+      `\\b${escapeRegExp(name)}(?:\\s+[A-Z][A-Z0-9'’.-]+)+\\b`,
+    );
+    if (longer.test(text)) return true;
+  }
+  return false;
+}
+
+/** True when the sentence carries an age, a build, clothes, or a voice. */
+export function carriesLook(text: string): boolean {
+  return LOOK.test(text);
+}
+
+/**
+ * Another character is named here. A longer billing of the same age
+ * ("HAPPY GILMORE" for HAPPY) is not someone else. A different age
+ * ("YOUNG HOLT" for HOLT) is — that look belongs on the other card.
+ */
+function namesSomeoneElse(text: string, name: string): boolean {
+  const runs = text.match(CAPS_RUN) ?? [];
+  return runs.some((run) => {
+    if (run.length < 3 || NOT_A_NAME.has(run) || run === name) return false;
+    if (samePersonBase(run, name) && isAgeVariantName(run) !== isAgeVariantName(name)) {
+      return true;
+    }
+    if (run.startsWith(`${name} `) || run.endsWith(` ${name}`)) {
+      const extra = run.startsWith(`${name} `)
+        ? run.slice(name.length).trim()
+        : run.slice(0, run.length - name.length).trim();
+      // Surname or middle name on the same billing — still this person.
+      if (!extra.split(/\s+/).some((word) => VERSION_PREFIX.test(word))) return false;
+      return true;
+    }
+    return !samePersonBase(run, name);
+  });
+}
+
+/**
+ * How much this sentence tells a casting director who the person is.
+ * Blocking ("HOLT drags the gate") scores nothing and is not passed on.
+ */
+function passageScore(text: string, name: string): number {
+  if (!mentionsCharacter(text, name)) return 0;
+  const escaped = escapeRegExp(name);
+  // "MARA VOSS," and "WALT the COOK," are introductions. "MARA sits" is not.
+  // "(YOUNG HAPPY GILMORE)" is the flashback reveal form — the look is written
+  // before the billing, so the comma test alone would miss it.
+  const introduced =
+    new RegExp(
+      `\\b${escaped}\\b(?:\\s+(?:[A-Z][A-Z'’.-]+|the|a|an))*\\s*[,(\\[]`,
+    ).test(text) || new RegExp(`\\(\\s*${escaped}\\s*\\)`).test(text);
+  const thisIs = new RegExp(`\\bthis is\\s+${escaped}\\b`, "i").test(text);
+  const nameAt = text.search(new RegExp(`\\b${escaped}\\b`));
+  const lookAt = text.search(new RegExp(LOOK.source, "i"));
+  // A look that lands before the name belongs to whoever came first — unless
+  // this is the parenthetical reveal ("a six year old kid (YOUNG HAPPY)").
+  if (!introduced && !thisIs && (lookAt === -1 || nameAt > lookAt)) return 0;
+
+  let score = 0;
+  if (introduced) score += 4;
+  if (thisIs) score += 3;
+  const hits = text.match(new RegExp(LOOK.source, "gi"));
+  score += Math.min(hits?.length ?? 0, 4);
+  // One clothing word in a blocking line ("sits with her boots hanging") is
+  // not a description. An introduction is. So are two facts about the person
+  // ("tall and thin", "grey suit").
+  if (!introduced && !thisIs && score < 2) return 0;
+  return score;
+}
+
+/**
+ * The passages that actually describe this character.
+ *
+ * The first lines that contain a name are usually blocking, a wrapped
+ * fragment, or another age of them ("YOUNG HOLT" for HOLT). Taking those and
+ * stopping — which is what this used to do — handed the model movement and
+ * the wrong face, then the prompt told it to invent nothing. The description
+ * came back empty or about the child when the card was for the adult.
+ *
+ * A passage qualifies when the sentence introduces them (a comma billing, or
+ * "this is NAME") or says how they look. The next sentence or two in the same
+ * action run comes with it, which is where a wrapped line hides the age.
+ * Pure blocking is left out.
+ */
+export function describedIn(script: ParsedScript, name: string, limit = 4): string[] {
+  const lines = script.actionLines;
+  const clusters: { page: number; text: string; score: number; end: number }[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    if (passageScore(lines[i].text, name) === 0) continue;
+
+    let start = i;
+    const escaped = escapeRegExp(name);
+    const thisIs = new RegExp(`\\bthis is\\s+${escaped}\\b`, "i").test(lines[i].text);
+    if (i > 0 && lines[i - 1].run === lines[i].run && thisIs) {
+      const prev = lines[i - 1];
+      if (!namesSomeoneElse(prev.text, name) && carriesLook(prev.text)) start = i - 1;
+    }
+
+    let end = i;
+    let chars = lines.slice(start, end + 1).reduce((sum, line) => sum + line.text.length, 0);
+    let followed = 0;
+    while (end + 1 < lines.length && followed < 2) {
+      const next = lines[end + 1];
+      if (next.run !== lines[i].run) break;
+      if (namesSomeoneElse(next.text, name)) break;
+      // "RENNA crosses to the shelving" is the same person and still not a
+      // description. A continuation ("She has been thirty-four...") does not
+      // open on the name.
+      const opensOnName = new RegExp(`^${escaped}\\b`).test(next.text);
+      if (opensOnName && passageScore(next.text, name) === 0) break;
+      if (chars + next.text.length > 520) break;
+      end++;
+      followed++;
+      chars += next.text.length;
+    }
+
+    const text = lines
+      .slice(start, end + 1)
+      .map((line) => line.text)
+      .join(" ");
+    clusters.push({ page: lines[start].page, text, score: passageScore(text, name), end });
+    i = end;
+  }
+
+  return clusters
+    .sort((a, b) => b.score - a.score || a.page - b.page)
+    .slice(0, limit)
+    .sort((a, b) => a.page - b.page)
+    .map((cluster) => `(p${cluster.page}) ${cluster.text.slice(0, 600)}`);
 }
 
 /** Title Case a cue name for display: "HAPPY GILMORE" -> "Happy Gilmore". */
