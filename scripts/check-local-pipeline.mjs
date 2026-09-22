@@ -238,7 +238,7 @@ try {
   );
   check(
     "the page says which build it is",
-    /[0-9a-f]{7} · \d/.test(page),
+    /v\d+\.\d+\.\d+/.test(page),
     "a page that has not been updated looks exactly like one that has",
   );
   check(

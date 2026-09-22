@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isFrameworkControlFlow } from "@/lib/errors";
 import SmartCreator from "@/components/SmartCreator";
 import type { Locale } from "@/lib/locale";
-import { versionLabel } from "@/lib/version";
+import { versionDetail, versionLabel } from "@/lib/version";
 import Link from "next/link";
 import { Upload, Sparkles, ClipboardCopy, FileText, Users, Video, ListChecks } from "lucide-react";
 
@@ -180,7 +180,7 @@ export default async function HomeView({ locale = "us" }: { locale?: Locale }) {
         <span>Script To Cast</span>
         <Link href="/privacy" className="hover:text-gray-600 transition">Privacy</Link>
         <Link href="/terms" className="hover:text-gray-600 transition">Terms</Link>
-        <span className="text-gray-300">{versionLabel()}</span>
+        <span className="text-gray-300" title={versionDetail()}>{versionLabel()}</span>
       </footer>
     </div>
   );
