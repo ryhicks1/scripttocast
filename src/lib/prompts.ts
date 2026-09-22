@@ -231,7 +231,7 @@ Before keeping any sentence, apply the cut test: does this change who an agent
 would submit, or what an actor would do on the day? If it does neither, delete
 it. Never narrate the spot; describe the person being cast.
 
-ROLE TYPE vocabulary: PRINCIPAL, FEATURED, EXTRA, VOICEOVER, HAND MODEL.
+ROLE TYPE vocabulary: ${t.commercialRoleTypes}.
 
 FORM QUESTIONS for commercials — extract any project-specific questions, then
 always add:

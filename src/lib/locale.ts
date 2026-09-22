@@ -40,6 +40,8 @@ export interface LocaleTerms {
   unionExamples: string;
   /** Role tiers, largest to smallest, used for both vocabulary and length. */
   roleTypes: { lead: string; mid: string; small: string; all: string; qualifiers: string };
+  /** Commercial role vocabulary, which uses a different set from film/TV. */
+  commercialRoleTypes: string;
   /** Examples for the `submissionNotes` field. */
   submissionNoteExamples: string;
   /** Standard questions added to every film/TV job form. */
@@ -65,6 +67,7 @@ export const LOCALE_TERMS: Record<Locale, LocaleTerms> = {
       all: "SERIES REGULAR, GUEST STAR, CO-STAR, RECURRING, LEAD, SUPPORTING, DAY PLAYER",
       qualifiers: '"LARGE CO-STAR", "SUPPORTING (1 DAY)"',
     },
+    commercialRoleTypes: "PRINCIPAL, FEATURED, EXTRA, VOICEOVER, HAND MODEL",
     submissionNoteExamples:
       '"LA LOCAL HIRES ONLY", "PLEASE INCLUDE SIZE CARDS", "MUST BE BASED IN LA", "SCALE", "ABOVE SCALE", demo clip requests',
     filmFormQuestions: `- "Are you available for all production dates?" (radio: Yes/No, required)
@@ -87,7 +90,12 @@ export const LOCALE_TERMS: Record<Locale, LocaleTerms> = {
   au: {
     label: "Australia",
     path: "/au",
-    platforms: "Showcast and Casting Networks Australia",
+    // Showcast has distributed Australian breakdowns for decades; Altai is an
+    // Australia/New Zealand platform built by Australian casting people. Casting
+    // Networks operates here but is US-headquartered, and its role-type dropdown
+    // carries US structure (Principal/Background, "Featured Background"), so it
+    // is deliberately not the reference for Australian vocabulary.
+    platforms: "Showcast and Altai",
     englishVariant:
       `Write in Australian English throughout — descriptions, logline, synopsis and
 form questions. Use -ise endings (realise, organise, specialise, recognise),
@@ -118,6 +126,9 @@ than "programme" is correct for television.`,
       all: "SERIES REGULAR, RECURRING, GUEST ROLE, LEAD, SUPPORTING, BIT PLAYER, FEATURED EXTRA, EXTRA, STAND-IN",
       qualifiers: '"SUPPORTING (1 DAY)", "GUEST ROLE (2 EPISODES)"',
     },
+    // The Australian market is usually described as principal, featured and
+    // background talent, with FEATURED EXTRA a distinct MEAA category.
+    commercialRoleTypes: "PRINCIPAL, FEATURED, FEATURED EXTRA, EXTRA, VOICEOVER, HAND MODEL",
     // REVIEW: state-based hiring is the Australian equivalent of the US
     // "local hire" note, since incentives and travel are organised by state.
     submissionNoteExamples:
