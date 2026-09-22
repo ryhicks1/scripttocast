@@ -198,11 +198,21 @@ Before keeping any sentence, apply the cut test: does this change who an agent
 would submit, or what an actor would do in the room? If it does neither, delete
 it. Stopping early is always better than padding.
 
-LENGTH IS A CEILING, NOT A TARGET. Use fewer sentences whenever the role needs
+LENGTH IS A CEILING, NOT A TARGET. Use fewer words whenever the role needs
 fewer; a sharp one-line breakdown beats a padded four-line one.
-- ${t.roleTypes.lead}: at most 5 sentences.
-- ${t.roleTypes.mid}: at most 4.
-- ${t.roleTypes.small}: at most 2.
+- ${t.roleTypes.lead}: up to about 110 words.
+- ${t.roleTypes.mid}: up to about 80.
+- ${t.roleTypes.small}: up to about 55.
+
+Words rather than sentences, because a sentence is not a fixed amount of
+writing here. In the fragment style above — "Small town enforcer. Hardened,
+calculating, intimidating." — a sentence runs about 58 characters; written out
+in full clauses it runs 99. A sentence count therefore rations how much you can
+say according to how you write it, and rations hardest exactly where the
+writing is tightest.
+
+These figures come from the real breakdowns this style is drawn from: their
+median lead runs 84 words of prose and their longest tenth run past 150.
 
 ROLE TYPE vocabulary: ${t.roleTypes.all}. Use only these terms — the tiers
 used in other markets are not interchangeable. Qualifiers as written in the
@@ -243,9 +253,11 @@ What the description must do:
 3. Note on-camera demands: product interaction, eating or drinking the product,
    improvisation, athletic ability, hand-model detail work.
 
-LENGTH: at most 3 sentences, and frequently one is enough. This is a ceiling,
-not a target — commercial breakdowns stay tight, and padding to fill a quota is
-the most common way they go wrong.
+LENGTH: up to about 60 words, and frequently a line is enough. This is a
+ceiling, not a target — commercial breakdowns stay tight, and padding to fill a
+quota is the most common way they go wrong. Counted in words rather than
+sentences, since a fragment and a full clause are not the same amount of
+writing.
 
 Before keeping any sentence, apply the cut test: does this change who an agent
 would submit, or what an actor would do on the day? If it does neither, delete

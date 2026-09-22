@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { GUARANTEES } from "./guarantees";
+import { versionLabel } from "@/lib/version";
 import { Shield, Laptop, Download, Terminal, ArrowRight, ExternalLink } from "lucide-react";
 
 /**
@@ -234,6 +235,7 @@ export default function PrivateSetupGuide() {
         <span>Script To Cast</span>
         <Link href="/privacy" className="hover:text-gray-600 transition">Privacy</Link>
         <Link href="/terms" className="hover:text-gray-600 transition">Terms</Link>
+        <span className="text-gray-300">{versionLabel()}</span>
       </footer>
     </div>
   );

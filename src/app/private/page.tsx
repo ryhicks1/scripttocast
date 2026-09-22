@@ -7,6 +7,7 @@ import { isVercelHosted } from "@/lib/runtime";
 import { pickBestModel, resolveConfig } from "@/lib/local/ollama";
 import PrivateSetupGuide from "./PrivateSetupGuide";
 import { GUARANTEES } from "./guarantees";
+import { versionLabel } from "@/lib/version";
 import ModelUpdate from "./ModelUpdate";
 import recommended from "../../../recommended-model.json";
 
@@ -106,6 +107,12 @@ function PrivateLocalTool({
           <SmartCreator isLoggedIn={false} analyzeEndpoint="/api/analyze-local" privateMode />
         </div>
       </section>
+
+      {/* Which build this is. Worth having in reach: a page that has not been
+          updated looks exactly like one that has. */}
+      <footer className="text-center text-[11px] text-gray-300 py-6">
+        {versionLabel() ?? "version unknown"}
+      </footer>
     </div>
   );
 }
