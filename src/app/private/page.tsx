@@ -6,6 +6,7 @@ import { Shield } from "lucide-react";
 import { isVercelHosted } from "@/lib/runtime";
 import { pickBestModel, resolveConfig } from "@/lib/local/ollama";
 import PrivateSetupGuide from "./PrivateSetupGuide";
+import { GUARANTEES } from "./guarantees";
 
 export const metadata = {
   title: "Private local setup — Script To Cast",
@@ -51,9 +52,25 @@ function PrivateLocalTool({ model }: { model: string }) {
               to run if that model is not local.
             </p>
             <p className="mt-1.5 text-emerald-800/90">
-              The document is held in memory for the length of the request and then dropped.
               Model: <code className="text-xs bg-white/80 px-1 rounded">{model}</code>
             </p>
+
+            {/* Folded away by default. The claim above is what matters day to
+                day; the detail is for the conversation where someone asks how
+                it is actually enforced. */}
+            <details className="mt-2 group">
+              <summary className="text-xs text-emerald-800/80 cursor-pointer hover:text-emerald-900 list-none">
+                <span className="underline underline-offset-2">What that means exactly</span>
+              </summary>
+              <ul className="mt-2 space-y-1.5">
+                {GUARANTEES.map((item) => (
+                  <li key={item} className="text-xs text-emerald-900/80 leading-relaxed flex gap-2">
+                    <span className="text-emerald-600 shrink-0">—</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
           </div>
         </div>
       </section>

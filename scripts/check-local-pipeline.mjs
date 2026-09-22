@@ -201,7 +201,9 @@ try {
   );
   check(
     "the page promises what the code actually enforces",
-    page.includes("Nothing you upload leaves this computer") && page.includes("127.0.0.1"),
+    page.includes("Nothing you upload leaves this computer") &&
+      page.includes("127.0.0.1") &&
+      page.includes("A non-local address is refused"),
     "this is a claim a studio would rely on, so it has to match the loopback guard",
   );
   check(

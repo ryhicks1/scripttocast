@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { GUARANTEES } from "./guarantees";
 import { Shield, Laptop, Download, Terminal, ArrowRight, ExternalLink } from "lucide-react";
 
 const STEPS = [
@@ -56,21 +57,6 @@ const STEPS = [
       </>
     ),
   },
-];
-
-/**
- * Properties the code enforces, not intentions.
- *
- * Each line corresponds to something checked in the test suite: the loopback
- * guard in assertLocalOllama, the absence of any other outbound request on this
- * path, and the debug dump being off by default. Worth keeping that way — this
- * is the page someone reads before handing over a confidential script.
- */
-const GUARANTEES = [
-  "One outbound request, to 127.0.0.1. A non-local address is refused rather than used — the analysis stops instead.",
-  "Your document is held in memory for the length of the request and then dropped. It is not written to disk.",
-  "No account, no database, no upload. There is nowhere for a script to be stored.",
-  "Sides and reports are generated on your machine too, from the file you already have.",
 ];
 
 export default function PrivateSetupGuide() {
