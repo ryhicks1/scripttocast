@@ -58,6 +58,21 @@ const STEPS = [
   },
 ];
 
+/**
+ * Properties the code enforces, not intentions.
+ *
+ * Each line corresponds to something checked in the test suite: the loopback
+ * guard in assertLocalOllama, the absence of any other outbound request on this
+ * path, and the debug dump being off by default. Worth keeping that way — this
+ * is the page someone reads before handing over a confidential script.
+ */
+const GUARANTEES = [
+  "One outbound request, to 127.0.0.1. A non-local address is refused rather than used — the analysis stops instead.",
+  "Your document is held in memory for the length of the request and then dropped. It is not written to disk.",
+  "No account, no database, no upload. There is nowhere for a script to be stored.",
+  "Sides and reports are generated on your machine too, from the file you already have.",
+];
+
 export default function PrivateSetupGuide() {
   return (
     <div className="min-h-screen bg-[#fafafa]">
@@ -79,10 +94,15 @@ export default function PrivateSetupGuide() {
           <h1 className="text-2xl font-bold text-gray-900 mb-3">
             Run this on your Mac
           </h1>
-          <p className="text-gray-500 text-sm max-w-xl mx-auto leading-relaxed">
-            This is not a cloud AI breakdown tool. The private / local-model path
-            only works on your computer via localhost. Vercel cannot reach Ollama
-            on your laptop.
+          <p className="text-gray-600 text-sm max-w-xl mx-auto leading-relaxed">
+            Set this up and <strong>your scripts never leave your computer</strong>. The
+            private path reads a document in your browser, analyses it with a model running
+            on your own machine, and never uploads it, stores it, or sends it to any online
+            service.
+          </p>
+          <p className="text-gray-400 text-xs max-w-xl mx-auto leading-relaxed mt-3">
+            It only works locally — this hosted page cannot reach a model on your laptop,
+            which is precisely the point.
           </p>
         </div>
       </section>
@@ -91,11 +111,24 @@ export default function PrivateSetupGuide() {
         <div className="max-w-3xl mx-auto flex gap-3 text-sm text-amber-950">
           <Shield size={18} className="shrink-0 mt-0.5" />
           <p>
-            Scripts stay on your machine <strong>only</strong> when you analyze
-            them on <code className="text-xs bg-white/80 px-1 rounded">localhost</code>{" "}
-            against Ollama. Using the public homepage still sends text to Claude.
+            This applies to the local tool <strong>only</strong>. The public tool on this
+            site sends document text to a cloud AI service for analysis — see{" "}
+            <Link href="/privacy" className="underline underline-offset-2">Privacy</Link>.
           </p>
         </div>
+      </section>
+
+      <section className="max-w-3xl mx-auto px-6 pt-14">
+        <p className="text-center text-xs text-gray-400 uppercase tracking-wider mb-8 font-medium">
+          What that actually means
+        </p>
+        <ul className="grid sm:grid-cols-2 gap-3 text-sm">
+          {GUARANTEES.map((item) => (
+            <li key={item} className="bg-white border border-gray-200 rounded-xl p-4 text-gray-600 leading-relaxed">
+              {item}
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section className="max-w-3xl mx-auto px-6 py-14">
