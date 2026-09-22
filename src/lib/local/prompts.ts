@@ -70,36 +70,40 @@ synopsis: three or four sentences.`;
 export const LOCAL_STYLE_RULES = `HOW IT IS WRITTEN — the part that goes wrong most often:
 
 - WRITE IN FRAGMENTS. Nearly two thirds of the sentences in professional
-  breakdowns have no verb in them at all. "Mexican field-hand." "Minimalist
-  presence." "Observant. Restrained." Each is a whole sentence. A full sentence
-  spends its words on grammar; a fragment spends them on the person.
-- Open on a noun or an adjective. Never open with "He is", "She is", "They
-  are", or the character's name.
-- Never open with "A seasoned", "A skilled" or "A young". They say nothing, and
+  breakdowns have no verb in them at all: a job title alone, a run of two or
+  three adjectives alone. Each is a whole sentence. A full sentence spends its
+  words on grammar; a fragment spends them on the person.
+- Fragments are for density, not brevity. Say MORE about the person in shorter
+  units — not less. A description of four words is not a good fragment, it is
+  an empty one.
+- Open on a noun or an adjective. Never open with He is, She is, They are, or
+  the character's name.
+- Never open with the words seasoned, skilled or young. They say nothing, and
   they end up on every role in the breakdown.
 
-PHYSICALITY. When the script says how someone looks, moves, carries themselves
-or sounds, put it in — in the script's own terms, near the front. "Gaunt,
-weathered." "Mountainous, corpulent." "A rangy wolf of a man with a bristling
-beard." That is what an agent pictures, and it is the difference between a
-description someone can cast from and a list of adjectives.
+PHYSICALITY. When the script says how a character looks, moves, carries
+themselves or sounds, put it in, near the front, using the script's own words
+about that character. Build, bearing, age in the face, how they hold
+themselves, what their voice does. That is what an agent pictures, and it is
+the difference between a description someone can cast from and a list of
+adjectives.
 
-Only what the evidence gives you. Do not invent a look, and do not write around
-one novelistically — no "his tailored suit accentuating his lean physique". If
-the script never describes them, say nothing about their appearance.
+Only what the evidence gives you. Never invent a look. Never carry a look
+across from another character. If the script does not describe them, write
+nothing about their appearance rather than reaching for something.
 
-WHAT THE PART DEMANDS. One line, at most, of the kind a casting director writes
-to an actor: what the performance has to carry. "Face should carry life
-experience." "Needs strong physical presence and emotional transparency."
-Only where the evidence supports it.
+WHAT THE PART DEMANDS. At most one line of the kind a casting director writes
+to an actor: what the performance has to carry, or what an actor must be able
+to do. Only where the evidence supports it.
 
 NEVER:
-- Explain your reasoning or cite the script: no "as evidenced by", "which
-  shows", "as seen when". Nothing has to be proved.
-- Hedge: no "possibly", "perhaps", "seems", "some kind of".
-- "carries himself", "an air of", "exudes", "a deep sense of", "is able to",
-  "is someone who", "a deep understanding of", "a commanding presence".
-- Retell a scene, or describe what anyone is doing.`;
+- Explain your reasoning or cite the script. Nothing has to be proved.
+- Hedge. If the evidence does not support it, leave it out.
+- Reach for stock phrasing about presence, understanding, bearing or air.
+- Retell a scene, or describe what anyone is doing.
+- Use any wording from these instructions. Every phrase here is about writing,
+  not about your character. A phrase quoted above belongs to no one in your
+  script.`;
 
 /**
  * The house prompt, adapted to describing one role at a time.

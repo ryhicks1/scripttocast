@@ -134,6 +134,17 @@ function reply(system, user) {
     }
   }
 
+  // A real run stamped a two-word phrase from the prompt's physicality section
+  // onto three separate characters. Short quoted examples are the leak the
+  // six-word rule cannot see.
+  if (name === "Nurse Pell" && !copiedOnce.has(name)) {
+    const quoted = /"([^"\n]{4,60})"/.exec(system.split("PHYSICALITY")[1] ?? "")?.[1];
+    if (quoted) {
+      copiedOnce.add(name);
+      return { gender: "Woman", ageRange: "20s", ethnicity: "", description: quoted, traits: [] };
+    }
+  }
+
   // A real run gave a lead the ethnicity of the character he shares scenes
   // with. Nothing in Devlin's evidence says Japanese, so it must be dropped.
   if (name === "Devlin") {

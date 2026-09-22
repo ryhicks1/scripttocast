@@ -295,6 +295,13 @@ try {
       otis.split(/\s+/).length > 6,
     `${JSON.stringify(body.meta?.diagnostics?.rolesCopiedPrompt)} -> ${otis}`,
   );
+  const pell = (body.roles ?? []).find((r) => r.name === "Nurse Pell")?.description ?? "";
+  check(
+    "a short phrase quoted in the prompt is caught too",
+    !/gaunt, weathered|mountainous, corpulent/i.test(pell),
+    `${pell} — the six-word rule cannot see a two-word lift`,
+  );
+
   const devlin = (body.roles ?? []).find((r) => r.name === "Devlin");
   check(
     "hair colour is not accepted as an ethnicity",
