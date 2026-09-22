@@ -15,7 +15,7 @@ import {
 import { buildSystemPrompt } from "@/lib/prompts";
 import { isLocale, type Locale } from "@/lib/locale";
 import type { CastingOptions } from "@/lib/prompts";
-import { findNarrativeVoice } from "@/lib/description-quality";
+import { countEmDashes, findMachineTells, findNarrativeVoice } from "@/lib/description-quality";
 
 export const maxDuration = 300;
 
@@ -265,10 +265,16 @@ export async function POST(request: Request) {
     // Log narrative-summary phrasing so the description prompt can be judged
     // against real output. Descriptions are returned unchanged either way.
     const flagged = (result.roles ?? [])
-      .map((role) => ({ name: role.name, phrases: findNarrativeVoice(role.description) }))
-      .filter((entry) => entry.phrases.length > 0);
+      .map((role) => ({
+        name: role.name,
+        narrativeVoice: findNarrativeVoice(role.description),
+        machineTells: findMachineTells(role.description),
+        // Real breakdowns average one em dash where they use them at all.
+        excessEmDashes: Math.max(0, countEmDashes(role.description) - 1),
+      }))
+      .filter((e) => e.narrativeVoice.length || e.machineTells.length || e.excessEmDashes);
     if (flagged.length) {
-      console.log("analyze: narrative voice in descriptions", {
+      console.log("analyze: description quality flags", {
         flaggedRoles: flagged.length,
         totalRoles: result.roles?.length ?? 0,
         examples: flagged.slice(0, 5),

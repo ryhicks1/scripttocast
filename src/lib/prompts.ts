@@ -105,6 +105,26 @@ DISCLOSURE
 SUBMISSION NOTES
 - Verbatim submission conditions: ${t.submissionNoteExamples}.
 
+HOW IT SHOULD READ
+Plain trade prose, in every field you write — descriptions, logline, synopsis.
+
+The constructions below appear in none of the real breakdowns this house style
+is drawn from. They read as machine-written. Never use them:
+
+  "delve", "tapestry", "a testament to", "underscores", "resonates",
+  "whisper", "in a world where"
+  "not just X, but Y" and "isn't just X, it's Y"
+  "part X, part Y"
+  sentences opening on a participle: "Having spent...", "Driven by..."
+
+Em dashes do appear in real breakdowns, but sparingly — around one in the
+entries that use them at all. Use at most one per description, and only where
+neither a comma nor a full stop will do.
+
+Do not overcorrect. A list of three is house style here, not a tell:
+"Hardened, calculating, intimidating" is exactly right, and appears in roughly a
+quarter of real entries. Keep them.
+
 SELF-TAPE INSTRUCTIONS
 - Per role: videos ({label, description} — SLATE, SCENE 1, ...), photos
   ("1 x close-up"), filmingNotes ("Landscape only", "Eyeline off-camera").
