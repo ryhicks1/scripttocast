@@ -8,6 +8,7 @@
     "start": "next start",
     "check:local": "node --no-warnings scripts/check-local-pipeline.mjs",
     "eval:local": "node --no-warnings scripts/eval-local.mjs",
+    "evidence:local": "node --no-warnings --experimental-transform-types scripts/inspect-evidence.mjs",
     "corpus:metrics": "node --no-warnings scripts/corpus/parse-corpus.mjs"
   },
   "dependencies": {

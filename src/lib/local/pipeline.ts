@@ -393,12 +393,16 @@ export async function analyzeLocally(
     const name = displayName(character.name);
     const evidence = buildEvidence(script, character, budgetFor(config, descriptionSystem, 2400));
 
-    // Always written, to local-evidence.txt in the project folder.
+    // Off unless LOCAL_DEBUG_EVIDENCE is set — see EVIDENCE_FILE above. The
+    // comment that stood here claimed the opposite ("always written, to the
+    // project folder"), which is the privacy promise this path is sold on read
+    // backwards.
     //
     // Every bad description in this project has been the model faithfully
-    // reporting bad evidence. Reading that back was buried behind an
-    // environment variable and a terminal window, which made the fastest way to
-    // diagnose a run the hardest thing to reach. It is a plain file now.
+    // reporting bad evidence, so reading the evidence back is the fastest way
+    // to diagnose a run — but it does not have to cost a run to do it:
+    // `npm run evidence:local -- script.pdf` prints the same blocks from the
+    // same code with no model involved.
     recordEvidence(name, roleType, evidence.text);
 
     const askFor = async (system: string) =>
