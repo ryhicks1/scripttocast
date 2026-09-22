@@ -25,6 +25,8 @@ export interface OllamaConfig {
   numCtx: number;
   /** Prompt budget in characters, derived from numCtx. */
   promptCharBudget: number;
+  /** Set when the running model is too small to do this job well. */
+  warning?: string;
 }
 
 /**
@@ -167,7 +169,7 @@ export async function preflight(config: OllamaConfig): Promise<OllamaConfig> {
     );
   }
 
-  const modelCtx = await modelContextLength(config);
+  const { contextLength: modelCtx, parameters } = await modelDetails(config);
   // Never ask for more context than the model has.
   const numCtx = modelCtx ? Math.min(config.numCtx, modelCtx) : config.numCtx;
 
@@ -180,30 +182,68 @@ export async function preflight(config: OllamaConfig): Promise<OllamaConfig> {
     );
   }
 
-  return { ...config, numCtx, promptCharBudget: promptCharBudgetFor(numCtx) };
+  const warning =
+    parameters !== null && parameters < MIN_USEFUL_PARAMETERS_B
+      ? `Running ${config.model}, which has ${parameters}B parameters. This path needs ` +
+        `about ${MIN_USEFUL_PARAMETERS_B}B to write usable descriptions — below that they come ` +
+        `back thin or generic no matter how the prompt is written. Run ` +
+        `"ollama pull llama3.1:8b", then set OLLAMA_MODEL=llama3.1:8b in .env.local ` +
+        `(an OLLAMA_MODEL already in that file overrides the app's default).`
+      : undefined;
+
+  if (warning) console.warn(`analyze_local: ${warning}`);
+
+  return { ...config, numCtx, promptCharBudget: promptCharBudgetFor(numCtx), warning };
+}
+
+/**
+ * Smallest model that writes usable casting copy.
+ *
+ * Below this the format survives but the substance does not: descriptions come
+ * back as adjectives, or as whatever the prompt last said. Worth saying out
+ * loud, because OLLAMA_MODEL can be set in .env.local and quietly override the
+ * default — which happened here, and cost three rounds of tuning prompts
+ * against a model that had supposedly been replaced.
+ */
+const MIN_USEFUL_PARAMETERS_B = 7;
+
+/** Parameter count in billions, from /api/show ("3.2B", "8.0B"). */
+function parameterBillions(details: Record<string, unknown> | undefined): number | null {
+  const raw = details?.parameter_size;
+  if (typeof raw !== "string") return null;
+  const match = /([\d.]+)\s*([BM])/i.exec(raw);
+  if (!match) return null;
+  const value = Number(match[1]);
+  if (!Number.isFinite(value)) return null;
+  return match[2].toUpperCase() === "M" ? value / 1000 : value;
 }
 
 /** The model's own context length, from /api/show. Null when unreported. */
-async function modelContextLength(config: OllamaConfig): Promise<number | null> {
+async function modelDetails(
+  config: OllamaConfig,
+): Promise<{ contextLength: number | null; parameters: number | null }> {
   const res = await ollamaFetch(config, "/api/show", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ model: config.model }),
     timeoutMs: 15_000,
   });
-  if (!res.ok) return null;
+  if (!res.ok) return { contextLength: null, parameters: null };
 
   const body = (await res.json().catch(() => null)) as
-    | { model_info?: Record<string, unknown> }
+    | { model_info?: Record<string, unknown>; details?: Record<string, unknown> }
     | null;
-  const info = body?.model_info ?? {};
+
+  let contextLength: number | null = null;
   // The key is architecture-prefixed: "llama.context_length", "qwen2.context_length"...
-  for (const [key, value] of Object.entries(info)) {
+  for (const [key, value] of Object.entries(body?.model_info ?? {})) {
     if (key.endsWith(".context_length") && typeof value === "number" && value > 0) {
-      return value;
+      contextLength = value;
+      break;
     }
   }
-  return null;
+
+  return { contextLength, parameters: parameterBillions(body?.details) };
 }
 
 export interface ChatJsonOptions {

@@ -80,6 +80,7 @@ export async function POST(request: Request) {
         numCtx: config.numCtx,
         third_party_ai: false,
         script_sha256: scriptSha,
+        warning: config.warning,
         diagnostics,
       },
     });

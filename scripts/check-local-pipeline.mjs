@@ -254,6 +254,33 @@ try {
   await emptyStub.close();
 }
 
+// --- 2b. A model too small for the job ----------------------------------------
+const smallStub = await startStubOllama({ scenario: "small-model" });
+server = await startDevServer({
+  OLLAMA_BASE_URL: smallStub.url,
+  OLLAMA_MODEL: "stub-model",
+  VERCEL: "",
+});
+
+try {
+  console.log("\nundersized local model");
+  const { status, body } = await analyze(screenplay, "the-long-way-down.pdf");
+  check("still analyses", status === 200, `got ${status}`);
+  check(
+    "says so on the page, not just in a log",
+    /3.2B/.test(body.meta?.warning ?? "") && /llama3.1:8b/.test(body.meta?.warning ?? ""),
+    body.meta?.warning,
+  );
+  check(
+    "names .env.local as the thing that overrides the default",
+    /\.env\.local/.test(body.meta?.warning ?? ""),
+    "this is what hid a 3B model for three rounds of fixes",
+  );
+} finally {
+  await stopDevServer(server);
+  await smallStub.close();
+}
+
 // --- 3. Ollama not running ---------------------------------------------------
 server = await startDevServer({
   OLLAMA_BASE_URL: "http://127.0.0.1:11999",

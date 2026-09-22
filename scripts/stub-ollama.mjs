@@ -28,7 +28,10 @@ export function startStubOllama({ scenario = "ok", port = 0 } = {}) {
         return json(200, { models: [{ name: "stub-model:latest" }] });
       }
       if (req.url === "/api/show") {
-        return json(200, { model_info: { "llama.context_length": 131072 } });
+        return json(200, {
+          model_info: { "llama.context_length": 131072 },
+          details: { parameter_size: scenario === "small-model" ? "3.2B" : "8.0B" },
+        });
       }
       if (req.url !== "/api/chat") return json(404, { error: "not found" });
 

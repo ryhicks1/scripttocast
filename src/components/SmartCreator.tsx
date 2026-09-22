@@ -588,6 +588,19 @@ export default function SmartCreator({ isLoggedIn, initialResult, authUnavailabl
 
   return (
     <div className="space-y-4">
+      {/* A local model too small for the job produces plausible-looking copy,
+          so nothing on screen reveals it. It has to be said here: the run that
+          prompted this had been on a 3B model for three rounds of fixes,
+          because OLLAMA_MODEL in .env.local quietly overrode the default. */}
+      {result?.meta?.warning && (
+        <div className="border border-amber-300 bg-amber-50 rounded-xl p-4">
+          <p className="text-sm font-semibold text-amber-900">
+            This ran on a small local model
+          </p>
+          <p className="text-xs text-amber-800 mt-1">{result.meta.warning}</p>
+        </div>
+      )}
+
       {/* The analysis itself needs no database, so it is worth saying plainly
           when the copy on screen is the only copy. */}
       {saveWarning && (
