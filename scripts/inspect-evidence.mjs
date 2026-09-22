@@ -15,6 +15,7 @@
  *   node scripts/inspect-evidence.mjs script.pdf            # summary table
  *   node scripts/inspect-evidence.mjs script.pdf --role MAL # one role in full
  *   node scripts/inspect-evidence.mjs script.pdf --full     # every role in full
+ *   npm run evidence:local -- --fixture movement --assert   # look/moves regression
  *
  * The script is read into memory and never written anywhere.
  *
@@ -27,16 +28,18 @@
  * Three other columns matter as much:
  *
  *   N of M mentions — how many action lines name this character in the whole
- *                     script, against the six describedIn() stops at. A lead
- *                     with 200 and a cap of 6 is being described from act one.
+ *                     script, against the six describedIn() keeps. A lead with
+ *                     200 is still described from a sample; the sample has to
+ *                     include the line that says what they look like.
  *   entrance        — whether the FIRST action line naming them says anything
  *                     about the person. If it does not, nothing downstream can.
  *   taken / pool    — the page span the six came from, against the span they
  *                     were drawn from.
  */
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { registerHooks } from "node:module";
-import { basename } from "node:path";
+import { tmpdir } from "node:os";
+import { basename, join } from "node:path";
 
 // The route's own modules are TypeScript, and they import each other the way
 // TypeScript does — "./errors", no extension. Node strips the types but does
@@ -57,60 +60,68 @@ registerHooks({
 });
 
 const { extractDocument } = await import("../src/lib/local/extract.ts");
-const { parseScript, assignTiers, buildEvidence, displayName, DESCRIPTION_BUDGET } = await import(
-  "../src/lib/local/screenplay.ts"
-);
+const {
+  parseScript,
+  assignTiers,
+  buildEvidence,
+  displayName,
+  actionMentions,
+  hasAppearance,
+  DESCRIPTION_BUDGET,
+} = await import("../src/lib/local/screenplay.ts");
 
 function parseArgs(argv) {
-  const options = { full: false, role: null, limit: 0 };
+  const options = { full: false, role: null, limit: 0, fixture: null, assert: false };
   const inputs = [];
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--full") options.full = true;
+    else if (arg === "--assert") options.assert = true;
     else if (arg === "--role") options.role = argv[++i];
     else if (arg === "--limit") options.limit = Number(argv[++i]);
+    else if (arg === "--fixture") options.fixture = argv[++i];
     else inputs.push(arg);
   }
   return { inputs, options };
 }
 
 /**
- * Words a screenplay uses when it is describing a person rather than moving
- * them around. Kept deliberately broad — this counts lines, it does not decide
- * what the model sees, so a false positive costs nothing but a number.
- */
-const LOOK =
-  /\b(\d{1,2}s?\b|teen|twenty|thirty|forty|fifty|sixty|seventy|eighty|twenties|thirties|forties|fifties|sixties|seventies|eighties|young|old|elderly|middle[- ]aged|aged|boy|girl|kid|child|baby|man|woman|guy|lady|gentleman|tall|short|thin|thick|slim|slight|lean|heavy|stocky|broad|small|big|wiry|gaunt|weathered|handsome|beautiful|pretty|plain|grey|gray|greying|blonde?|brunette|red[- ]haired|bald|beard|moustache|mustache|stubble|hair|eyes|face|skin|scar|tattoo|limp|suit|uniform|dress|coat|jacket|boots|glasses|voice|accent|drawl|growl|whisper)\b/i;
-
-/**
  * Does this line say anything about the person, or only move them around?
  *
- * The first version of this asked whether the character's name appeared in
- * caps, on the theory from the brief that caps marks a described entrance. It
- * cannot: describedIn() SELECTS lines by a case-sensitive match on the caps cue
- * name, so every line it returns carries the name in caps by construction. The
- * column read 100% intro on a synthetic fixture and 100% intro on a 147-page
- * feature, which is what a tautology looks like from the outside.
- *
- * What actually separates an introduction from blocking is the vocabulary: an
- * introduction says how old someone is, what they look like, what they are
- * wearing, how they sound. Blocking says where they walked.
+ * The first version asked whether the character's name appeared in caps, on
+ * the theory that caps marks a described entrance. It cannot: describedIn()
+ * selects action lines with a case-sensitive match on the caps cue name, so
+ * every line it returns carries the name in caps by construction. That column
+ * read 100% intro on a synthetic fixture and on a 147-page feature — look 0,
+ * moves 0, 0% blocking — which is a tautology, not a measurement. Appearance
+ * vocabulary is what separates a look from blocking. The same test now decides
+ * which lines are kept once the pool is longer than the cap, so a count and
+ * the evidence the model sees cannot drift apart.
  */
 function classify(line) {
-  return LOOK.test(line.replace(/^\(p\d+\)\s*/, "")) ? "look" : "moves";
+  return hasAppearance(line.replace(/^\(p\d+\)\s*/, "")) ? "look" : "moves";
 }
 
 /**
- * Every action line naming this character, not just the six that fit.
- *
- * describedIn() takes the first six in document order and stops. Whether that
- * is a reasonable sample or an act-one crop depends entirely on how many there
- * were, which is the number nobody has had.
+ * What the old selector handed the model: the first six mentions, in order.
+ * Kept here so a fixture can show the before-state next to the current one.
+ * An intro-first reading of those six is what a feature run reported as
+ * look 0, moves 0 — every line was an "intro" because every line had the name.
  */
-function allMentions(script, name) {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const caps = new RegExp(`\\b${escaped}\\b`);
-  return script.actionLines.filter((line) => caps.test(line.text) && /[a-z]/.test(line.text));
+function documentOrderLines(mentions, limit = 6) {
+  return mentions.slice(0, limit).map((line) => `(p${line.page}) ${line.text.slice(0, 400)}`);
+}
+
+function introFirstCounts(lines, name) {
+  const caps = new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`);
+  const counts = { intro: 0, look: 0, moves: 0 };
+  for (const line of lines) {
+    const body = line.replace(/^\(p\d+\)\s*/, "");
+    if (caps.test(body)) counts.intro++;
+    else if (hasAppearance(body)) counts.look++;
+    else counts.moves++;
+  }
+  return counts;
 }
 
 function section(evidence, heading) {
@@ -131,11 +142,41 @@ function span(pages) {
   return low === high ? `p${low}` : `p${low}-${high}`;
 }
 
+const FIXTURES = {
+  movement: "makeMovementPdf",
+  blocking: "makeBlockingPdf",
+  screenplay: "makeScreenplayPdf",
+};
+
+async function fixturePdf(name) {
+  const maker = FIXTURES[name];
+  if (!maker) {
+    console.error(
+      `unknown fixture "${name}". expected one of: ${Object.keys(FIXTURES).join(", ")}`,
+    );
+    process.exit(2);
+  }
+  const { [maker]: make } = await import("./make-test-script.mjs");
+  const dir = mkdtempSync(join(tmpdir(), "scripttocast-evidence-"));
+  const path = join(dir, `${name}.pdf`);
+  writeFileSync(path, await make());
+  return path;
+}
+
+function introKept(described, mentions) {
+  if (!mentions.length) return false;
+  const needle = mentions[0].text.slice(0, 80);
+  return described.some((line) => line.includes(needle));
+}
+
 async function main() {
   const { inputs, options } = parseArgs(process.argv.slice(2));
-  const path = inputs[0];
+  const path = options.fixture ? await fixturePdf(options.fixture) : inputs[0];
   if (!path) {
-    console.error("usage: node scripts/inspect-evidence.mjs <script.pdf> [--role NAME] [--full] [--limit N]");
+    console.error(
+      "usage: node scripts/inspect-evidence.mjs <script.pdf> [--role NAME] [--full] [--limit N]\n" +
+        "       node scripts/inspect-evidence.mjs --fixture movement --assert",
+    );
     process.exit(2);
   }
 
@@ -161,46 +202,43 @@ async function main() {
     }
   }
   if (options.limit) characters = characters.slice(0, options.limit);
+  // The movement check has to see the whole cast. --role only filters the table.
+  const visible = new Set(characters.map((character) => character.name));
 
-  const totals = { look: 0, moves: 0 };
+  const totals = { look: 0, moves: 0, intro: 0 };
   let noDescription = 0;
   let bareEntrance = 0;
   let truncated = 0;
   let fixableByRanking = 0;
   let starved = 0;
+  const rows = [];
 
-  for (const character of characters) {
+  for (const character of script.characters) {
     const tier = tiers.get(character.name) ?? "DAY PLAYER";
     const evidence = buildEvidence(script, character, 2400);
     const described = section(evidence.text, "How the script describes them");
     const counts = { look: 0, moves: 0 };
     for (const line of described) counts[classify(line)]++;
-    totals.look += counts.look;
-    totals.moves += counts.moves;
 
-    // The whole pool, against the six that were taken from it.
-    const mentions = allMentions(script, character.name);
+    // The whole pool, against the lines that were taken from it.
+    const mentions = actionMentions(script, character.name);
+    const keptIntro = introKept(described, mentions);
 
     // The entrance is the first action line that names them, and it is the one
     // line a screenplay reliably spends on saying who somebody is. If it says
-    // nothing about the person, nothing downstream can.
+    // nothing about the person, the description has to come from a later line.
     const entrance = !mentions.length
       ? "none"
-      : LOOK.test(mentions[0].text)
+      : hasAppearance(mentions[0].text)
         ? "described"
         : "bare";
 
-    // The decisive number, and the one the entrance column cannot give.
-    //
     // A role whose taken lines are all blocking is in one of two situations
     // that need opposite fixes. Either the script DOES describe them somewhere
-    // and document-order selection walked past it — in which case ranking the
-    // pool fixes the role and nothing else has to change. Or no action line
-    // anywhere in the script says a word about them, and no amount of
-    // reselection will help: that role's description has to come from what
-    // other characters say, or it cannot be written.
-    const lookInPool = mentions.filter((line) => LOOK.test(line.text));
-    const firstLookRank = mentions.findIndex((line) => LOOK.test(line.text)) + 1;
+    // and selection walked past it, or no action line anywhere says a word
+    // about them and reselection cannot help.
+    const lookInPool = mentions.filter((line) => hasAppearance(line.text));
+    const firstLookRank = mentions.findIndex((line) => hasAppearance(line.text)) + 1;
 
     const verdict = counts.look
       ? "ok"
@@ -208,17 +246,38 @@ async function main() {
         ? "RANKING"
         : "STARVED";
 
-    if (!described.length) noDescription++;
-    if (entrance === "bare") bareEntrance++;
-    if (mentions.length > described.length) truncated++;
-    if (verdict === "RANKING") fixableByRanking++;
-    if (verdict === "STARVED" && described.length) starved++;
+    if (visible.has(character.name)) {
+      totals.look += counts.look;
+      totals.moves += counts.moves;
+      if (keptIntro) totals.intro++;
+      if (!described.length) noDescription++;
+      if (entrance === "bare") bareEntrance++;
+      if (mentions.length > described.length) truncated++;
+      if (verdict === "RANKING") fixableByRanking++;
+      if (verdict === "STARVED" && described.length) starved++;
+    }
+
+    const beforeLines = documentOrderLines(mentions);
+    const beforeCounts = { look: 0, moves: 0 };
+    for (const line of beforeLines) beforeCounts[classify(line)]++;
+    rows.push({
+      name: character.name,
+      mentions,
+      described,
+      counts,
+      beforeCounts,
+      beforeIntroFirst: introFirstCounts(beforeLines, character.name),
+      keptIntro,
+    });
+
+    if (!visible.has(character.name)) continue;
 
     console.log(
       `${displayName(character.name).padEnd(22)} ${tier.padEnd(11)} ` +
         `${String(character.cues).padStart(4)} cues  ` +
         `${String(described.length).padStart(2)} of ${String(mentions.length).padEnd(4)} mentions  ` +
         `entrance ${entrance.padEnd(10)} ` +
+        `intro ${keptIntro ? "yes" : "no "} ` +
         `${String(counts.look).padStart(2)} look ${String(counts.moves).padStart(2)} moves  ` +
         `pool look ${String(lookInPool.length).padStart(2)}` +
         `${firstLookRank ? `@${String(firstLookRank).padEnd(3)}` : "    "}  ` +
@@ -243,19 +302,87 @@ async function main() {
 
   const lines = totals.look + totals.moves;
   console.log(
-    `\n${characters.length} roles, ${lines} description lines: ` +
+    `\n${visible.size} roles, ${lines} description lines: ` +
       `${totals.look} carry a look, ${totals.moves} are blocking ` +
       `(${lines ? Math.round((totals.moves / lines) * 100) : 0}% blocking).\n` +
+      `${totals.intro} roles whose introduction line is still in the evidence.\n` +
       `${noDescription} roles with no description evidence at all.\n` +
       `${bareEntrance} roles whose first action line says nothing about the person.\n` +
       `${truncated} roles with more mentions in the script than were taken.\n` +
-      `${fixableByRanking} RANKING — all six taken lines are blocking, but the script ` +
-      `describes them somewhere in the pool. Selecting on content rather than ` +
-      `document order fixes these.\n` +
+      `${fixableByRanking} RANKING — taken lines are all blocking, but the script ` +
+      `describes them somewhere in the pool. Content selection should have kept that line.\n` +
       `${starved} STARVED — no action line anywhere in the script says a word about ` +
       `them. Reselection cannot help; their description has to come from what ` +
       `other characters say, or it cannot be written.`,
   );
+
+  if (options.fixture === "movement") {
+    const failed = reportMovementFixture(rows);
+    if (failed) process.exit(1);
+  } else if (options.assert) {
+    console.error("\n--assert checks the movement fixture. Pass --fixture movement.");
+    process.exit(2);
+  }
+}
+
+/**
+ * The movement fixture is built so the old selector fails in a way we can
+ * name. Calder's appearance line is past the sixth mention, so document order
+ * keeps six blocking lines (look 0). Reading those six as introductions,
+ * because each contains his name in caps, is the Inception result: look 0 and
+ * moves 0 as well. Vess is introduced with a look on page 1; that line has to
+ * stay.
+ */
+function reportMovementFixture(rows) {
+  const calder = rows.find((row) => row.name === "CALDER");
+  const vess = rows.find((row) => row.name === "VESS");
+  const failures = [];
+  const expect = (ok, message) => {
+    if (!ok) failures.push(message);
+  };
+
+  console.log("\nmovement fixture, before and after selection:");
+  for (const row of [calder, vess]) {
+    if (!row) continue;
+    const old = row.beforeIntroFirst;
+    console.log(
+      `  ${displayName(row.name).padEnd(8)} ` +
+        `document-order + intro-first: ${old.intro} intro, ${old.look} look, ${old.moves} moves; ` +
+        `document-order by vocabulary: ${row.beforeCounts.look} look, ${row.beforeCounts.moves} moves; ` +
+        `taken now: intro ${row.keptIntro ? "yes" : "no"}, ${row.counts.look} look, ${row.counts.moves} moves`,
+    );
+  }
+
+  expect(calder, "Calder was not parsed out of the movement fixture");
+  expect(vess, "Vess was not parsed out of the movement fixture");
+  if (calder) {
+    expect(
+      calder.beforeIntroFirst.intro > 0 &&
+        calder.beforeIntroFirst.look === 0 &&
+        calder.beforeIntroFirst.moves === 0,
+      "before-state drifted: Calder's first six lines should read as all intro (look 0, moves 0)",
+    );
+    expect(
+      calder.beforeCounts.look === 0 && calder.beforeCounts.moves > 0,
+      "before-state drifted: document order should keep only blocking for Calder",
+    );
+    expect(calder.counts.look > 0, "Calder's appearance line was not extracted");
+    expect(calder.counts.moves > 0, "Calder's blocking lines were not extracted");
+    expect(calder.keptIntro, "Calder's introduction line was dropped");
+  }
+  if (vess) {
+    expect(vess.counts.look > 0, "Vess's introduction no longer counts as a look");
+    expect(vess.counts.moves > 0, "Vess's blocking lines were not extracted");
+    expect(vess.keptIntro, "Vess's introduction line was dropped");
+  }
+
+  if (failures.length) {
+    console.error(`\n${failures.length} movement-fixture check(s) failed:`);
+    for (const failure of failures) console.error(`  - ${failure}`);
+    return true;
+  }
+  console.log("\nmovement fixture checks passed: look and moves are both extracted, introductions kept.");
+  return false;
 }
 
 main().catch((error) => {
