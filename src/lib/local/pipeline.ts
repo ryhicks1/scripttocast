@@ -34,6 +34,7 @@ import {
   type SelfTapeInstruction,
 } from "../breakdown";
 import { findNarrativeVoice } from "../description-quality";
+import type { Locale } from "../locale";
 import { defaultFormQuestions, defaultSelfTape } from "./defaults";
 import { LocalAnalysisError } from "./errors";
 import type { ExtractedDocument } from "./extract";
@@ -55,6 +56,7 @@ import {
   displayName,
   buildEvidence,
   parseScript,
+  roleTypeLabel,
   SENTENCE_CEILING,
   type ParsedCharacter,
   type ParsedScript,
@@ -214,6 +216,7 @@ export async function analyzeLocally(
   config: OllamaConfig,
   log: Logger = () => {},
   onProgress: ProgressReporter = () => {},
+  locale: Locale = "us",
 ): Promise<LocalAnalysis> {
   const startedAt = Date.now();
   let modelCalls = 0;
@@ -338,7 +341,9 @@ export async function analyzeLocally(
   // the format or answers from the examples, which is why the local path had
   // its own lean prompt in the first place.
   const useHousePrompt = (config.parameters ?? 0) >= HOUSE_PROMPT_MIN_PARAMETERS_B;
-  const descriptionSystem = useHousePrompt ? houseDescriptionSystem(mode) : DESCRIPTION_SYSTEM;
+  const descriptionSystem = useHousePrompt
+    ? houseDescriptionSystem(mode, locale)
+    : DESCRIPTION_SYSTEM;
   log("local: description prompt", {
     prompt: useHousePrompt ? "house (src/lib/prompts.ts)" : "local lean",
     parameters: config.parameters,
@@ -364,7 +369,11 @@ export async function analyzeLocally(
     // document was a screenplay. A casting brief gives no such signal, so the
     // role takes its mode's ordinary tier rather than being ranked on nothing.
     const tier: Tier = tiers.get(character.name) ?? "DAY PLAYER";
-    const roleType = isScreenplay ? tier : mode === "commercial" ? "PRINCIPAL" : "SUPPORTING";
+    const roleType = isScreenplay
+      ? roleTypeLabel(tier, locale)
+      : mode === "commercial"
+        ? "PRINCIPAL"
+        : "SUPPORTING";
     const ceiling = isScreenplay
       ? SENTENCE_CEILING[tier]
       : mode === "commercial"

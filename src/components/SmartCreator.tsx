@@ -210,7 +210,7 @@ function projectFields(p: Project | null | undefined): { label: string; value: s
     .map(([label, value]) => ({ label, value }));
 }
 
-export default function SmartCreator({ isLoggedIn, initialResult, authUnavailable = false, analyzeEndpoint = "/api/analyze", privateMode = false, locale = "us" }: { isLoggedIn: boolean; initialResult?: AnalysisResult; authUnavailable?: boolean; analyzeEndpoint?: string; privateMode?: boolean; locale?: Locale }) {
+export default function SmartCreator({ isLoggedIn, initialResult, authUnavailable = false, analyzeEndpoint = "/api/analyze", privateMode = false, locale: initialLocale = "us" }: { isLoggedIn: boolean; initialResult?: AnalysisResult; authUnavailable?: boolean; analyzeEndpoint?: string; privateMode?: boolean; locale?: Locale }) {
   const [stage, setStage] = useState<"upload" | "analyzing" | "results">(initialResult ? "results" : "upload");
   const [liveProgress, setLiveProgress] = useState<LiveProgress | null>(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -225,6 +225,10 @@ export default function SmartCreator({ isLoggedIn, initialResult, authUnavailabl
   const fileRef = useRef<HTMLInputElement>(null);
   const [opts, setOpts] = useState({ project: true, roles: true, instructions: true, forms: true, sides: true, cnAutoFill: true });
   const [mode, setMode] = useState<BreakdownMode>("auto");
+  // Seeded from the page (/au sets "au"), then the picker owns it. A market is
+  // a property of the job, not of which URL you arrived at — a Sydney casting
+  // director landing on the US page should not have to find another address.
+  const [locale, setLocale] = useState<Locale>(initialLocale);
   const [saveWarning, setSaveWarning] = useState("");
   const [openCasting, setOpenCasting] = useState({ omitGender: false, omitEthnicity: false });
 
@@ -661,6 +665,27 @@ export default function SmartCreator({ isLoggedIn, initialResult, authUnavailabl
                 <span className="block text-[10px] text-gray-400 leading-tight">{o.hint}</span>
               </span>
             </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="mb-6">
+        <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-2 font-semibold">Market</p>
+        <div className="grid grid-cols-2 gap-1.5">
+          {([
+            { key: "us", label: "United States", hint: "US role types, US spelling" },
+            { key: "au", label: "Australia", hint: "AU role types, Australian spelling" },
+          ] as const).map(l => (
+            <button
+              key={l.key}
+              type="button"
+              onClick={() => setLocale(l.key)}
+              title={l.hint}
+              className={`rounded-lg border px-2 py-2 text-left transition ${locale === l.key ? "border-gray-900 bg-gray-900 text-white" : "border-gray-200 bg-white text-gray-700 hover:border-gray-400"}`}
+            >
+              <span className="block text-[11px] font-semibold">{l.label}</span>
+              <span className={`block text-[9px] leading-tight mt-0.5 ${locale === l.key ? "text-gray-300" : "text-gray-400"}`}>{l.hint}</span>
+            </button>
           ))}
         </div>
       </div>

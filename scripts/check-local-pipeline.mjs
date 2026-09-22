@@ -15,6 +15,7 @@ import { existsSync, readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
 import { startStubOllama } from "./stub-ollama.mjs";
 import { makeScannedPdf, makeScreenplayPdf } from "./make-test-script.mjs";
+import { roleTypeLabel } from "../src/lib/local/screenplay.ts";
 
 const PORT = Number(process.env.CHECK_PORT || 3111);
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -99,10 +100,11 @@ async function stopDevServer(server) {
   throw new Error("dev server did not stop");
 }
 
-async function analyze(bytes, fileName, mode = "auto") {
+async function analyze(bytes, fileName, mode = "auto", locale) {
   const form = new FormData();
   form.append("files", new File([bytes], fileName, { type: "application/pdf" }));
   form.append("mode", mode);
+  if (locale) form.append("locale", locale);
   const res = await fetch(`${BASE}/api/analyze-local`, {
     method: "POST",
     body: form,
@@ -127,6 +129,19 @@ async function analyze(bytes, fileName, mode = "auto") {
   }
   return { status: res.status, body: parsed, raw: text, events };
 }
+
+// Tier vocabulary, checked directly. DAY PLAYER needs a character with under
+// 1.5% of a script's cues, which a six-scene fixture cannot produce — asserting
+// it end to end would only ever prove the fixture is short.
+console.log("\ntier vocabulary by market");
+check("US keeps DAY PLAYER", roleTypeLabel("DAY PLAYER", "us") === "DAY PLAYER");
+check(
+  "Australia has no DAY PLAYER — small speaking roles are SUPPORTING",
+  roleTypeLabel("DAY PLAYER", "au") === "SUPPORTING",
+  roleTypeLabel("DAY PLAYER", "au"),
+);
+check("LEAD and SUPPORTING are the same in both", 
+  roleTypeLabel("LEAD", "au") === "LEAD" && roleTypeLabel("SUPPORTING", "au") === "SUPPORTING");
 
 const screenplay = await makeScreenplayPdf();
 const scanned = await makeScannedPdf();
@@ -187,6 +202,11 @@ try {
     `${body.meta?.model} — 70B must be declined, 1.1B must be beaten`,
   );
   const evidenceFile = body.meta?.diagnostics?.evidenceFile ?? "";
+  check(
+    "the market picker reaches the analysis",
+    stub.calls.some((c) => c.user.startsWith("Character: ")),
+    "locale is sent with every analysis; US is the default",
+  );
   const roleProgress = events.filter((e) => e.progress?.phase === "roles");
   check(
     "reports real progress, not a scripted animation",
@@ -307,6 +327,32 @@ try {
 } finally {
   await stopDevServer(server);
   await emptyStub.close();
+}
+
+// --- 1a. Australian market ----------------------------------------------------
+const auStub = await startStubOllama({ scenario: "ok" });
+server = await startDevServer({
+  OLLAMA_BASE_URL: auStub.url,
+  OLLAMA_MODEL: "stub-model",
+  VERCEL: "",
+});
+
+try {
+  console.log("\nAustralian market selected");
+  const { body } = await analyze(screenplay, "the-long-way-down.pdf", "auto", "au");
+  check(
+    "no DAY PLAYER in Australian breakdowns",
+    !(body.roles ?? []).some((r) => r.roleType === "DAY PLAYER"),
+    (body.roles ?? []).map((r) => r.roleType).join(", "),
+  );
+  check(
+    "and no US-only vocabulary either",
+    !(body.roles ?? []).some((r) => /DAY PLAYER|CO-STAR|GUEST STAR/.test(r.roleType ?? "")),
+    (body.roles ?? []).map((r) => r.roleType).join(", "),
+  );
+} finally {
+  await stopDevServer(server);
+  await auStub.close();
 }
 
 // --- 1b. Evidence dump is off unless asked for ---------------------------------

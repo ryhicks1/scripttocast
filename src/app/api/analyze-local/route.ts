@@ -3,6 +3,7 @@ import { createHash } from "crypto";
 import { totalmem } from "os";
 import type { BreakdownMode } from "@/lib/breakdown";
 import { isVercelHosted } from "@/lib/runtime";
+import { isLocale, type Locale } from "@/lib/locale";
 import { LocalAnalysisError } from "@/lib/local/errors";
 import { extractDocument, type ExtractedDocument } from "@/lib/local/extract";
 import { analyzeLocally } from "@/lib/local/pipeline";
@@ -43,6 +44,9 @@ export async function POST(request: Request) {
     if (!files.length) {
       return NextResponse.json({ error: "No files provided" }, { status: 400 });
     }
+
+    const requestedLocale = formData.get("locale");
+    const locale: Locale = isLocale(requestedLocale) ? requestedLocale : "us";
 
     const requested = formData.get("mode");
     const mode: BreakdownMode =
@@ -100,6 +104,7 @@ export async function POST(request: Request) {
               latest = progress;
               send({ progress });
             },
+            locale,
           );
 
           // The hash identifies a run in the logs without recording the script.
