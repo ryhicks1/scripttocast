@@ -25,7 +25,14 @@ export function startStubOllama({ scenario = "ok", port = 0 } = {}) {
       };
 
       if (req.url === "/api/tags") {
-        return json(200, { models: [{ name: "stub-model:latest" }] });
+        return json(200, {
+          models: [
+            { name: "tiny-model", details: { parameter_size: "1.1B" } },
+            { name: "stub-model", details: { parameter_size: scenario === "small-model" ? "3.2B" : "8.0B" } },
+            // Larger than a 16GB machine should run: must not be chosen.
+            { name: "huge-model", details: { parameter_size: "70B" } },
+          ],
+        });
       }
       if (req.url === "/api/show") {
         return json(200, {

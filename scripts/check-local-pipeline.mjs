@@ -160,13 +160,13 @@ try {
   const page = await fetch(`${BASE}/private`).then((r) => r.text());
   check(
     "the page names the model before you run anything",
-    page.includes("stub-model") && page.includes("OLLAMA_MODEL"),
+    page.includes("stub-model"),
     "a wrong model is invisible in the output, so it has to be on the page",
   );
   check(
-    "the result names the model that produced it",
+    "picks the largest model that fits, not the first or the biggest",
     body.meta?.model === "stub-model",
-    body.meta?.model,
+    `${body.meta?.model} — 70B must be declined, 1.1B must be beaten`,
   );
   check(
     "evidence is written to local-evidence.txt",
@@ -283,9 +283,9 @@ try {
     body.meta?.warning,
   );
   check(
-    "names .env.local as the thing that overrides the default",
-    /\.env\.local/.test(body.meta?.warning ?? ""),
-    "this is what hid a 3B model for three rounds of fixes",
+    "says how to get a better one",
+    /ollama pull/.test(body.meta?.warning ?? ""),
+    body.meta?.warning,
   );
 } finally {
   await stopDevServer(server);

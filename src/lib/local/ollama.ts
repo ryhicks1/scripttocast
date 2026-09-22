@@ -103,16 +103,111 @@ function envNumber(name: string): number | null {
   return Number.isFinite(value) && value > 0 ? Math.floor(value) : null;
 }
 
-/** Read config from the environment. Does not contact Ollama. */
-export function resolveConfig(): OllamaConfig {
+/** Model names Ollama accepts: "llama3.1:8b", "hf.co/user/model:Q4_K_M". */
+const MODEL_NAME = /^[\w.\-/]+(:[\w.\-]+)?$/;
+
+/**
+ * Read config from the environment. Does not contact Ollama.
+ *
+ * `requested` comes from the model picker on the page and wins over the
+ * environment, so choosing a model does not mean editing .env.local. It is
+ * checked against the installed list in preflight, which is what actually makes
+ * it safe — an unknown name fails there with a message saying how to pull it.
+ */
+export function resolveConfig(requested?: string | null): OllamaConfig {
   const baseUrl = process.env.OLLAMA_BASE_URL || DEFAULT_BASE_URL;
   assertLocalOllama(baseUrl);
   const numCtx = envNumber("OLLAMA_NUM_CTX") ?? DEFAULT_NUM_CTX;
+  const picked = requested && MODEL_NAME.test(requested) ? requested : null;
   return {
     baseUrl: baseUrl.replace(/\/$/, ""),
-    model: process.env.OLLAMA_MODEL || DEFAULT_MODEL,
+    model: picked || process.env.OLLAMA_MODEL || DEFAULT_MODEL,
     numCtx,
     promptCharBudget: promptCharBudgetFor(numCtx),
+  };
+}
+
+/**
+ * Models installed on this machine. Returns an empty list rather than throwing:
+ * the page still renders when Ollama is not running, and the analysis itself
+ * fails loudly with instructions.
+ */
+export async function listInstalledModels(
+  config: OllamaConfig,
+): Promise<{ name: string; parameters: number | null }[]> {
+  try {
+    const res = await ollamaFetch(config, "/api/tags", { method: "GET", timeoutMs: 5_000 });
+    if (!res.ok) return [];
+    const body = (await res.json().catch(() => null)) as
+      | { models?: { name?: string; details?: Record<string, unknown> }[] }
+      | null;
+    return (body?.models ?? [])
+      .filter((m) => m.name)
+      .map((m) => ({ name: m.name as string, parameters: parameterBillions(m.details) }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Fraction of system memory a model may occupy.
+ *
+ * A quantised model is roughly 0.6GB per billion parameters, and it has to
+ * share the machine with the browser, the dev server and macOS. At 45% a 16GB
+ * Mac lands on an 8B model and declines a 14B, which is the right call: a model
+ * that swaps takes minutes per role and the run never finishes.
+ */
+const MEMORY_BUDGET = 0.45;
+const GB_PER_BILLION_PARAMS = 0.6;
+
+/**
+ * Choose the best installed model for this machine.
+ *
+ * Chosen rather than configured, because configuring it meant editing a hidden
+ * file from a terminal, and a stale OLLAMA_MODEL in that file pinned a 3B model
+ * through several rounds of work while every diagnostic said the prompt was at
+ * fault. The largest model that fits is almost always the right answer here,
+ * and when it is wrong the environment variable still wins.
+ */
+export async function pickBestModel(
+  config: OllamaConfig,
+  totalMemoryBytes: number,
+): Promise<{ model: string; reason: string }> {
+  const pinned = process.env.OLLAMA_MODEL;
+  const installed = await listInstalledModels(config);
+  if (!installed.length) {
+    return { model: pinned || DEFAULT_MODEL, reason: "Ollama is not running" };
+  }
+
+  const budgetGb = (totalMemoryBytes / 1024 ** 3) * MEMORY_BUDGET;
+  const fits = (parameters: number | null) =>
+    parameters === null || parameters * GB_PER_BILLION_PARAMS <= budgetGb;
+
+  // A model named outright still wins, as long as it is actually installed.
+  if (pinned) {
+    const match = installed.find(
+      (m) => m.name === pinned || m.name.replace(/:latest$/, "") === pinned.replace(/:latest$/, ""),
+    );
+    if (match) return { model: match.name, reason: "set by OLLAMA_MODEL" };
+  }
+
+  const best = installed
+    .filter((m) => fits(m.parameters))
+    .sort((a, b) => (b.parameters ?? 0) - (a.parameters ?? 0))[0];
+
+  if (!best) {
+    return {
+      model: installed[0].name,
+      reason: "every installed model is large for this machine",
+    };
+  }
+
+  return {
+    model: best.name,
+    reason:
+      installed.length > 1
+        ? `largest of your ${installed.length} installed models that fits in memory`
+        : "the only model installed",
   };
 }
 

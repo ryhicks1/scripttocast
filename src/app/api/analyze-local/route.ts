@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { createHash } from "crypto";
+import { totalmem } from "os";
 import type { BreakdownMode } from "@/lib/breakdown";
 import { isVercelHosted } from "@/lib/runtime";
 import { LocalAnalysisError } from "@/lib/local/errors";
 import { extractDocument, type ExtractedDocument } from "@/lib/local/extract";
 import { analyzeLocally } from "@/lib/local/pipeline";
-import { preflight, resolveConfig } from "@/lib/local/ollama";
+import { pickBestModel, preflight, resolveConfig } from "@/lib/local/ollama";
 
 export const maxDuration = 300;
 export const runtime = "nodejs";
@@ -46,7 +47,10 @@ export async function POST(request: Request) {
 
     // Fail before reading documents if Ollama is not there: the user should be
     // told to start it, not left waiting on an extraction that leads nowhere.
-    const config = await preflight(resolveConfig());
+    // Pick the best installed model for this machine rather than making the
+    // user name one in a config file.
+    const { model } = await pickBestModel(resolveConfig(), totalmem());
+    const config = await preflight({ ...resolveConfig(), model });
 
     const documents: ExtractedDocument[] = [];
     for (const file of files) documents.push(await extractDocument(file));
