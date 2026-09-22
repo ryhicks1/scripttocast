@@ -639,22 +639,31 @@ function passageScore(text: string, name: string): number {
     new RegExp(
       `\\b${escaped}\\b(?:\\s+(?:[A-Z][A-Z'’.-]+|the|a|an))*\\s*[,(\\[]`,
     ).test(text) || new RegExp(`\\(\\s*${escaped}\\s*\\)`).test(text);
+  // "DUKE LETO ATREIDES in ceremonial noble dress" — a portrait with no comma.
+  // "RENNA sits … with her boots hanging" is still blocking: a movement verb
+  // plus one clothing word is not an introduction.
+  const portrait =
+    new RegExp(`\\b(?:[A-Z][A-Z'’.-]+\\s+){0,4}${escaped}(?:\\s+[A-Z][A-Z'’.-]+){0,3}\\b`).test(
+      text,
+    ) &&
+    carriesLook(text) &&
+    !/\b(sits|stands|walks|crosses|lunges|runs|turns|grabs|holds|picks|shrugs)\b/i.test(text);
   const thisIs = new RegExp(`\\bthis is\\s+${escaped}\\b`, "i").test(text);
   const nameAt = text.search(new RegExp(`\\b${escaped}\\b`));
   const lookAt = text.search(new RegExp(LOOK.source, "i"));
   // A look that lands before the name belongs to whoever came first — unless
   // this is the parenthetical reveal ("a six year old kid (YOUNG HAPPY)").
-  if (!introduced && !thisIs && (lookAt === -1 || nameAt > lookAt)) return 0;
+  if (!introduced && !thisIs && !portrait && (lookAt === -1 || nameAt > lookAt)) return 0;
 
   let score = 0;
-  if (introduced) score += 4;
+  if (introduced || portrait) score += 4;
   if (thisIs) score += 3;
   const hits = text.match(new RegExp(LOOK.source, "gi"));
   score += Math.min(hits?.length ?? 0, 4);
   // One clothing word in a blocking line ("sits with her boots hanging") is
   // not a description. An introduction is. So are two facts about the person
   // ("tall and thin", "grey suit").
-  if (!introduced && !thisIs && score < 2) return 0;
+  if (!introduced && !thisIs && !portrait && score < 2) return 0;
   return score;
 }
 

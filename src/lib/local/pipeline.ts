@@ -446,7 +446,9 @@ export async function analyzeLocally(
     });
 
     let body = reply
-      ? tightenDescription(stripEssayClauses(clean(reply.description)), budget, log, name)
+      ? stripBlocking(
+          tightenDescription(stripEssayClauses(clean(reply.description)), budget, log, name),
+        )
       : "";
 
     // Last resort: a retry that copied the prompt too is discarded outright.
@@ -670,6 +672,26 @@ function budgetFor(config: OllamaConfig, system: string, cap: number): number {
   return Math.max(600, Math.min(config.promptCharBudget - system.length - SCAFFOLD_CHARS, cap));
 }
 
+/**
+ * Drop sentences that narrate the moment instead of the person.
+ *
+ * An introduction often does both: "Lady Jessica, 35, sits a table and looks
+ * out at the valley." The age and the title are the role. Sitting and looking
+ * are the scene, and a small model copies them straight onto the card.
+ */
+const BLOCKING_SENTENCE =
+  /\b(sits|wakes up|wakes|stares|staring|looking out|looks out|walks|crosses|shrugs|lunges|picks up)\b/i;
+
+function stripBlocking(description: string): string {
+  if (!description) return "";
+  const sentences = description
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+  const kept = sentences.filter((sentence) => !BLOCKING_SENTENCE.test(sentence));
+  return (kept.length ? kept : sentences.slice(0, 1)).join(" ");
+}
+
 /** The opening of the document, where the title and credits live. */
 function headText(pages: string[], budget: number): string {
   let out = "";
@@ -865,7 +887,9 @@ function stripDemographicEcho(
  * an age range from a script that never indicated one.
  */
 function hasAgeEvidence(identityEvidence: string): boolean {
-  return /\b(\d{1,2}s?\b|teen|twenties|thirties|forties|fifties|sixties|seventies|young|old|elderly|middle[- ]aged|boy|girl|kid|child|baby|infant|adolescent|senior|veteran of|retired)\b/i.test(
+  // "Old man" is an insult, not an age. Bare young/old used to unlock a range
+  // the model then invented — a father came back 20 to 30.
+  return /\b(\d{1,2}\s*(?:-|to)\s*\d{1,2}|,\s*\d{1,2}\b|\d{1,2}\s*,|\d{1,2}s\b|teen|twenties|thirties|forties|fifties|sixties|seventies|elderly|middle[- ]aged|infant|adolescent|senior|veteran of|retired|years?\s+old|year[- ]old)\b/i.test(
     identityEvidence,
   );
 }

@@ -175,8 +175,9 @@ export function descriptionUser(
 Evidence from the script:
 ${evidence}
 
-If the evidence has a section on how the script describes them, that section is the description. Turn each fact in it into its own fragment, and keep its nouns: age, build, clothes, voice, job, manner. Do not fold those facts into one adjective. Do not add a look the section does not state.
-If that section is absent, describe how they deal with people from what is said about them. Leave appearance out. Do not borrow a person from the instructions.
+If the evidence has a section on how the script describes them, that section is the description. Take age, station, build, clothes, voice, and manner from it, each as its own fragment, in the script's words. The same sentence may also say what they do in the moment — waking, sitting, staring, walking, fighting. Leave that out. A comparison to someone else ("as sour as his Duke is warm") — keep only the half about this character.
+If that section is absent, describe how they deal with people. Leave appearance out. Do not borrow a person from the instructions.
+Do not quote dialogue. Do not transcribe a line anyone says. Do not add an adjective the evidence does not use. Two accurate fragments beat a sentence you made up. A description that reads like a scene is a failure.
 Traits are single words the evidence supports. Never a list copied from the instructions.
 
 ${lengthHint}${avoid}`;
