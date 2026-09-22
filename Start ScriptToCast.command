@@ -62,8 +62,23 @@ if [ -n "$WANTED" ] && ! echo "$INSTALLED" | grep -qx -e "$WANTED" -e "${WANTED}
   esac
 fi
 
+# Open the tool as soon as it answers, rather than leaving someone to type a
+# URL into a browser every time they want to use it. Bounded, so a server that
+# never starts does not leave a loop running.
+(
+  for _ in $(seq 1 120); do
+    if curl -sf http://localhost:3000/private > /dev/null 2>&1; then
+      open http://localhost:3000/private
+      exit 0
+    fi
+    sleep 1
+  done
+) &
+
 echo
-echo "Starting. When it says Ready, open:  http://localhost:3000/private"
+echo "Starting. Your browser will open by itself in a moment."
+echo "If it doesn't, go to:  http://localhost:3000/private"
+echo
 echo "Leave this window open while you use it. Close it to stop."
 echo
 npm run dev

@@ -111,13 +111,31 @@ export default function PrivateSetupGuide() {
         <Link href="/" className="text-sm text-gray-500 hover:text-gray-900">Public (Claude)</Link>
       </nav>
 
+      {/* First thing on the page, because most visits after the first one are
+          someone looking for their tool rather than someone installing it. */}
+      <section className="bg-gray-900 px-6 py-3">
+        <div className="max-w-3xl mx-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+          <span className="font-medium text-white">Already set up?</span>
+          <span className="text-gray-400">
+            Double-click <strong className="text-gray-200 font-medium">Start ScriptToCast</strong>{" "}
+            in your scripttocast folder — it opens your tool by itself.
+          </span>
+          <a
+            href="http://localhost:3000/private"
+            className="ml-auto text-gray-300 hover:text-white underline underline-offset-2 whitespace-nowrap"
+          >
+            Or go straight there
+          </a>
+        </div>
+      </section>
+
       <section className="bg-white border-b border-gray-200 py-14">
         <div className="max-w-3xl mx-auto px-6 text-center">
           <div className="w-12 h-12 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center mx-auto mb-5 text-emerald-700">
             <Laptop size={22} />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-3">
-            Run this on your Mac
+            Setting this up for the first time
           </h1>
           <p className="text-gray-600 text-sm max-w-xl mx-auto leading-relaxed">
             Set this up and <strong>your scripts never leave your computer</strong>. The
