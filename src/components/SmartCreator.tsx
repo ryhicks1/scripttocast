@@ -601,6 +601,17 @@ export default function SmartCreator({ isLoggedIn, initialResult, authUnavailabl
         </div>
       )}
 
+      {/* Which model actually produced this, stated on the result itself. The
+          configured model and the one that ran can differ, and the difference
+          is not visible in the copy. */}
+      {result?.meta?.model && (
+        <p className="text-[11px] text-gray-500">
+          Analysed on this machine by{" "}
+          <code className="bg-gray-100 px-1 rounded">{result.meta.model}</code>
+          {result.meta.provider ? ` via ${result.meta.provider}` : ""}. Nothing was sent to a third party.
+        </p>
+      )}
+
       {/* The analysis itself needs no database, so it is worth saying plainly
           when the copy on screen is the only copy. */}
       {saveWarning && (

@@ -3,6 +3,7 @@ import SmartCreator from "@/components/SmartCreator";
 import Link from "next/link";
 import { Shield } from "lucide-react";
 import { isVercelHosted } from "@/lib/runtime";
+import { DEFAULT_MODEL } from "@/lib/local/ollama";
 import PrivateSetupGuide from "./PrivateSetupGuide";
 
 export const metadata = {
@@ -18,10 +19,12 @@ export const metadata = {
 export default async function PrivatePage() {
   await connection();
   if (isVercelHosted()) return <PrivateSetupGuide />;
-  return <PrivateLocalTool />;
+  // Read per request, like isVercelHosted above: .env.local is the usual way
+  // this gets set, and it must not be baked in at build time.
+  return <PrivateLocalTool model={process.env.OLLAMA_MODEL || DEFAULT_MODEL} />;
 }
 
-function PrivateLocalTool() {
+function PrivateLocalTool({ model }: { model: string }) {
   return (
     <div className="min-h-screen bg-[#fafafa]">
       <nav className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
@@ -37,11 +40,20 @@ function PrivateLocalTool() {
       <section className="bg-emerald-50 border-b border-emerald-100 px-6 py-3">
         <div className="max-w-3xl mx-auto flex gap-3 text-sm text-emerald-900">
           <Shield size={18} className="shrink-0 mt-0.5" />
-          <p>
-            This page calls <code className="text-xs bg-white/80 px-1 rounded">/api/analyze-local</code>,
-            which talks only to <strong>Ollama on this computer</strong> (<code className="text-xs">127.0.0.1</code>).
-            It does not use the Anthropic / Claude API. Use <code className="text-xs">npm run dev</code> on your Mac.
-          </p>
+          <div>
+            <p>
+              This page calls <code className="text-xs bg-white/80 px-1 rounded">/api/analyze-local</code>,
+              which talks only to <strong>Ollama on this computer</strong> (<code className="text-xs">127.0.0.1</code>).
+              It does not use the Anthropic / Claude API. Use <code className="text-xs">npm run dev</code> on your Mac.
+            </p>
+            {/* Which model is about to run, before a ten-minute analysis rather
+                than after it. A wrong model here is invisible in the output —
+                it produces plausible copy that is simply worse. */}
+            <p className="mt-1.5 text-emerald-800/90">
+              Model: <code className="text-xs bg-white/80 px-1 rounded">{model}</code>
+              <span className="text-emerald-700/70"> · set by OLLAMA_MODEL in .env.local</span>
+            </p>
+          </div>
         </div>
       </section>
 

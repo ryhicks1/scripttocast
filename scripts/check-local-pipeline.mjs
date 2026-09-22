@@ -157,6 +157,17 @@ try {
     !/carries herself|an air of/i.test(mara?.description ?? ""),
     mara?.description,
   );
+  const page = await fetch(`${BASE}/private`).then((r) => r.text());
+  check(
+    "the page names the model before you run anything",
+    page.includes("stub-model") && page.includes("OLLAMA_MODEL"),
+    "a wrong model is invisible in the output, so it has to be on the page",
+  );
+  check(
+    "the result names the model that produced it",
+    body.meta?.model === "stub-model",
+    body.meta?.model,
+  );
   check(
     "evidence is written to local-evidence.txt",
     existsSync("local-evidence.txt") &&
