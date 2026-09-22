@@ -48,7 +48,8 @@ function PrivateLocalTool({ model }: { model: string }) {
               Most AI tools send your document off to a company&apos;s computers to be read.
               This one doesn&apos;t. The AI sits on this Mac, so{" "}
               <strong>your script never leaves it</strong> — and this page will not run at
-              all if the AI is anywhere but here.
+              all if the AI is anywhere but here. There is no second copy: nothing on a
+              server to be leaked or handed over, and nothing used to train an AI.
             </p>
             <p className="mt-1.5 text-emerald-800/90">
               Model: <code className="text-xs bg-white/80 px-1 rounded">{model}</code>
