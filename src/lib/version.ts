@@ -14,6 +14,8 @@ import { join } from "path";
  * no .git, so the commit comes from the environment instead.
  */
 export interface AppVersion {
+  /** The released version, from package.json. */
+  version: string;
   /** Short commit hash, or null when neither source is available. */
   commit: string | null;
   /** When that commit landed in this checkout, as YYYY-MM-DD. */
@@ -24,13 +26,28 @@ let cached: AppVersion | null = null;
 
 export function appVersion(): AppVersion {
   if (cached) return cached;
-  cached = process.env.VERCEL_GIT_COMMIT_SHA
+  const git = process.env.VERCEL_GIT_COMMIT_SHA
     ? { commit: process.env.VERCEL_GIT_COMMIT_SHA.slice(0, 7), date: null }
     : fromGitDirectory();
+  cached = { version: packageVersion(), ...git };
   return cached;
 }
 
-function fromGitDirectory(): AppVersion {
+/**
+ * Read rather than import, so this file works the same in the app and in a
+ * plain node script. Importing JSON needs an import attribute in one and not
+ * the other, and the version is not worth that.
+ */
+function packageVersion(): string {
+  try {
+    const pkg = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8"));
+    return typeof pkg.version === "string" ? pkg.version : "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+}
+
+function fromGitDirectory(): Omit<AppVersion, "version"> {
   const gitDir = join(process.cwd(), ".git");
 
   try {
@@ -61,16 +78,31 @@ function fromGitDirectory(): AppVersion {
   }
 }
 
-/** "a1b2c3d · 22 Sep 2026", or null when there is nothing to show. */
-export function versionLabel(): string | null {
-  const { commit, date } = appVersion();
-  if (!commit) return null;
-  if (!date) return commit;
+/**
+ * "v3.0.0 · 22 Sept 2026" — what to show in a footer.
+ *
+ * Both halves earn their place. The version is the thing to say out loud when
+ * reporting a problem; the date answers the question the version cannot, which
+ * is whether this checkout has been updated recently. Between releases the
+ * version holds still while the date moves.
+ *
+ * The commit is kept in versionDetail for a tooltip, where it is available
+ * when something needs pinning down exactly and invisible the rest of the time.
+ */
+export function versionLabel(): string {
+  const { version, date } = appVersion();
+  if (!date) return `v${version}`;
   const when = new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", {
     day: "numeric",
     month: "short",
     year: "numeric",
     timeZone: "UTC",
   });
-  return `${commit} · ${when}`;
+  return `v${version} · ${when}`;
+}
+
+/** The exact build, for a title attribute. */
+export function versionDetail(): string {
+  const { version, commit } = appVersion();
+  return commit ? `Version ${version}, build ${commit}` : `Version ${version}`;
 }
