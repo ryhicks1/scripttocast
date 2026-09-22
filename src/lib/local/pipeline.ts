@@ -96,11 +96,12 @@ const EVIDENCE_ENABLED = Boolean(process.env.LOCAL_DEBUG_EVIDENCE);
 const DEFAULT_MAX_ROLES = 120;
 
 /**
- * Room reserved for one role's answer. A role entry is a demographic line,
- * some prose and a few traits — a couple of hundred tokens. The chunked
- * design reserved 3,500 per call and spent it forty times over.
+ * Upper bound on the per-role ask: the length hint, the list of openings
+ * already spent on other roles, and a retry correction if one is needed. The
+ * script dwarfs it, so being generous here costs nothing and being wrong about
+ * it rejects every call.
  */
-const ROLE_OUTPUT_RESERVE = 700;
+const MAX_ROLE_USER_CHARS = 4_000;
 
 /**
  * Ceiling for one role call, generous enough to include a cold prefill.
@@ -418,7 +419,11 @@ export async function analyzeLocally(
   // Size the window to the script, and refuse rather than truncate. Ollama
   // drops anything past num_ctx without saying so, and a breakdown written
   // from a silently halved script is the failure that looks most like success.
-  const roleCtx = contextFor(descriptionSystem.length + 1200, ROLE_OUTPUT_RESERVE);
+  // Size from the LONGEST user message this loop can produce, not a guess at a
+  // typical one. The ask grows: eight already-used openings are appended to
+  // discourage repetition, and a retry adds a correction on top. Sizing for
+  // 1200 characters of it was the second half of the 845-character overrun.
+  const roleCtx = contextFor(descriptionSystem.length + MAX_ROLE_USER_CHARS);
   const ceiling = Math.min(MAX_ROLE_CTX, config.modelContextLimit || MAX_ROLE_CTX);
   if (roleCtx > ceiling) {
     throw new LocalAnalysisError(

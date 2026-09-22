@@ -31,7 +31,20 @@ registerHooks({
     }
     return next(specifier, context);
   },
+  // ollama.ts reads recommended-model.json. A bundler supplies the import
+  // attribute Node now demands; a plain node script has to supply it here, or
+  // the module cannot be loaded at all and its pure functions cannot be tested
+  // against the real thing.
+  load(url, context, next) {
+    if (url.endsWith(".json")) {
+      return next(url, { ...context, importAttributes: { type: "json" } });
+    }
+    return next(url, context);
+  },
 });
+
+// ollama.ts reaches "./errors" the same way, so it loads after the hook too.
+const { contextFor, promptCharBudgetFor } = await import("../src/lib/local/ollama.ts");
 
 const PORT = Number(process.env.CHECK_PORT || 3111);
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -158,6 +171,38 @@ async function analyze(bytes, fileName, mode = "auto", locale) {
 // Tier vocabulary, checked directly. DAY PLAYER needs a character with under
 // 1.5% of a script's cues, which a six-scene fixture cannot produce — asserting
 // it end to end would only ever prove the fixture is short.
+console.log("\ncontext sizing agrees with the prompt budget");
+// A pure property, checked because breaking it broke everything at once.
+//
+// contextFor picks a window for a prompt; promptCharBudgetFor derives from
+// that window the longest prompt allowed in it. If the second is ever smaller
+// than the prompt the first was sized for, every call is rejected before it is
+// sent. That happened: the two used different output reserves, and a script
+// that fit in memory failed on all twenty-four roles by 845 characters. They
+// share one constant now, which makes the relationship hold by construction —
+// this asserts it stays that way, including at the sizes a real feature hits.
+{
+  const sizes = [
+    500, 1_500, 5_000, 20_000, 50_000, 120_000,
+    166_700, 167_398, // the exact prompt that failed, and its system half
+    250_000, 400_000,
+  ];
+  const short = sizes.filter((n) => promptCharBudgetFor(contextFor(n)) < n);
+  check(
+    "every prompt fits the window sized for it",
+    short.length === 0,
+    short.length
+      ? short
+          .map((n) => `${n} chars -> ctx ${contextFor(n)} -> budget ${promptCharBudgetFor(contextFor(n))}`)
+          .join("; ")
+      : "",
+  );
+  // The window is sized for the prompt, not wildly past it: a context twice
+  // what is needed doubles the memory Ollama reserves for nothing.
+  const wasteful = sizes.filter((n) => contextFor(n) > contextFor(n * 2));
+  check("a bigger prompt never gets a smaller window", wasteful.length === 0);
+}
+
 console.log("\ntier vocabulary by market");
 check("US keeps DAY PLAYER", roleTypeLabel("DAY PLAYER", "us") === "DAY PLAYER");
 check(

@@ -114,11 +114,22 @@ export function promptCharBudgetFor(numCtx: number): number {
  * error, it just returns a breakdown written from a fragment — which is how
  * this path shipped descriptions of a film the model had mostly not read.
  *
+ * It reserves OUTPUT_RESERVE_TOKENS — the same constant promptCharBudgetFor
+ * subtracts — and that is not an incidental detail. The two must agree, or the
+ * budget derived from this window is smaller than the prompt it was sized for
+ * and every call is rejected before it is sent. Sizing with a 700-token
+ * reserve against a budget computed with 1200 is what made a script that fit
+ * comfortably in memory fail on all twenty-four roles, by 845 characters.
+ *
+ * With one constant the relationship holds by construction:
+ * promptCharBudgetFor(contextFor(n)) >= n for every n. The check suite asserts
+ * it across a range of sizes.
+ *
  * Capped by the caller against the model's own reported limit. If it does not
  * fit, the caller refuses rather than sending it.
  */
-export function contextFor(promptChars: number, outputReserve: number): number {
-  const needed = Math.ceil(promptChars / CHARS_PER_TOKEN) + outputReserve;
+export function contextFor(promptChars: number): number {
+  const needed = Math.ceil(promptChars / CHARS_PER_TOKEN) + OUTPUT_RESERVE_TOKENS;
   return Math.max(MIN_NUM_CTX, Math.ceil(needed / 4096) * 4096);
 }
 
