@@ -407,6 +407,18 @@ try {
   const { status, body } = await analyze(screenplay, "the-long-way-down.pdf");
   check("403, no analysis attempted", status === 403, `got ${status}`);
   check("explains why", /only runs on your Mac/i.test(body.error ?? ""), body.error);
+
+  const guide = await fetch(`${BASE}/private`).then((r) => r.text());
+  check(
+    "a returning user is offered their tool before the setup steps",
+    guide.includes("Already set up?") &&
+      guide.indexOf("Already set up?") < guide.indexOf("Setting this up for the first time"),
+    "most visits after the first are someone looking for their tool, not installing it",
+  );
+  check(
+    "and is pointed at the launcher rather than a URL to type",
+    /Start ScriptToCast/.test(guide),
+  );
 } finally {
   await stopDevServer(server);
 }
