@@ -44,14 +44,14 @@ function PrivateLocalTool({ model }: { model: string }) {
           <Shield size={18} className="shrink-0 mt-0.5" />
           <div>
             <p>
-              This page calls <code className="text-xs bg-white/80 px-1 rounded">/api/analyze-local</code>,
-              which talks only to <strong>Ollama on this computer</strong> (<code className="text-xs">127.0.0.1</code>).
-              It does not use the Anthropic / Claude API. Use <code className="text-xs">npm run dev</code> on your Mac.
+              <strong>Nothing you upload leaves this computer.</strong> Your script is read
+              in this browser, analysed by a model running on this machine
+              (<code className="text-xs bg-white/80 px-1 rounded">127.0.0.1</code>), and never
+              uploaded, stored in a database, or sent to any online service. This page refuses
+              to run if that model is not local.
             </p>
-            {/* Which model is about to run, before a ten-minute analysis rather
-                than after it. A wrong model here is invisible in the output —
-                it produces plausible copy that is simply worse. */}
             <p className="mt-1.5 text-emerald-800/90">
+              The document is held in memory for the length of the request and then dropped.
               Model: <code className="text-xs bg-white/80 px-1 rounded">{model}</code>
             </p>
           </div>

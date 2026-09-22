@@ -137,6 +137,7 @@ let server = await startDevServer({
   OLLAMA_BASE_URL: stub.url,
   OLLAMA_MODEL: "stub-model",
   VERCEL: "",
+  LOCAL_DEBUG_EVIDENCE: "1",
 });
 
 try {
@@ -199,7 +200,12 @@ try {
     JSON.stringify(roleProgress.at(-1)?.progress),
   );
   check(
-    "evidence is dumped outside the project folder",
+    "the page promises what the code actually enforces",
+    page.includes("Nothing you upload leaves this computer") && page.includes("127.0.0.1"),
+    "this is a claim a studio would rely on, so it has to match the loopback guard",
+  );
+  check(
+    "evidence dump, when asked for, lands outside the project folder",
     Boolean(evidenceFile) &&
       !evidenceFile.startsWith(process.cwd()) &&
       existsSync(evidenceFile) &&
@@ -299,6 +305,27 @@ try {
 } finally {
   await stopDevServer(server);
   await emptyStub.close();
+}
+
+// --- 1b. Evidence dump is off unless asked for ---------------------------------
+const quietStub = await startStubOllama({ scenario: "ok" });
+server = await startDevServer({
+  OLLAMA_BASE_URL: quietStub.url,
+  OLLAMA_MODEL: "stub-model",
+  VERCEL: "",
+});
+
+try {
+  console.log("\ndefault run (no debug flag)");
+  const { body } = await analyze(screenplay, "the-long-way-down.pdf");
+  check(
+    "writes no script text to disk by default",
+    body.meta?.diagnostics?.evidenceFile === null,
+    `${body.meta?.diagnostics?.evidenceFile} — the default has to match what the page promises`,
+  );
+} finally {
+  await stopDevServer(server);
+  await quietStub.close();
 }
 
 // --- 2a. A run long enough to be dropped by a browser -------------------------

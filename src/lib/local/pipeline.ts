@@ -62,14 +62,20 @@ import {
 } from "./screenplay";
 
 /**
- * Outside the project folder, deliberately.
+ * Debug dump of the script excerpts handed to the model. Off unless asked for.
  *
- * This was written to the project root, where `next dev` is watching for file
- * changes — a file being appended to forty times during a request is exactly
- * the kind of churn that restarts a dev server mid-analysis and drops the
- * connection the browser is waiting on.
+ * It was on by default for a while, which quietly weakened the one property
+ * this path is sold on: with it on, a file of script text sits in the temp
+ * folder after every run. The product's promise is that a confidential script
+ * stays in memory on this machine, so the default has to match the promise,
+ * and anyone diagnosing a bad run can turn it on for that run.
+ *
+ * Outside the project folder either way: `next dev` watches that directory, and
+ * appending to a file in it forty times during one request restarts the server
+ * and drops the connection the browser is waiting on.
  */
 const EVIDENCE_FILE = join(tmpdir(), "scripttocast-evidence.txt");
+const EVIDENCE_ENABLED = Boolean(process.env.LOCAL_DEBUG_EVIDENCE);
 
 /** Roles described per run. Each one is its own model call. */
 const DEFAULT_MAX_ROLES = 40;
@@ -172,8 +178,8 @@ export interface LocalDiagnostics {
   rolesThin: string[];
   /** True when PDF margins were used to tell dialogue from action. */
   usedLayout: boolean;
-  /** Where the evidence dump for this run was written. */
-  evidenceFile: string;
+  /** Where the evidence dump was written, or null when it is off (the default). */
+  evidenceFile: string | null;
   elapsedMs: number;
 }
 
@@ -212,10 +218,12 @@ export async function analyzeLocally(
   const startedAt = Date.now();
   let modelCalls = 0;
 
-  try {
-    writeFileSync(EVIDENCE_FILE, `evidence handed to ${config.model}, ${new Date().toISOString()}\n`, "utf8");
-  } catch {
-    // Not fatal — see recordEvidence.
+  if (EVIDENCE_ENABLED) {
+    try {
+      writeFileSync(EVIDENCE_FILE, `evidence handed to ${config.model}, ${new Date().toISOString()}\n`, "utf8");
+    } catch {
+      // Not fatal — see recordEvidence.
+    }
   }
 
   const pages = documents.flatMap((doc) => doc.pages);
@@ -533,7 +541,7 @@ export async function analyzeLocally(
       unsupportedEthnicityDropped: unsupportedEthnicity,
       rolesThin: thin,
       usedLayout: script.usedLayout,
-      evidenceFile: EVIDENCE_FILE,
+      evidenceFile: EVIDENCE_ENABLED ? EVIDENCE_FILE : null,
       elapsedMs: Date.now() - startedAt,
     },
   };
@@ -737,6 +745,7 @@ export function composeDescription({
  * done. The path is reported in diagnostics so it can be found.
  */
 function recordEvidence(name: string, roleType: string, evidence: string): void {
+  if (!EVIDENCE_ENABLED) return;
   try {
     appendFileSync(
       EVIDENCE_FILE,

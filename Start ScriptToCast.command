@@ -7,6 +7,10 @@
 set -e
 cd "$(dirname "$0")"
 
+# Next.js collects anonymous usage telemetry by default. It never includes your
+# documents, but this tool's whole claim is that nothing goes out, so it is off.
+export NEXT_TELEMETRY_DISABLED=1
+
 echo "Updating..."
 git pull --quiet || echo "(could not update — carrying on with what is here)"
 
