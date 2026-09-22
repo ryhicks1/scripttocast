@@ -10,7 +10,7 @@ import { pickBestModel, preflight, resolveConfig } from "@/lib/local/ollama";
 
 export const maxDuration = 300;
 
-/** How often to send a byte so the connection is not judged dead. */
+/** How often to repeat the last progress line when a phase runs long. */
 const HEARTBEAT_MS = 5000;
 export const runtime = "nodejs";
 
@@ -62,27 +62,33 @@ export async function POST(request: Request) {
       .update(documents.flatMap((d) => d.pages).join("\n"))
       .digest("hex");
 
-    // Stream, purely to keep the connection open.
+    // Stream progress as newline-delimited JSON, then the result.
     //
-    // A feature script is forty roles and forty model calls — minutes of work
-    // with nothing sent back. A browser drops a request that quiet, and the
-    // user gets "Failed to fetch" after ten minutes and loses the whole run.
+    // A feature script is forty roles and forty model calls — minutes of work.
+    // Two things go wrong if nothing is sent back in that time: a browser drops
+    // a request that quiet, and the person watching has no way to tell a slow
+    // run from a dead one.
     //
-    // Newlines are legal JSON whitespace, so a heartbeat costs nothing: the
-    // body is still one JSON document and res.json() parses it unchanged.
-    // Everything that can fail with a status code — preflight, extraction —
-    // has already run above, so anything failing from here is reported inside
-    // the body instead.
+    // Each line is its own JSON object: {"progress":{...}} while working, then
+    // one {"result":{...}} or {"error":"..."} at the end. Everything that can
+    // fail with a status code — preflight, extraction — has already run above,
+    // so anything failing from here is reported inside the stream instead.
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
-        const heartbeat = setInterval(() => {
+        const send = (payload: unknown) => {
           try {
-            controller.enqueue(encoder.encode("\n"));
+            controller.enqueue(encoder.encode(`${JSON.stringify(payload)}\n`));
           } catch {
-            // Client hung up; the analysis below will finish and be discarded.
+            // Client hung up; the analysis below finishes and is discarded.
           }
-        }, HEARTBEAT_MS);
+        };
+
+        // Phases before the per-role loop can run for half a minute on their
+        // own, so the last progress line is repeated rather than leaving a gap
+        // long enough for the connection to look dead.
+        let latest: unknown = { phase: "project", message: "Starting" };
+        const heartbeat = setInterval(() => send({ progress: latest }), HEARTBEAT_MS);
 
         try {
           const { result, diagnostics } = await analyzeLocally(
@@ -90,6 +96,10 @@ export async function POST(request: Request) {
             mode,
             config,
             (message, data) => console.log(message, data ?? {}),
+            (progress) => {
+              latest = progress;
+              send({ progress });
+            },
           );
 
           // The hash identifies a run in the logs without recording the script.
@@ -102,22 +112,20 @@ export async function POST(request: Request) {
             ...diagnostics,
           });
 
-          controller.enqueue(
-            encoder.encode(
-              JSON.stringify({
-                ...result,
-                meta: {
-                  provider: "ollama",
-                  model: config.model,
-                  numCtx: config.numCtx,
-                  third_party_ai: false,
-                  script_sha256: scriptSha,
-                  warning: config.warning,
-                  diagnostics,
-                },
-              }),
-            ),
-          );
+          send({
+            result: {
+              ...result,
+              meta: {
+                provider: "ollama",
+                model: config.model,
+                numCtx: config.numCtx,
+                third_party_ai: false,
+                script_sha256: scriptSha,
+                warning: config.warning,
+                diagnostics,
+              },
+            },
+          });
         } catch (error) {
           const message =
             error instanceof LocalAnalysisError
@@ -126,7 +134,7 @@ export async function POST(request: Request) {
                 ? error.message
                 : "Local analysis failed";
           console.error("analyze_local: failed mid-run", error);
-          controller.enqueue(encoder.encode(JSON.stringify({ error: message })));
+          send({ error: message });
         } finally {
           clearInterval(heartbeat);
           controller.close();
@@ -136,7 +144,7 @@ export async function POST(request: Request) {
 
     return new Response(stream, {
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/x-ndjson",
         "Cache-Control": "no-store",
         // Tell any proxy in the way not to buffer the heartbeat.
         "X-Accel-Buffering": "no",

@@ -109,13 +109,23 @@ async function analyze(bytes, fileName, mode = "auto") {
     signal: AbortSignal.timeout(120_000),
   });
   const text = await res.text();
+  // The private path answers with newline-delimited JSON: progress lines, then
+  // one result. Anything else is a plain JSON error body.
   let parsed = {};
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    parsed = {};
+  const events = [];
+  for (const line of text.split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const event = JSON.parse(line);
+      events.push(event);
+      if (event.result) parsed = event.result;
+      else if (event.error) parsed = { error: event.error };
+      else if (!event.progress) parsed = event;
+    } catch {
+      // ignore partial lines
+    }
   }
-  return { status: res.status, body: parsed, raw: text };
+  return { status: res.status, body: parsed, raw: text, events };
 }
 
 const screenplay = await makeScreenplayPdf();
@@ -131,7 +141,7 @@ let server = await startDevServer({
 
 try {
   console.log("\nscreenplay, model answering normally");
-  const { status, body, raw: rawBody } = await analyze(screenplay, "the-long-way-down.pdf");
+  const { status, body, events } = await analyze(screenplay, "the-long-way-down.pdf");
   check("200 OK", status === 200, `got ${status} ${JSON.stringify(body).slice(0, 200)}`);
   check("project name came from the model", body.project?.name === "THE LONG WAY DOWN", body.project?.name);
   check("mode auto-detected as film_tv", body.mode === "film_tv", body.mode);
@@ -176,6 +186,18 @@ try {
     `${body.meta?.model} — 70B must be declined, 1.1B must be beaten`,
   );
   const evidenceFile = body.meta?.diagnostics?.evidenceFile ?? "";
+  const roleProgress = events.filter((e) => e.progress?.phase === "roles");
+  check(
+    "reports real progress, not a scripted animation",
+    roleProgress.length >= body.roles.length &&
+      roleProgress.at(-1).progress.done === roleProgress.at(-1).progress.total,
+    `${roleProgress.length} role updates for ${body.roles?.length} roles`,
+  );
+  check(
+    "progress counts every role",
+    roleProgress.some((e) => e.progress.total === body.roles.length),
+    JSON.stringify(roleProgress.at(-1)?.progress),
+  );
   check(
     "evidence is dumped outside the project folder",
     Boolean(evidenceFile) &&
@@ -289,16 +311,16 @@ server = await startDevServer({
 
 try {
   console.log("\nslow run (minutes on a real model)");
-  const { status, body, raw } = await analyze(screenplay, "the-long-way-down.pdf");
+  const { status, body, events } = await analyze(screenplay, "the-long-way-down.pdf");
   check("completes", status === 200 && (body.roles?.length ?? 0) > 0, `got ${status}`);
   check(
-    "sends a heartbeat so the browser does not give up",
-    raw.startsWith("\n"),
-    `body starts with ${JSON.stringify(raw.slice(0, 4))} — a silent request is dropped as dead`,
+    "sends progress while it works, so the browser does not give up",
+    events.filter((e) => e.progress).length > 3,
+    `${events.filter((e) => e.progress).length} progress events — a silent request is dropped as dead`,
   );
   check(
-    "the heartbeat still leaves one parseable JSON document",
-    JSON.parse(raw).roles.length === body.roles.length,
+    "the result still arrives at the end of the stream",
+    (body.roles?.length ?? 0) > 0,
   );
 } finally {
   await stopDevServer(server);

@@ -184,11 +184,30 @@ export interface LocalAnalysis {
 
 type Logger = (message: string, data?: Record<string, unknown>) => void;
 
+/**
+ * Real progress, reported as the work happens.
+ *
+ * The page used to animate a scripted list of steps that reached 95% in ninety
+ * seconds and then sat there — for most of the run, on a feature script, the
+ * only honest thing on screen was that it had not crashed. Describing roles is
+ * where nearly all the time goes and it is countable, so it is counted.
+ */
+export interface LocalProgress {
+  phase: "project" | "story" | "cast" | "roles" | "assembling";
+  message: string;
+  /** Roles finished and roles to do, during the phase that takes the time. */
+  done?: number;
+  total?: number;
+}
+
+type ProgressReporter = (progress: LocalProgress) => void;
+
 export async function analyzeLocally(
   documents: ExtractedDocument[],
   requestedMode: BreakdownMode,
   config: OllamaConfig,
   log: Logger = () => {},
+  onProgress: ProgressReporter = () => {},
 ): Promise<LocalAnalysis> {
   const startedAt = Date.now();
   let modelCalls = 0;
@@ -219,6 +238,7 @@ export async function analyzeLocally(
   });
 
   // --- Pass 1: project facts, from the opening pages only. ------------------
+  onProgress({ phase: "project", message: "Reading the title page" });
   const head = headText(pages, budgetFor(config, PROJECT_SYSTEM, 6000));
   const project = emptyProject();
   try {
@@ -250,6 +270,7 @@ export async function analyzeLocally(
 
   // --- Pass 2: logline and synopsis, from scene headings only. --------------
   if (script.sceneHeadings.length >= 5) {
+    onProgress({ phase: "story", message: "Writing the logline and synopsis" });
     const headings = fitLines(
       script.sceneHeadings.map((h) => `p${h.page} ${h.text}`),
       budgetFor(config, STORY_SYSTEM, 5000),
@@ -283,6 +304,10 @@ export async function analyzeLocally(
     allCharacters = found.characters;
   }
   const totalFound = allCharacters.length;
+  onProgress({
+    phase: "cast",
+    message: `Found ${totalFound} character${totalFound === 1 ? "" : "s"} in the script`,
+  });
   const characters = allCharacters.slice(0, maxRoles);
   if (totalFound > characters.length) {
     log("local: more roles found than described", { found: totalFound, described: characters.length });
@@ -321,6 +346,12 @@ export async function analyzeLocally(
   let unsupportedEthnicity = 0;
 
   for (const [index, character] of characters.entries()) {
+    onProgress({
+      phase: "roles",
+      message: `Describing ${displayName(character.name)}`,
+      done: index,
+      total: characters.length,
+    });
     // Tiers come from how often a character speaks, which only exists when the
     // document was a screenplay. A casting brief gives no such signal, so the
     // role takes its mode's ordinary tier rather than being ranked on nothing.
@@ -387,6 +418,12 @@ export async function analyzeLocally(
     }
 
     log("local: role done", { index: index + 1, of: characters.length, role: name });
+    onProgress({
+      phase: "roles",
+      message: `Described ${name}`,
+      done: index + 1,
+      total: characters.length,
+    });
 
     let body = reply
       ? tightenDescription(stripEssayClauses(clean(reply.description)), ceiling, log, name)
@@ -458,6 +495,8 @@ export async function analyzeLocally(
       502,
     );
   }
+
+  onProgress({ phase: "assembling", message: "Putting the breakdown together" });
 
   const repeatedPhrases = findRepeatedPhrases(roles.map((role) => role.description)).slice(0, 8);
   if (repeatedPhrases.length) {
