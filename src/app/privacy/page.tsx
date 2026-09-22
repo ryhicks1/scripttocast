@@ -38,6 +38,40 @@ export default function PrivacyPolicy() {
           </section>
 
           <section>
+            <h2 className="text-base font-semibold text-gray-900 mb-2">
+              The Private Option: Nothing Leaves Your Computer
+            </h2>
+            <p className="mb-3">
+              Everything above describes the tool on this website. There is a second way to
+              run Script To Cast, for material that cannot be sent anywhere: you run it on
+              your own Mac against a model installed on that machine.
+            </p>
+            <p className="mb-3">
+              On that path your script is read in your browser, analysed locally, and never
+              uploaded, stored, or sent to any online service. It is enforced rather than
+              promised — the analysis makes exactly one outbound request, to
+              {" "}<code className="text-[12px] bg-gray-100 px-1 rounded">127.0.0.1</code>, and
+              refuses to run at all if that address is anything other than this computer.
+              No account is required and there is no database involved, so there is nowhere
+              for a script to be kept.
+            </p>
+            <p className="mb-3">
+              The document is held in memory for the length of the request and then dropped.
+              It is not written to disk. Sides and reports are generated on your machine from
+              the file you already have.
+            </p>
+            <p>
+              To be exact about one thing: your script is read by a language model on that
+              path, as it is on this one. The difference is that the model runs on your
+              computer and the text never goes anywhere else.{" "}
+              <Link href="/private" className="text-[#00BFA5] hover:underline">
+                Setup instructions
+              </Link>
+              .
+            </p>
+          </section>
+
+          <section>
             <h2 className="text-base font-semibold text-gray-900 mb-2">What We Store</h2>
             <ul className="list-disc list-inside space-y-2 pl-1">
               <li><strong>Your email address</strong> and account credentials (password is hashed and managed by our authentication provider, Supabase).</li>

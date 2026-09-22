@@ -1,9 +1,12 @@
+import { totalmem } from "os";
 import { connection } from "next/server";
 import SmartCreator from "@/components/SmartCreator";
 import Link from "next/link";
 import { Shield } from "lucide-react";
 import { isVercelHosted } from "@/lib/runtime";
+import { pickBestModel, resolveConfig } from "@/lib/local/ollama";
 import PrivateSetupGuide from "./PrivateSetupGuide";
+import { GUARANTEES } from "./guarantees";
 
 export const metadata = {
   title: "Private local setup — Script To Cast",
@@ -18,10 +21,13 @@ export const metadata = {
 export default async function PrivatePage() {
   await connection();
   if (isVercelHosted()) return <PrivateSetupGuide />;
-  return <PrivateLocalTool />;
+  // Read per request, like isVercelHosted above: the environment is one way
+  // this gets set, and it must not be baked in at build time.
+  const { model } = await pickBestModel(resolveConfig(), totalmem());
+  return <PrivateLocalTool model={model} />;
 }
 
-function PrivateLocalTool() {
+function PrivateLocalTool({ model }: { model: string }) {
   return (
     <div className="min-h-screen bg-[#fafafa]">
       <nav className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
@@ -37,11 +43,35 @@ function PrivateLocalTool() {
       <section className="bg-emerald-50 border-b border-emerald-100 px-6 py-3">
         <div className="max-w-3xl mx-auto flex gap-3 text-sm text-emerald-900">
           <Shield size={18} className="shrink-0 mt-0.5" />
-          <p>
-            This page calls <code className="text-xs bg-white/80 px-1 rounded">/api/analyze-local</code>,
-            which talks only to <strong>Ollama on this computer</strong> (<code className="text-xs">127.0.0.1</code>).
-            It does not use the Anthropic / Claude API. Use <code className="text-xs">npm run dev</code> on your Mac.
-          </p>
+          <div>
+            <p>
+              <strong>Nothing you upload leaves this computer.</strong> Your script is read
+              in this browser, analysed by a model running on this machine
+              (<code className="text-xs bg-white/80 px-1 rounded">127.0.0.1</code>), and never
+              uploaded, stored in a database, or sent to any online service. This page refuses
+              to run if that model is not local.
+            </p>
+            <p className="mt-1.5 text-emerald-800/90">
+              Model: <code className="text-xs bg-white/80 px-1 rounded">{model}</code>
+            </p>
+
+            {/* Folded away by default. The claim above is what matters day to
+                day; the detail is for the conversation where someone asks how
+                it is actually enforced. */}
+            <details className="mt-2 group">
+              <summary className="text-xs text-emerald-800/80 cursor-pointer hover:text-emerald-900 list-none">
+                <span className="underline underline-offset-2">What that means exactly</span>
+              </summary>
+              <ul className="mt-2 space-y-1.5">
+                {GUARANTEES.map((item) => (
+                  <li key={item} className="text-xs text-emerald-900/80 leading-relaxed flex gap-2">
+                    <span className="text-emerald-600 shrink-0">—</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </div>
         </div>
       </section>
 

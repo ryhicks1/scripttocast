@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { GUARANTEES } from "./guarantees";
 import { Shield, Laptop, Download, Terminal, ArrowRight, ExternalLink } from "lucide-react";
 
 const STEPS = [
@@ -26,7 +27,10 @@ const STEPS = [
     body: (
       <>
         In Terminal:{" "}
+        <code className="text-[11px] bg-gray-100 px-1.5 py-0.5 rounded">ollama pull llama3.1:8b</code>
+        . It needs about 6GB of free memory. On a machine that cannot spare it,{" "}
         <code className="text-[11px] bg-gray-100 px-1.5 py-0.5 rounded">ollama pull llama3.2</code>
+        {" "}works too — descriptions come out thinner.
       </>
     ),
   },
@@ -76,10 +80,15 @@ export default function PrivateSetupGuide() {
           <h1 className="text-2xl font-bold text-gray-900 mb-3">
             Run this on your Mac
           </h1>
-          <p className="text-gray-500 text-sm max-w-xl mx-auto leading-relaxed">
-            This is not a cloud AI breakdown tool. The private / local-model path
-            only works on your computer via localhost. Vercel cannot reach Ollama
-            on your laptop.
+          <p className="text-gray-600 text-sm max-w-xl mx-auto leading-relaxed">
+            Set this up and <strong>your scripts never leave your computer</strong>. The
+            private path reads a document in your browser, analyses it with a model running
+            on your own machine, and never uploads it, stores it, or sends it to any online
+            service.
+          </p>
+          <p className="text-gray-400 text-xs max-w-xl mx-auto leading-relaxed mt-3">
+            It only works locally — this hosted page cannot reach a model on your laptop,
+            which is precisely the point.
           </p>
         </div>
       </section>
@@ -88,11 +97,24 @@ export default function PrivateSetupGuide() {
         <div className="max-w-3xl mx-auto flex gap-3 text-sm text-amber-950">
           <Shield size={18} className="shrink-0 mt-0.5" />
           <p>
-            Scripts stay on your machine <strong>only</strong> when you analyze
-            them on <code className="text-xs bg-white/80 px-1 rounded">localhost</code>{" "}
-            against Ollama. Using the public homepage still sends text to Claude.
+            This applies to the local tool <strong>only</strong>. The public tool on this
+            site sends document text to a cloud AI service for analysis — see{" "}
+            <Link href="/privacy" className="underline underline-offset-2">Privacy</Link>.
           </p>
         </div>
+      </section>
+
+      <section className="max-w-3xl mx-auto px-6 pt-14">
+        <p className="text-center text-xs text-gray-400 uppercase tracking-wider mb-8 font-medium">
+          What that actually means
+        </p>
+        <ul className="grid sm:grid-cols-2 gap-3 text-sm">
+          {GUARANTEES.map((item) => (
+            <li key={item} className="bg-white border border-gray-200 rounded-xl p-4 text-gray-600 leading-relaxed">
+              {item}
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section className="max-w-3xl mx-auto px-6 py-14">

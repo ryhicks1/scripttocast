@@ -23,6 +23,99 @@ const PROGRESS_STEPS = [
   { pct: 95, msg: "Almost there..." },
 ];
 
+/**
+ * Read newline-delimited JSON, reporting progress until the result arrives.
+ *
+ * Lines can be split across chunks, so the tail is held back until a newline
+ * shows up. Anything unparseable is skipped rather than failing the run — a
+ * half-written line is not a reason to throw away a breakdown that took
+ * minutes to produce.
+ */
+async function readProgressStream(
+  res: Response,
+  onProgress: (progress: LiveProgress) => void,
+): Promise<AnalysisResult & { error?: string }> {
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("No response body");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let final: (AnalysisResult & { error?: string }) | null = null;
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const event = JSON.parse(line);
+        if (event.progress) onProgress(event.progress as LiveProgress);
+        else if (event.result) final = event.result;
+        else if (event.error) final = { error: event.error } as AnalysisResult & { error?: string };
+      } catch {
+        // Partial or malformed line — ignore it and keep reading.
+      }
+    }
+  }
+
+  if (!final) throw new Error("The analysis ended without returning a breakdown.");
+  return final;
+}
+
+export interface LiveProgress {
+  phase: "project" | "story" | "cast" | "roles" | "assembling";
+  message: string;
+  done?: number;
+  total?: number;
+}
+
+/**
+ * Progress the server actually reported.
+ *
+ * The scripted version below reaches 95% in ninety seconds and then sits there,
+ * which on a feature script is most of the run. Describing roles is where the
+ * time goes and it is countable, so this counts it.
+ */
+function LiveAnalyzingProgress({ progress }: { progress: LiveProgress }) {
+  const { done = 0, total = 0, phase, message } = progress;
+  // Everything before the per-role loop is a small, fixed share of the work.
+  const pct =
+    phase === "assembling"
+      ? 98
+      : phase === "roles" && total
+        ? Math.round(8 + (done / total) * 88)
+        : phase === "cast"
+          ? 8
+          : 4;
+
+  return (
+    <div className="max-w-xl mx-auto py-16">
+      <div className="flex items-baseline justify-between mb-2">
+        <p className="text-sm text-gray-700">{message}</p>
+        <p className="text-sm text-gray-400 tabular-nums">{pct}%</p>
+      </div>
+      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div
+          className="h-full bg-gray-900 transition-[width] duration-500 ease-out"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      {phase === "roles" && total > 0 && (
+        <p className="text-xs text-gray-500 mt-3 tabular-nums">
+          {done} of {total} roles described
+        </p>
+      )}
+      <p className="text-[11px] text-gray-400 mt-4">
+        Running on this machine. A feature script takes several minutes — one pass per role.
+      </p>
+    </div>
+  );
+}
+
 function AnalyzingProgress() {
   const [step, setStep] = useState(0);
   const [smoothPct, setSmoothPct] = useState(0);
@@ -119,6 +212,7 @@ function projectFields(p: Project | null | undefined): { label: string; value: s
 
 export default function SmartCreator({ isLoggedIn, initialResult, authUnavailable = false, analyzeEndpoint = "/api/analyze", privateMode = false, locale = "us" }: { isLoggedIn: boolean; initialResult?: AnalysisResult; authUnavailable?: boolean; analyzeEndpoint?: string; privateMode?: boolean; locale?: Locale }) {
   const [stage, setStage] = useState<"upload" | "analyzing" | "results">(initialResult ? "results" : "upload");
+  const [liveProgress, setLiveProgress] = useState<LiveProgress | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState("");
   const [result, setResult] = useState<AnalysisResult | null>(initialResult || null);
@@ -186,6 +280,7 @@ export default function SmartCreator({ isLoggedIn, initialResult, authUnavailabl
     if (!files.length) return;
     setStage("analyzing");
     setError("");
+    setLiveProgress(null);
     try {
       const formData = new FormData();
       files.forEach(f => formData.append("files", f));
@@ -208,7 +303,14 @@ export default function SmartCreator({ isLoggedIn, initialResult, authUnavailabl
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error || `Analysis failed (${res.status})`);
       }
-      const data: AnalysisResult = await res.json();
+      // The private path streams newline-delimited progress and finishes with
+      // the result. A failure after the first byte therefore arrives with a 200
+      // and an error in the stream rather than a status code.
+      const data: AnalysisResult & { error?: string } =
+        res.headers.get("content-type")?.includes("ndjson")
+          ? await readProgressStream(res, setLiveProgress)
+          : await res.json();
+      if (data.error) throw new Error(data.error);
       setSaveWarning("");
       if (isLoggedIn && !privateMode) {
         const saved = await saveProject(data);
@@ -588,7 +690,9 @@ export default function SmartCreator({ isLoggedIn, initialResult, authUnavailabl
   );
 
   // ========== ANALYZING ==========
-  if (stage === "analyzing") return <AnalyzingProgress />;
+  if (stage === "analyzing") {
+    return liveProgress ? <LiveAnalyzingProgress progress={liveProgress} /> : <AnalyzingProgress />;
+  }
 
   // ========== RESULTS ==========
   if (!result) return null;
@@ -616,6 +720,30 @@ export default function SmartCreator({ isLoggedIn, initialResult, authUnavailabl
 
   return (
     <div className="space-y-4">
+      {/* A local model too small for the job produces plausible-looking copy,
+          so nothing on screen reveals it. It has to be said here: the run that
+          prompted this had been on a 3B model for three rounds of fixes,
+          because OLLAMA_MODEL in .env.local quietly overrode the default. */}
+      {result?.meta?.warning && (
+        <div className="border border-amber-300 bg-amber-50 rounded-xl p-4">
+          <p className="text-sm font-semibold text-amber-900">
+            This ran on a small local model
+          </p>
+          <p className="text-xs text-amber-800 mt-1">{result.meta.warning}</p>
+        </div>
+      )}
+
+      {/* Which model actually produced this, stated on the result itself. The
+          configured model and the one that ran can differ, and the difference
+          is not visible in the copy. */}
+      {result?.meta?.model && (
+        <p className="text-[11px] text-gray-500">
+          Analysed on this machine by{" "}
+          <code className="bg-gray-100 px-1 rounded">{result.meta.model}</code>
+          {result.meta.provider ? ` via ${result.meta.provider}` : ""}. Nothing was sent to a third party.
+        </p>
+      )}
+
       {/* The analysis itself needs no database, so it is worth saying plainly
           when the copy on screen is the only copy. */}
       {saveWarning && (

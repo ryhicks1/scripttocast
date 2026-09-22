@@ -5,7 +5,10 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "check:local": "node scripts/check-local-pipeline.mjs",
+    "eval:local": "node --no-warnings scripts/eval-local.mjs",
+    "corpus:metrics": "node --no-warnings scripts/corpus/parse-corpus.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",

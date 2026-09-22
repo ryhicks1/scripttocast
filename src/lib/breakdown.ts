@@ -98,6 +98,12 @@ export interface AnalysisResult {
   selfTapeInstructions: SelfTapeInstruction[];
   formQuestions: FormQuestion[];
   projectId?: string;
+  /** Set by the private path only: which local model ran, and any caveat. */
+  meta?: {
+    provider?: string;
+    model?: string;
+    warning?: string;
+  };
 }
 
 // The API caps a schema at 16 union-typed parameters ("type" arrays or anyOf),
