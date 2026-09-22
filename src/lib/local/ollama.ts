@@ -27,6 +27,8 @@ export interface OllamaConfig {
   promptCharBudget: number;
   /** Set when the running model is too small to do this job well. */
   warning?: string;
+  /** Parameter count in billions, when Ollama reports it. */
+  parameters?: number | null;
 }
 
 /**
@@ -288,7 +290,7 @@ export async function preflight(config: OllamaConfig): Promise<OllamaConfig> {
 
   if (warning) console.warn(`analyze_local: ${warning}`);
 
-  return { ...config, numCtx, promptCharBudget: promptCharBudgetFor(numCtx), warning };
+  return { ...config, numCtx, promptCharBudget: promptCharBudgetFor(numCtx), warning, parameters };
 }
 
 /**

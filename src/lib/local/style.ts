@@ -70,6 +70,68 @@ const SCENE_NARRATION: RegExp[] = [
   /\bdriven by (a|his|her|their) (desire|need)\b/i,
 ];
 
+/**
+ * Essay voice: the model explaining its reasoning instead of describing a
+ * person. "as evidenced by his repeated failures", "is able to navigate complex
+ * situations", "a complex and possibly troubled individual".
+ *
+ * An 8B model does this constantly, because it has been handed evidence and
+ * asked to draw a conclusion, and it shows its working. A breakdown never
+ * shows its working — the script is not on trial.
+ *
+ * Measured against the 310 real entries: "as evidenced by", "is able to" and
+ * "complex and" appear ZERO times; "is someone who", "who is a" and "involved
+ * in" appear once each. Hedging ("possibly", "perhaps", "seemingly") is 1.9%.
+ *
+ * These are REPORTED, not used to drop sentences — see stripEssayClauses for
+ * why. The prompt forbids them; this counts how often that fails.
+ */
+const ESSAY_VOICE: RegExp[] = [
+  /\bas evidenced by\b/i,
+  /\bwhich (shows|suggests|indicates)\b/i,
+  /\bis able to\b/i,
+  /\bis someone who\b/i,
+  /\b(possibly|perhaps|seemingly|apparently)\b/i,
+];
+
+/** Essay-voice phrases found in a description. Diagnostic only. */
+export function findEssayVoice(text: string): string[] {
+  if (!text) return [];
+  return ESSAY_VOICE.flatMap((pattern) => {
+    const match = text.match(pattern);
+    return match ? [match[0].toLowerCase().trim()] : [];
+  });
+}
+
+/**
+ * Remove the smallest thing that carries the fault, rather than the sentence
+ * around it.
+ *
+ * This is the correction to a mistake repeated several times here: every filter
+ * dropped whole sentences, and on real output that deleted the castable content
+ * along with the tic. Running the sentence-level rule over one real run cost a
+ * lead "He's a skilled architect" — the single most useful fact on the card —
+ * because the same sentence also contained the word "possibly".
+ *
+ * So a trailing justification is cut at the clause, and a hedging adverb is cut
+ * at the word. Both leave grammatical sentences. Constructions that cannot be
+ * excised without breaking the sentence ("is able to", "is someone who") are
+ * left alone here and handled in the prompt — clumsy phrasing that carries a
+ * real fact still beats a blank.
+ */
+export function stripEssayClauses(text: string): string {
+  return text
+    // Trailing justification: ", as evidenced by his repeated failures..."
+    .replace(/,?\s*\bas evidenced by\b[^.!?]*/gi, "")
+    .replace(/,?\s*\bas seen (when|in|with)\b[^.!?]*/gi, "")
+    .replace(/,?\s*\b(which|this) (shows|suggests|indicates)\b[^.!?]*/gi, "")
+    // Hedging adverbs, which delete cleanly and change nothing else.
+    .replace(/\b(possibly|perhaps|seemingly|apparently|somewhat|rather)\s+/gi, "")
+    .replace(/\s+([.!?,])/g, "$1")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 /** Returns the book-voice phrases found in a description. */
 export function findBookVoice(text: string): string[] {
   if (!text) return [];

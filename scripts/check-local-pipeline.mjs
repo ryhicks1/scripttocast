@@ -180,9 +180,7 @@ try {
     "without this, action lines leak into the evidence as dialogue",
   );
 
-  const descriptionPrompts = stub.calls.filter((c) =>
-    c.system.includes("casting breakdown"),
-  );
+  const descriptionPrompts = stub.calls.filter((c) => c.user.startsWith("Character: "));
   check(
     "evidence includes where the character turns up",
     descriptionPrompts.some((c) => c.user.includes("Where they turn up:")),
@@ -202,12 +200,17 @@ try {
     "action following a speech used to be captured as part of it",
   );
   check(
-    "a description copied from the prompt is discarded",
+    "the house prompt is used on a model big enough for it",
+    body.meta?.diagnostics?.descriptionPrompt === "house",
+    body.meta?.diagnostics?.descriptionPrompt,
+  );
+  const otis = (body.roles ?? []).find((r) => r.name === "Otis")?.description ?? "";
+  check(
+    "a description copied from the prompt is regenerated, not printed",
     (body.meta?.diagnostics?.rolesCopiedPrompt ?? []).includes("Otis") &&
-      !/write in this order/i.test(
-        (body.roles ?? []).find((r) => r.name === "Otis")?.description ?? "",
-      ),
-    JSON.stringify(body.meta?.diagnostics?.rolesCopiedPrompt),
+      !/write in this order|ROLE DESCRIPTION/i.test(otis) &&
+      otis.split(/\s+/).length > 6,
+    `${JSON.stringify(body.meta?.diagnostics?.rolesCopiedPrompt)} -> ${otis}`,
   );
   const devlin = (body.roles ?? []).find((r) => r.name === "Devlin");
   check(

@@ -1,3 +1,6 @@
+import type { ResolvedMode } from "../breakdown";
+import { buildSystemPrompt } from "../prompts";
+
 /**
  * Prompts for the private path, written for a 3B local model.
  *
@@ -57,6 +60,12 @@ synopsis: three or four sentences.`;
 /**
  * No worked examples, deliberately.
  *
+ * The grammar rules below stand in for them. Two thirds of real breakdowns open
+ * the prose on a bare noun or adjective, a quarter on "A/An/The", and only 5%
+ * on "He is" / "She is" — which is exactly what an 8B model reaches for. That
+ * distribution is measurable (see scripts/corpus) and describable, so it can be
+ * stated as a rule rather than demonstrated with copy the model will lift.
+ *
  * An earlier version ended with three example descriptions in the house style.
  * Two roles in the next run came back as those examples, word for word —
  * "Small town organised crime enforcer... whose first language is violence" was
@@ -75,6 +84,20 @@ Write in this order:
 1. What they are — their job, their rank, or what they are to another character.
 2. What they are like to deal with, in concrete terms.
 
+HOW IT IS WRITTEN. This is the part that gets it wrong most often:
+- Open with a noun or an adjective. Never open with "He is", "She is",
+  "They are", or the character's name. Two thirds of professional breakdowns
+  open on a bare occupation or a run of adjectives.
+- Sentence fragments are correct here. A job title on its own is a sentence.
+  Three adjectives separated by commas is a sentence.
+- Never explain your reasoning or cite the script. Do not write "as evidenced
+  by", "which shows", "this suggests", "as seen when". State what they are
+  like. Nothing has to be proved.
+- No hedging. Not "possibly", "perhaps", "seems", "a helper or assistant",
+  "some kind of". If the evidence does not support it, leave it out.
+- Do not repeat their gender, age or ethnicity in your sentences. Those are
+  printed immediately before your text and saying them twice reads as a fault.
+
 Rules:
 - Use only the evidence given below. Do not use anything you already know about
   this film, this script or these characters. If you recognise it, ignore that.
@@ -87,13 +110,52 @@ Rules:
 - Do not describe clothes, eyes, smiles or posture unless the part requires it.
 - Never write "carries himself", "carries herself", "an air of", "exudes",
   "a deep sense of", "a voice of reason", "moral compass", "driven by a desire",
-  "in the story", "his journey", "we learn", "by the end", "serves as",
-  "represents" or "the audience".
+  "is able to", "is someone who", "in the story", "his journey", "we learn",
+  "by the end", "serves as", "represents" or "the audience".
 - Never copy wording from these instructions.
 
 Fill gender, ageRange and ethnicity only when the evidence states them outright.
 Return "" for anything it does not. Never guess ethnicity, and never infer it
-from a location, a name, or another character.`;
+from a location, a name, or another character. ageRange is a range of years,
+like "35 to 45 years old" or "40s" — never a word like "young".`;
+
+/**
+ * The house prompt, adapted to describing one role at a time.
+ *
+ * src/lib/prompts.ts is what the public path sends to claude-opus-5: the
+ * canonical format, the tier ceilings, the banned constructions, the worked
+ * examples, the cut test. The local path skipped it because a 3B model cannot
+ * hold a hundred lines of layered rules — it drops the format or returns a
+ * shape that parses and says nothing.
+ *
+ * That reasoning was about 3B. An 8B model can hold it, and the house style is
+ * better written there than anywhere else, so it is reused verbatim rather than
+ * paraphrased — one source of truth for what a breakdown sounds like. The
+ * addendum narrows a whole-breakdown instruction to one role, which the
+ * response schema enforces anyway.
+ *
+ * Its worked examples are a known hazard: a model short of evidence copies them
+ * out as a character. pipeline.ts catches that and retries on DESCRIPTION_SYSTEM,
+ * which has no examples to lift.
+ */
+export function houseDescriptionSystem(mode: ResolvedMode): string {
+  return `${buildSystemPrompt(mode)}
+
+────────────────────────────────────────
+YOU ARE DOING ONE PART OF THAT JOB.
+
+You are given the evidence for a SINGLE character, gathered from the script.
+Return only that character's fields: gender, ageRange, ethnicity, description
+and traits. No project, no roles array, no self-tape, no form questions.
+
+The description follows the DESCRIPTION FORMAT above, except that you write only
+the [ROLE DESCRIPTION] part — the gender, age and ethnicity are returned as
+their own fields and printed before your text, so do not repeat them in it, and
+do not write the trailing role type. Both are added for you.
+
+Use only the evidence below. Do not use anything you already know about this
+film or these characters. Never copy wording from these instructions.`;
+}
 
 /**
  * The length instruction is a phrase, never the ceiling number.

@@ -66,8 +66,14 @@ export function startStubOllama({ scenario = "ok", port = 0 } = {}) {
   });
 }
 
+const copiedOnce = new Set();
+
 function reply(system, user) {
-  if (system.includes("pull out facts")) {
+  // Route on the USER message first. Both description prompts are long and the
+  // house one mentions loglines, project fields and role lists, so matching on
+  // system text alone sends description calls to the wrong branch.
+  const isDescription = user.startsWith("Character: ");
+  if (!isDescription && system.includes("pull out facts")) {
     return {
       title: "THE LONG WAY DOWN",
       productionType: "feature_film",
@@ -77,13 +83,13 @@ function reply(system, user) {
       location: "Chicago",
     };
   }
-  if (system.includes("logline")) {
+  if (!isDescription && system.includes("logline")) {
     return {
       logline: "A night-shift paramedic drives a stolen ambulance across three counties.",
       synopsis: "Mara takes a call that goes wrong. Devlin follows her out of the city. By morning both of them have to answer for it.",
     };
   }
-  if (system.includes("list the roles")) {
+  if (!isDescription && system.includes("list the roles")) {
     return { roles: ["HERO DAD", "BARISTA"] };
   }
   // Description. Each of these is a failure seen in a real run, reproduced so
@@ -93,9 +99,17 @@ function reply(system, user) {
   // A real run returned the prompt's own worked examples as two characters'
   // descriptions. Copy a phrase straight out of the instructions and the guard
   // must discard the whole thing.
-  if (name === "Otis") {
-    const phrase = /Write in this order:\n1\. (.+)/.exec(system)?.[1] ?? "what they are";
-    return { gender: "Man", ageRange: "60s", ethnicity: "", description: phrase, traits: [] };
+  if (name === "Otis" && !system.includes("no examples marker")) {
+    // Answer with a line lifted from whichever prompt was sent. The pipeline
+    // must notice and retry on the lean prompt rather than printing it.
+    const phrase =
+      /DESCRIPTION FORMAT — follow this exactly:\s*\n\s*\n\s*(.+)/.exec(system)?.[1] ??
+      /Write in this order:\n1\. (.+)/.exec(system)?.[1] ??
+      "what they are, their job, their rank, or what they are to another";
+    if (!copiedOnce.has(name)) {
+      copiedOnce.add(name);
+      return { gender: "Man", ageRange: "60s", ethnicity: "", description: phrase, traits: [] };
+    }
   }
 
   // A real run gave a lead the ethnicity of the character he shares scenes

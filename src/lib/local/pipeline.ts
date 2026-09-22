@@ -37,12 +37,13 @@ import { defaultFormQuestions, defaultSelfTape } from "./defaults";
 import { LocalAnalysisError } from "./errors";
 import type { ExtractedDocument } from "./extract";
 import { chatJson, type OllamaConfig } from "./ollama";
-import { findBookVoice, findRepeatedPhrases } from "./style";
+import { findBookVoice, findEssayVoice, findRepeatedPhrases, stripEssayClauses } from "./style";
 import {
   CAST_LIST_SYSTEM,
   castListUser,
   DESCRIPTION_SYSTEM,
   descriptionUser,
+  houseDescriptionSystem,
   PROJECT_SYSTEM,
   projectUser,
   STORY_SYSTEM,
@@ -63,6 +64,16 @@ const EVIDENCE_FILE = join(process.cwd(), "local-evidence.txt");
 
 /** Roles described per run. Each one is its own model call. */
 const DEFAULT_MAX_ROLES = 40;
+
+/**
+ * Smallest model handed the full house prompt from src/lib/prompts.ts.
+ *
+ * That prompt is around a hundred lines: a canonical format, tier ceilings, a
+ * banned-construction list, worked examples and a cut test. A 3B model drops
+ * it. An 8B model holds it, and it is the best statement of house style in the
+ * codebase, so it is reused rather than paraphrased.
+ */
+const HOUSE_PROMPT_MIN_PARAMETERS_B = 7;
 
 /** Commercial descriptions are tighter than film/TV ones — three sentences. */
 const COMMERCIAL_SENTENCE_CEILING = 3;
@@ -142,8 +153,10 @@ export interface LocalDiagnostics {
   narrativeVoiceFlagged: number;
   /** Phrases reused across roles — the tell that the model ran out of evidence. */
   repeatedPhrases: string[];
-  /** Descriptions discarded for repeating the prompt back. */
+  /** Roles that first answered with prompt text and had to be regenerated. */
   rolesCopiedPrompt: string[];
+  /** Which description prompt ran: the house one, or the lean local one. */
+  descriptionPrompt: "house" | "local";
   /** Ethnicity claims dropped because the script did not state them. */
   unsupportedEthnicityDropped: number;
   /** Descriptions left with almost nothing — the sign that evidence was thin. */
@@ -277,6 +290,16 @@ export async function analyzeLocally(
   const isScreenplay = script.looksLikeScreenplay;
   const tiers = assignTiers(characters);
 
+  // A model big enough to hold the house prompt gets it. Below that it drops
+  // the format or answers from the examples, which is why the local path had
+  // its own lean prompt in the first place.
+  const useHousePrompt = (config.parameters ?? 0) >= HOUSE_PROMPT_MIN_PARAMETERS_B;
+  const descriptionSystem = useHousePrompt ? houseDescriptionSystem(mode) : DESCRIPTION_SYSTEM;
+  log("local: description prompt", {
+    prompt: useHousePrompt ? "house (src/lib/prompts.ts)" : "local lean",
+    parameters: config.parameters,
+  });
+
   // --- Pass 3: one description per role, from that role's own lines. --------
   const roles: Role[] = [];
   const failed: string[] = [];
@@ -297,14 +320,24 @@ export async function analyzeLocally(
       : mode === "commercial"
         ? COMMERCIAL_SENTENCE_CEILING
         : SENTENCE_CEILING.SUPPORTING;
-    // The model is asked for a short answer and never told the ceiling, which
-    // it would otherwise write up to. The ceiling is applied afterwards.
+    // Length, matched to what real breakdowns at this tier actually run to.
+    //
+    // This asked for two sentences until the corpus scorer was pointed at a
+    // real run: the reference median is 5 sentences and 59 words, and the run
+    // came in at 2.5 and 28. That instruction was written to stop a 3B model
+    // padding to a ceiling, and it was right then. On an 8B model with real
+    // evidence it starves the description instead.
+    //
+    // Still not the ceiling number, which the model would write up to
+    // regardless of what it has to say; still conditional on the evidence.
     const lengthHint =
       ceiling <= 2
         ? "Write one sentence. Two at most."
-        : "Write two sentences. Three only if the evidence supports a third.";
+        : ceiling >= 5
+          ? "Write three to five sentences, as far as the evidence carries you. Stop where it stops."
+          : "Write two to four sentences, as far as the evidence carries you. Stop where it stops.";
     const name = displayName(character.name);
-    const evidence = buildEvidence(script, character, budgetFor(config, DESCRIPTION_SYSTEM, 2400));
+    const evidence = buildEvidence(script, character, budgetFor(config, descriptionSystem, 2400));
 
     // Always written, to local-evidence.txt in the project folder.
     //
@@ -314,16 +347,29 @@ export async function analyzeLocally(
     // diagnose a run the hardest thing to reach. It is a plain file now.
     recordEvidence(name, roleType, evidence.text);
 
-    let reply: DescriptionReply | null = null;
-    try {
-      reply = await chatJson<DescriptionReply>(config, {
-        system: DESCRIPTION_SYSTEM,
+    const askFor = async (system: string) =>
+      chatJson<DescriptionReply>(config, {
+        system,
         user: descriptionUser(name, lengthHint, evidence.text),
         schema: DESCRIPTION_SCHEMA,
         label: `role: ${name}`,
         maxOutputTokens: 400,
       });
+
+    let reply: DescriptionReply | null = null;
+    try {
+      reply = await askFor(descriptionSystem);
       modelCalls++;
+
+      // The house prompt's worked examples are vivid, and a model short of
+      // evidence hands one back as the character. Retry on the lean prompt,
+      // which has no examples to lift, rather than discarding the role.
+      if (sharesWording(clean(reply.description), descriptionSystem)) {
+        log("local: description copied the prompt, retrying without examples", { role: name });
+        leaked.push(name);
+        reply = await askFor(DESCRIPTION_SYSTEM);
+        modelCalls++;
+      }
     } catch (error) {
       failed.push(name);
       log("local: role description failed", { role: name, error: String(error) });
@@ -331,24 +377,16 @@ export async function analyzeLocally(
 
     log("local: role done", { index: index + 1, of: characters.length, role: name });
 
-    let body = reply ? tightenDescription(clean(reply.description), ceiling, log, name) : "";
+    let body = reply
+      ? tightenDescription(stripEssayClauses(clean(reply.description)), ceiling, log, name)
+      : "";
 
-    // A description that repeats the instructions is not a description. This
-    // has happened: two roles came back as the prompt's own worked examples,
-    // and the examples are gone now, but the guard stays — anything the model
-    // copies out of its instructions is a fabrication about a real person.
-    if (body && sharesWording(body, DESCRIPTION_SYSTEM)) {
-      log("local: description copied the prompt, discarded", { role: name, body });
-      leaked.push(name);
+    // Last resort: a retry that copied the prompt too is discarded outright.
+    // Text lifted from instructions is a fabrication about a real person.
+    if (body && (sharesWording(body, DESCRIPTION_SYSTEM) || sharesWording(body, descriptionSystem))) {
+      log("local: description still copied the prompt, discarded", { role: name, body });
       body = "";
     }
-
-    body = withoutOtherCharacters(body, name, castNames);
-    // Under about eight words there is nothing an agent can act on. Worth
-    // counting: a run full of these means the evidence is the problem, not the
-    // wording, and local-evidence.txt is where to look.
-    if (body.split(/\s+/).filter(Boolean).length < 8) thin.push(name);
-    if (body && (findNarrativeVoice(body).length || findBookVoice(body).length)) flagged++;
 
     // Ethnicity only where the script says so. The model claimed a lead was
     // Japanese because he shares scenes with a Japanese character; a wrong
@@ -357,23 +395,38 @@ export async function analyzeLocally(
     // what the evidence supports — and a breakdown without it is much less
     // useful, since real ones state it 93% of the time. The script's own
     // pronouns are evidence, so read them rather than dropping the field.
-    const gender = clean(reply?.gender) || genderFromPronouns(evidence.identity);
+    const gender = normalizeGender(clean(reply?.gender) || genderFromPronouns(evidence.identity));
     const ethnicity = statedIn(evidence.identity, clean(reply?.ethnicity));
+    const ageRange = normalizeAgeRange(clean(reply?.ageRange));
     if (reply?.ethnicity && !ethnicity) {
       log("local: dropped unsupported ethnicity", { role: name, claimed: reply.ethnicity });
       unsupportedEthnicity++;
     }
 
+    body = withoutOtherCharacters(body, name, castNames);
+    body = stripDemographicEcho(body, { gender, ageRange, ethnicity });
+    // Under about eight words there is nothing an agent can act on. Worth
+    // counting: a run full of these means the evidence is the problem, not the
+    // wording, and local-evidence.txt is where to look.
+    if (body.split(/\s+/).filter(Boolean).length < 8) thin.push(name);
+    if (
+      body &&
+      (findNarrativeVoice(body).length || findBookVoice(body).length || findEssayVoice(body).length)
+    ) {
+      flagged++;
+    }
+
+
     roles.push({
       name,
       description: composeDescription({
         gender,
-        ageRange: clean(reply?.ageRange),
+        ageRange,
         ethnicity,
         body,
         roleType,
       }),
-      ageRange: clean(reply?.ageRange) || null,
+      ageRange: ageRange || null,
       gender: gender || null,
       ethnicity: ethnicity || null,
       roleType,
@@ -426,6 +479,7 @@ export async function analyzeLocally(
       narrativeVoiceFlagged: flagged,
       repeatedPhrases,
       rolesCopiedPrompt: leaked,
+      descriptionPrompt: useHousePrompt ? "house" : "local",
       unsupportedEthnicityDropped: unsupportedEthnicity,
       rolesThin: thin,
       usedLayout: script.usedLayout,
@@ -649,6 +703,67 @@ function recordEvidence(name: string, roleType: string, evidence: string): void 
  * answer is worse than none: the claim has to appear in the script's own words
  * about this character, not be inferred from anything around them.
  */
+/**
+ * Age as the trade writes it: "35 to 40 years old", "30s", "mid 50s to early
+ * 60s". A model asked for an age range returns "35-40", "35", or "young", and
+ * the last of those is not an age range at all — a breakdown that says "young"
+ * under AGE tells an agent nothing, so it is dropped rather than printed.
+ */
+function normalizeAgeRange(raw: string): string {
+  if (!raw) return "";
+  const value = raw.trim();
+  // Decade forms and anything already written out are left alone.
+  if (/\d0s\b/.test(value) || /years old/i.test(value) || /\bish\b/.test(value)) return value;
+
+  const range = /^(\d{1,2})\s*(?:-|–|—|to)\s*(\d{1,2})$/.exec(value);
+  if (range) return `${range[1]} to ${range[2]} years old`;
+
+  const single = /^(\d{1,2})\+?$/.exec(value);
+  if (single) return `${single[1]} years old`;
+
+  // No digits at all: "young", "adult", "middle aged" — not an age range.
+  if (!/\d/.test(value)) return "";
+  return value;
+}
+
+/** "male" -> "Male". The corpus uses both Man/Woman and Male/Female. */
+function normalizeGender(raw: string): string {
+  if (!raw) return "";
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
+/**
+ * Drop a demographic opener from the prose that the composed line already says.
+ *
+ * The canonical line is assembled from the separate fields, so a model that
+ * also opens its prose with "A 35-year-old man" or "Japanese man" produces
+ * "male, 35-40. A 35-year-old man..." and "Japanese. Japanese man...". Both
+ * appeared in a real run. The prompt now asks it not to; this is the backstop,
+ * because the prompt asking has never been enough on its own.
+ */
+function stripDemographicEcho(
+  body: string,
+  head: { gender: string; ageRange: string; ethnicity: string },
+): string {
+  if (!body) return body;
+
+  const ethnicityWord = head.ethnicity.split(/[\s,/]+/)[0]?.toLowerCase() ?? "";
+  const ethnicityPart = ethnicityWord.length > 3 ? `(?:${ethnicityWord}\\s+)?` : "";
+  const pattern = new RegExp(
+    `^(?:a|an|the)?\\s*` +
+      `(?:\\d{1,2}\\s*(?:-|–|to)\\s*\\d{1,2}[-\\s]*)?` +
+      `(?:\\d{1,2}[-\\s]?year[-\\s]?old\\s*)?` +
+      ethnicityPart +
+      `(?:man|woman|male|female|guy|girl|person|individual)\\b[,.\\s]*`,
+    "i",
+  );
+
+  const stripped = body.replace(pattern, "").trim();
+  // Only accept the strip if something substantive survives it.
+  if (stripped.split(/\s+/).filter(Boolean).length < 4) return body;
+  return stripped.charAt(0).toUpperCase() + stripped.slice(1);
+}
+
 function genderFromPronouns(identityEvidence: string): string {
   const he = (identityEvidence.match(/\b(he|him|his)\b/gi) ?? []).length;
   const she = (identityEvidence.match(/\b(she|her|hers)\b/gi) ?? []).length;
