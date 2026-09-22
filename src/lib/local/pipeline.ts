@@ -403,7 +403,14 @@ export async function analyzeLocally(
   const scriptText = documents
     .map((doc) => `=== ${doc.name} ===\n${doc.pages.join("\n")}`)
     .join("\n\n");
-  const descriptionSystem =
+  // Split deliberately. The guard below asks whether the model copied its
+  // instructions, and it must never be handed the script to check against:
+  // a description IS supposed to reuse the script's words, and with a quarter
+  // of a million characters of English prose as the haystack even innocent
+  // phrasing collides on a six-word run by chance. Handing it the whole system
+  // prompt flagged all twenty-four roles as copied, retried them, flagged them
+  // again and discarded every one — a breakdown of empty cards.
+  const descriptionInstructions =
     `${buildSystemPrompt(mode, locale)}\n\n` +
     `────────────────────────────────────────\n` +
     `You are writing ONE role's entry at a time. The full script is below. ` +
@@ -413,8 +420,8 @@ export async function analyzeLocally(
     `description and traits. No project, no roles array, no self-tape, no form ` +
     `questions. Write only the [ROLE DESCRIPTION] part — gender, age and ` +
     `ethnicity are printed for you from their own fields, so do not repeat ` +
-    `them in the prose and do not write the trailing role type.\n\n` +
-    `THE SCRIPT:\n${scriptText}`;
+    `them in the prose and do not write the trailing role type.`;
+  const descriptionSystem = `${descriptionInstructions}\n\nTHE SCRIPT:\n${scriptText}`;
 
   // Size the window to the script, and refuse rather than truncate. Ollama
   // drops anything past num_ctx without saying so, and a breakdown written
@@ -540,7 +547,7 @@ export async function analyzeLocally(
       // The house prompt's worked examples are vivid, and a model short of
       // evidence hands one back as the character. Retry saying so outright
       // rather than discarding the role.
-      if (sharesWording(clean(reply.description), descriptionSystem)) {
+      if (sharesWording(clean(reply.description), descriptionInstructions)) {
         log("local: description copied the prompt, retrying", { role: name });
         leaked.push(name);
         reply = await askFor(
@@ -572,7 +579,7 @@ export async function analyzeLocally(
 
     // Last resort: a retry that copied the prompt too is discarded outright.
     // Text lifted from instructions is a fabrication about a real person.
-    if (body && sharesWording(body, descriptionSystem)) {
+    if (body && sharesWording(body, descriptionInstructions)) {
       log("local: description still copied the prompt, discarded", { role: name, body });
       body = "";
     }

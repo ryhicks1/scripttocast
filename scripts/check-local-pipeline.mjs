@@ -500,6 +500,41 @@ try {
     "the fragments addendum is what produced four-word leads",
   );
 
+  // The failure this is here to catch: every card came back as its demographic
+  // line and its tier — "Man...LEAD", "SUPPORTING" — and nothing else. The
+  // cause was the copied-prompt guard being handed the whole system prompt to
+  // check against, which now contains the script. A description is SUPPOSED to
+  // reuse the script's words, and across a quarter of a million characters of
+  // prose a six-word run collides by chance anyway, so all twenty-four roles
+  // were flagged as copied, retried, flagged again and discarded.
+  //
+  // Asserted on the whole cast rather than one role, because that is the shape
+  // it takes when it goes wrong: not one bad card, all of them.
+  const prose = (d) =>
+    String(d ?? "")
+      .replace(/\.\.\.[A-Z ]+$/, "")
+      .replace(/^[^.]*\.\s*/, "")
+      .trim();
+  const described = (body.roles ?? []).filter((r) => prose(r.description).split(/\s+/).filter(Boolean).length >= 8);
+  check(
+    "the run does not come back as a breakdown of empty cards",
+    (body.roles ?? []).length > 0 && described.length >= Math.ceil((body.roles ?? []).length / 2),
+    `${described.length} of ${(body.roles ?? []).length} roles carry any prose at all`,
+  );
+  check(
+    "the script is not mistaken for the instructions it was appended to",
+    (body.meta?.diagnostics?.rolesCopiedPrompt ?? []).length < (body.roles ?? []).length,
+    `${JSON.stringify(body.meta?.diagnostics?.rolesCopiedPrompt)} — every role flagged means the ` +
+      `guard is checking descriptions against the script`,
+  );
+
+  const walt = (body.roles ?? []).find((r) => r.name === "Walt")?.description ?? "";
+  check(
+    "a description written in the script's own words survives",
+    /keeps cooking anyway/i.test(walt),
+    `Walt -> ${JSON.stringify(walt)} — reusing the script's wording is the job, not a leak`,
+  );
+
   const otis = (body.roles ?? []).find((r) => r.name === "Otis")?.description ?? "";
   check(
     "a description copied from the prompt is regenerated, not printed",

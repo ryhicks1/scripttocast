@@ -151,6 +151,23 @@ function reply(system, user) {
     }
   }
 
+  // Walt answers in the script's own words, which is what a good description
+  // does. The system prompt now carries the whole script, so a guard that asks
+  // "did this copy the prompt?" against the whole system prompt sees a
+  // six-word run from the screenplay and throws the description away. That is
+  // what turned a real run into twenty-four empty cards, and without a stubbed
+  // reply that actually reuses script wording the suite cannot see it.
+  if (name === "Walt") {
+    return {
+      gender: "Man",
+      ageRange: "60s",
+      ethnicity: "",
+      description:
+        "Sixties. Turns the sign to CLOSED and keeps cooking anyway. Short-order cook who stopped listening to closing time a decade ago.",
+      traits: ["stubborn"],
+    };
+  }
+
   // A real run gave a lead the ethnicity of the character he shares scenes
   // with. Nothing in Devlin's evidence says Japanese, so it must be dropped.
   if (name === "Devlin") {
