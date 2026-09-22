@@ -7,6 +7,8 @@ import { isVercelHosted } from "@/lib/runtime";
 import { pickBestModel, resolveConfig } from "@/lib/local/ollama";
 import PrivateSetupGuide from "./PrivateSetupGuide";
 import { GUARANTEES } from "./guarantees";
+import ModelUpdate from "./ModelUpdate";
+import recommended from "../../../recommended-model.json";
 
 export const metadata = {
   title: "Private local setup — Script To Cast",
@@ -24,10 +26,21 @@ export default async function PrivatePage() {
   // Read per request, like isVercelHosted above: the environment is one way
   // this gets set, and it must not be baked in at build time.
   const { model } = await pickBestModel(resolveConfig(), totalmem());
-  return <PrivateLocalTool model={model} />;
+  // As recommendations move up, the next model may not fit an older Mac.
+  // Offering a nine-gigabyte download that cannot then be run is worse than
+  // saying so.
+  const memoryGb = totalmem() / 1024 ** 3;
+  const recommendedFits = recommended.approxMemoryGb <= memoryGb * 0.45;
+  return <PrivateLocalTool model={model} recommendedFits={recommendedFits} />;
 }
 
-function PrivateLocalTool({ model }: { model: string }) {
+function PrivateLocalTool({
+  model,
+  recommendedFits,
+}: {
+  model: string;
+  recommendedFits: boolean;
+}) {
   return (
     <div className="min-h-screen bg-[#fafafa]">
       <nav className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
@@ -77,6 +90,15 @@ function PrivateLocalTool({ model }: { model: string }) {
 
       <section id="tool" className="bg-white border-b border-gray-200 py-12">
         <div className="max-w-3xl mx-auto px-6">
+          {model !== recommended.model && (
+            <ModelUpdate
+              recommended={recommended.model}
+              current={model}
+              approxGb={recommended.approxMemoryGb}
+              fits={recommendedFits}
+              alternative={recommended.smallerAlternative}
+            />
+          )}
           <h2 className="text-2xl font-bold text-gray-900 text-center mb-2">Private casting setup</h2>
           <p className="text-gray-500 text-sm text-center mb-8">
             Same workflow. Local model only — analysis stays on this machine.

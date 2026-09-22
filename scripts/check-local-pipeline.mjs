@@ -100,6 +100,15 @@ async function stopDevServer(server) {
   throw new Error("dev server did not stop");
 }
 
+async function installModel(model) {
+  const res = await fetch(`${BASE}/api/local-model`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model }),
+  });
+  return { status: res.status, body: await res.json().catch(() => ({})) };
+}
+
 async function analyze(bytes, fileName, mode = "auto", locale) {
   const form = new FormData();
   form.append("files", new File([bytes], fileName, { type: "application/pdf" }));
@@ -208,6 +217,13 @@ try {
     stub.calls.some((c) => c.user.startsWith("Character: ")),
     "locale is sent with every analysis; US is the default",
   );
+  const wrongModel = await installModel("something-else:latest");
+  check(
+    "only the recommended model can be installed from the page",
+    wrongModel.status === 400,
+    `got ${wrongModel.status} — Ollama pulls any name it is given`,
+  );
+
   const roleProgress = events.filter((e) => e.progress?.phase === "roles");
   check(
     "reports real progress, not a scripted animation",
@@ -454,6 +470,13 @@ try {
   const { status, body } = await analyze(screenplay, "the-long-way-down.pdf");
   check("403, no analysis attempted", status === 403, `got ${status}`);
   check("explains why", /only runs on your Mac/i.test(body.error ?? ""), body.error);
+
+  const hostedInstall = await installModel(RECOMMENDED);
+  check(
+    "no model installs on the hosted site",
+    hostedInstall.status === 403,
+    `got ${hostedInstall.status}`,
+  );
 
   const guide = await fetch(`${BASE}/private`).then((r) => r.text());
   check(
