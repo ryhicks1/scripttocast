@@ -9,7 +9,7 @@
  */
 export const GUARANTEES = [
   "Nothing is used to train an AI, and no one else's terms of service apply to your material.",
-  "Your script is read, used, and forgotten. It is never saved to your hard drive or anywhere else.",
+  "Your script is read (locally), then forgotten. It is never saved to your hard drive or anywhere else.",
   "No account, no sign-in, nothing uploaded. There is nowhere for a script to be kept.",
   "Sides and reports are made on your machine too, from the file you already have.",
 ];
