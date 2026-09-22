@@ -223,7 +223,7 @@ try {
     "the page promises what the code actually enforces",
     page.includes("your script never leaves it") &&
       page.includes("will not run at all if the AI is anywhere but here") &&
-      page.includes("never saved to your hard drive"),
+      page.includes("no copy is ever saved to your hard drive"),
     "this is a claim a studio would rely on, so it has to match the loopback guard",
   );
   check(
