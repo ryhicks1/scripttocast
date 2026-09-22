@@ -22,15 +22,14 @@ export interface AppVersion {
   date: string | null;
 }
 
-let cached: AppVersion | null = null;
-
 export function appVersion(): AppVersion {
-  if (cached) return cached;
+  // Read every time. A long-running `next dev` otherwise keeps the version it
+  // saw on the first request, and the footer keeps saying 3.1.1 after the
+  // checkout has moved on — the exact confusion this label exists to prevent.
   const git = process.env.VERCEL_GIT_COMMIT_SHA
     ? { commit: process.env.VERCEL_GIT_COMMIT_SHA.slice(0, 7), date: null }
     : fromGitDirectory();
-  cached = { version: packageVersion(), ...git };
-  return cached;
+  return { version: packageVersion(), ...git };
 }
 
 /**
