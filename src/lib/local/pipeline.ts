@@ -103,6 +103,15 @@ const DEFAULT_MAX_ROLES = 120;
 const ROLE_OUTPUT_RESERVE = 700;
 
 /**
+ * Ceiling for one role call, generous enough to include a cold prefill.
+ *
+ * Only the first call should ever need most of it. If every role is taking
+ * this long, the prompt cache is not being reused and something has made the
+ * system prompt vary between calls — which the check suite asserts against.
+ */
+const ROLE_TIMEOUT_MS = 900_000;
+
+/**
  * The longest script this path will read in one pass.
  *
  * llama3.1:8b offers 128k. This stops short of it because Ollama allocates the
@@ -410,11 +419,14 @@ export async function analyzeLocally(
   // drops anything past num_ctx without saying so, and a breakdown written
   // from a silently halved script is the failure that looks most like success.
   const roleCtx = contextFor(descriptionSystem.length + 1200, ROLE_OUTPUT_RESERVE);
-  if (roleCtx > MAX_ROLE_CTX) {
+  const ceiling = Math.min(MAX_ROLE_CTX, config.modelContextLimit || MAX_ROLE_CTX);
+  if (roleCtx > ceiling) {
     throw new LocalAnalysisError(
       `This script needs about ${Math.ceil(roleCtx / 1024)}k tokens of context to be read ` +
-        `in one pass, and this path will not split it into pieces small enough to ` +
-        `distort the result. Split the PDF and run the parts separately.`,
+        `in one pass, and the ceiling here is ${Math.ceil(ceiling / 1024)}k ` +
+        `(${config.modelContextLimit ? `"${config.model}" reports ${Math.ceil(config.modelContextLimit / 1024)}k` : "set by memory, not the model"}). ` +
+        `This path will not split it into pieces small enough to distort the result. ` +
+        `Split the PDF and run the parts separately.`,
       413,
     );
   }
@@ -432,6 +444,10 @@ export async function analyzeLocally(
   // --- Pass 3: one description per role, from that role's own lines. --------
   const roles: Role[] = [];
   const failed: string[] = [];
+  // Kept so a run that fails everywhere can say WHY. It used to report only
+  // that every role failed and suggest checking that Ollama worked, which is
+  // the one thing that was never wrong.
+  let firstFailure: unknown = null;
   const leaked: string[] = [];
   // Openings spent so far, fed into each subsequent prompt.
   const usedOpenings: string[] = [];
@@ -503,6 +519,12 @@ export async function analyzeLocally(
         schema: DESCRIPTION_SCHEMA,
         label: `role: ${name}`,
         maxOutputTokens: 400,
+        // The first role pays to read the whole script; the rest reuse that
+        // work. Three minutes — the default — is not enough to prefill a
+        // feature on a laptop, and when the first call times out nothing is
+        // cached, so every role after it re-reads the script and times out
+        // too. That is what "failed on every role" was.
+        timeoutMs: ROLE_TIMEOUT_MS,
       });
 
     let reply: DescriptionReply | null = null;
@@ -525,6 +547,7 @@ export async function analyzeLocally(
       }
     } catch (error) {
       failed.push(name);
+      if (!firstFailure) firstFailure = error;
       log("local: role description failed", { role: name, error: String(error) });
     }
 
@@ -622,10 +645,20 @@ export async function analyzeLocally(
   }
 
   if (failed.length === roles.length) {
+    // Report the cause, not the symptom. This used to say only that every role
+    // failed and suggest checking that Ollama ran — which sent people to test
+    // the one component that was working, while the real error (a timeout, a
+    // context that would not allocate) sat in the terminal log unread.
+    const cause = firstFailure ? String(firstFailure) : "";
     throw new LocalAnalysisError(
-      `The local model failed on every role (${failed.length} of ${failed.length}). ` +
-        `Check that "${config.model}" is working: ollama run ${config.model} "hello".`,
+      `The local model failed on every role (${failed.length} of ${failed.length}).` +
+        (cause ? ` The first failure was: ${cause}` : "") +
+        ` The script needed ${Math.ceil(roleCtx / 1024)}k tokens of context ` +
+        `(~${(kvCacheBytes(roleCtx) / 1024 ** 3).toFixed(1)} GiB of memory reserved by Ollama). ` +
+        `If that is more than this machine has free, Ollama cannot allocate it and every ` +
+        `call fails the same way — set OLLAMA_KV_CACHE_TYPE=q8_0 to halve it, or split the PDF.`,
       502,
+      cause,
     );
   }
 

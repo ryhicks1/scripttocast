@@ -30,6 +30,15 @@ export interface OllamaConfig {
   warning?: string;
   /** Parameter count in billions, when Ollama reports it. */
   parameters?: number | null;
+  /**
+   * The model's own context ceiling, as Ollama reports it.
+   *
+   * Preflight used to clamp numCtx against this and then discard the number,
+   * so a later caller sizing its own window — the whole-script pass does
+   * exactly that — had nothing to clamp against and could ask for more context
+   * than the model has.
+   */
+  modelContextLimit?: number | null;
 }
 
 /**
@@ -334,7 +343,14 @@ export async function preflight(config: OllamaConfig): Promise<OllamaConfig> {
 
   if (warning) console.warn(`analyze_local: ${warning}`);
 
-  return { ...config, numCtx, promptCharBudget: promptCharBudgetFor(numCtx), warning, parameters };
+  return {
+    ...config,
+    numCtx,
+    promptCharBudget: promptCharBudgetFor(numCtx),
+    warning,
+    parameters,
+    modelContextLimit: modelCtx ?? null,
+  };
 }
 
 /**
