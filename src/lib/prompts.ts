@@ -206,7 +206,7 @@ fewer; a sharp one-line breakdown beats a padded four-line one.
 
 ROLE TYPE vocabulary: ${t.roleTypes.all}. Use only these terms — the tiers
 used in other markets are not interchangeable. Qualifiers as written in the
-trade are welcome and should be preserved: ${t.roleTypes.qualifiers}.
+trade are welcome and should be preserved: ${t.roleTypes.qualifiers}.${t.roleTypeNote ? `\n\n${t.roleTypeNote}` : ""}
 
 Write in plain trade language. Be specific and castable rather than decorative —
 but a plain descriptor is correct when it is what the role is; real breakdowns

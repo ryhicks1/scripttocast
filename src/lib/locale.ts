@@ -42,6 +42,8 @@ export interface LocaleTerms {
   roleTypes: { lead: string; mid: string; small: string; all: string; qualifiers: string };
   /** Commercial role vocabulary, which uses a different set from film/TV. */
   commercialRoleTypes: string;
+  /** Optional note appended to the role-type vocabulary line. */
+  roleTypeNote?: string;
   /** Examples for the `submissionNotes` field. */
   submissionNoteExamples: string;
   /** Standard questions added to every film/TV job form. */
@@ -106,11 +108,15 @@ than "programme" is correct for television.`,
     // engagement classes belong here, not in roleType.
     unionExamples:
       '"Actors Feature Film Collective Agreement", "Actors Television Programs Agreement (ATPA)", "MEAA Equity", "Non-Union". Where the documents name a MEAA engagement class — Performer Class 1, Performer Class 2, Bit Player, Extra, Featured Extra, Stand-in — record it here as written, not as the role type',
-    // GUEST STAR -> GUEST ROLE, and CO-STAR -> BIT PLAYER, which MEAA defines as
-    // a small role with direct interaction with principal cast, billed above an
-    // extra and below a supporting role. FEATURED EXTRA is a real and distinct
-    // category: a background performer who may be recognisable, but does not
-    // speak and is not featured in individual shots.
+    // GUEST STAR becomes GUEST ROLE. There is no Australian equivalent of
+    // CO-STAR: BIT PLAYER is a MEAA engagement class rather than something a
+    // casting director writes in a breakdown, so small speaking roles sit under
+    // SUPPORTING and the Australian vocabulary is flatter than the US set.
+    // Confirmed by the product owner, who works in Australian casting. BIT
+    // PLAYER stays in unionExamples above, where it belongs.
+    //
+    // FEATURED EXTRA remains distinct: a background performer who may be
+    // recognisable, but does not speak and is not featured in individual shots.
     // REVIEW: Casting Networks models role type in two levels — Principal or
     // Background, then a sub-type ("Principal", "Supporting", "Featured
     // Background"). So CN says FEATURED BACKGROUND where MEAA says FEATURED
@@ -122,10 +128,14 @@ than "programme" is correct for television.`,
     roleTypes: {
       lead: "SERIES REGULAR or LEAD",
       mid: "GUEST ROLE or SUPPORTING",
-      small: "BIT PLAYER, FEATURED EXTRA or EXTRA",
-      all: "SERIES REGULAR, RECURRING, GUEST ROLE, LEAD, SUPPORTING, BIT PLAYER, FEATURED EXTRA, EXTRA, STAND-IN",
+      small: "FEATURED EXTRA or EXTRA",
+      all: "SERIES REGULAR, RECURRING, GUEST ROLE, LEAD, SUPPORTING, FEATURED EXTRA, EXTRA, STAND-IN",
       qualifiers: '"SUPPORTING (1 DAY)", "GUEST ROLE (2 EPISODES)"',
     },
+    // Without CO-STAR, SUPPORTING has to cover everything from a substantial
+    // part to a single scene, so its ceiling alone would over-write small roles.
+    roleTypeNote:
+      "SUPPORTING covers a wide range here, from a substantial part to a single scene. Its sentence ceiling is for the substantial end. A one-scene supporting role wants a sentence or two, not four.",
     // The Australian market is usually described as principal, featured and
     // background talent, with FEATURED EXTRA a distinct MEAA category.
     commercialRoleTypes: "PRINCIPAL, FEATURED, FEATURED EXTRA, EXTRA, VOICEOVER, HAND MODEL",
