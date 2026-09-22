@@ -211,10 +211,9 @@ export default function PrivateSetupGuide() {
 
       <section className="max-w-3xl mx-auto px-6 pb-14">
         <p className="text-xs text-gray-400 leading-relaxed mb-4">
-          The model needs about 6GB of free memory. If your Mac has 8GB or less, swap{" "}
-          <code className="text-[11px] bg-gray-100 px-1 rounded">llama3.1:8b</code> for{" "}
-          <code className="text-[11px] bg-gray-100 px-1 rounded">llama3.2</code> in the line
-          above — it runs on less, and the descriptions come out shorter.
+          The model needs about 6GB of free memory. On a Mac with less than that to spare,
+          it will run but the descriptions come out thinner — there is no lighter version
+          of this that is worth having.
         </p>
         <div className="border-t border-gray-200 pt-6 flex gap-3 text-xs text-gray-400 leading-relaxed">
           <Shield size={14} className="shrink-0 mt-0.5" />

@@ -283,14 +283,9 @@ try {
     "action following a speech used to be captured as part of it",
   );
   check(
-    "the house prompt carries the local style rules",
+    "there is one prompt, and it carries the local style rules",
     descriptionPrompts.every((c) => /WRITE IN FRAGMENTS/.test(c.system) && /PHYSICALITY/.test(c.system)),
     "rules that only reach the lean prompt never reach a model anyone uses",
-  );
-  check(
-    "the house prompt is used on a model big enough for it",
-    body.meta?.diagnostics?.descriptionPrompt === "house",
-    body.meta?.diagnostics?.descriptionPrompt,
   );
   const otis = (body.roles ?? []).find((r) => r.name === "Otis")?.description ?? "";
   check(

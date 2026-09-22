@@ -15,14 +15,12 @@ export default function ModelUpdate({
   current,
   approxGb,
   fits,
-  alternative,
 }: {
   recommended: string;
   current: string;
   approxGb: number;
   /** False when this Mac has too little memory to run the recommendation. */
   fits: boolean;
-  alternative: string;
 }) {
   const [state, setState] = useState<"idle" | "working" | "done" | "error">("idle");
   const [detail, setDetail] = useState("");
@@ -89,10 +87,9 @@ export default function ModelUpdate({
         </p>
         <p className="text-xs text-gray-600 mt-1 leading-relaxed">
           This version is built for <strong>{recommended}</strong>, which needs about{" "}
-          {approxGb}GB of free memory. You&apos;re running <strong>{current}</strong>, which
-          is the right choice for this machine — descriptions will be a little thinner than
-          on a Mac with more memory. <strong>{alternative}</strong> is the lighter option if
-          you ever need it.
+          {approxGb}GB of free memory. You&apos;re running <strong>{current}</strong>. Closing
+          other apps may free enough to install it; on a Mac with less memory than this
+          needs, the descriptions will stay thinner than they should be.
         </p>
       </div>
     );

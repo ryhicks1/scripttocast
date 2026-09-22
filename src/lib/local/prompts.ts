@@ -61,12 +61,11 @@ synopsis: three or four sentences.`;
 /**
  * The rules both prompts need, in one place.
  *
- * These lived only in DESCRIPTION_SYSTEM, which runs below 7B. Every model
- * anyone actually uses gets the house prompt instead — so the fragment rule,
- * the banned openings and the actor-direction line were written, committed,
- * and never sent. A run came back with "A seasoned operative" still in it and
- * not a fragment in sight, which is exactly what a prompt that never arrives
- * looks like.
+ * These once lived only in a second, leaner prompt kept for small models —
+ * which is to say they were written, committed, and never sent, because every
+ * run used the house prompt. A release went out with "A seasoned operative"
+ * still in its output and not a fragment in sight. The lean prompt is gone and
+ * these are appended to the one prompt there is.
  */
 export const LOCAL_STYLE_RULES = `HOW IT IS WRITTEN — the part that goes wrong most often:
 
@@ -103,49 +102,6 @@ NEVER:
 - Retell a scene, or describe what anyone is doing.`;
 
 /**
- * No worked examples, deliberately.
- *
- * The grammar rules below stand in for them. Two thirds of real breakdowns open
- * the prose on a bare noun or adjective, a quarter on "A/An/The", and only 5%
- * on "He is" / "She is" — which is exactly what an 8B model reaches for. That
- * distribution is measurable (see scripts/corpus) and describable, so it can be
- * stated as a rule rather than demonstrated with copy the model will lift.
- *
- * An earlier version ended with three example descriptions in the house style.
- * Two roles in the next run came back as those examples, word for word —
- * "Small town organised crime enforcer... whose first language is violence" was
- * prompt text, printed as a character. A small model with thin evidence copies
- * the most fluent thing in its context, and a vivid example is exactly that.
- *
- * So the shape is described rather than demonstrated, the JSON shape is
- * enforced by the response schema instead of shown, and pipeline.ts rejects any
- * description that shares wording with this prompt.
- */
-export const DESCRIPTION_SYSTEM = `You turn evidence about one character into a casting breakdown description.
-
-An agent reads it to decide which of their clients to put forward.
-
-Write in this order:
-1. What they are — their job, their rank, or what they are to another character.
-2. What they are like to deal with, in concrete terms.
-
-${LOCAL_STYLE_RULES}
-
-Rules:
-- Use only the evidence given below. Do not use anything you already know about
-  this film, this script or these characters. If you recognise it, ignore that.
-- If the evidence does not say what they do or who they are to other people,
-  write only what it does support, in one sentence, and stop. Do not fill the
-  space with adjectives.
-- Never mention another character except as a relationship, like "X's sister".
-- Never copy wording from these instructions.
-
-Fill gender, ageRange and ethnicity only when the evidence states them outright.
-Return "" for anything it does not. Never guess ethnicity, and never infer it
-from a location, a name, or another character. ageRange is a range of years,
-like "35 to 45 years old" or "40s" — never a word like "young".`;
-
-/**
  * The house prompt, adapted to describing one role at a time.
  *
  * src/lib/prompts.ts is what the public path sends to claude-opus-5: the
@@ -161,8 +117,7 @@ like "35 to 45 years old" or "40s" — never a word like "young".`;
  * response schema enforces anyway.
  *
  * Its worked examples are a known hazard: a model short of evidence copies them
- * out as a character. pipeline.ts catches that and retries on DESCRIPTION_SYSTEM,
- * which has no examples to lift.
+ * out as a character. pipeline.ts catches that and retries, saying so outright.
  */
 export function houseDescriptionSystem(mode: ResolvedMode, locale: Locale = "us"): string {
   return `${buildSystemPrompt(mode, locale)}
