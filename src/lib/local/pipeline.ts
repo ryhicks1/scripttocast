@@ -43,7 +43,6 @@ import { findBookVoice, findEssayVoice, findRepeatedPhrases, stripEssayClauses }
 import {
   CAST_LIST_SYSTEM,
   castListUser,
-  DESCRIPTION_SYSTEM,
   descriptionUser,
   houseDescriptionSystem,
   PROJECT_SYSTEM,
@@ -81,16 +80,6 @@ const EVIDENCE_ENABLED = Boolean(process.env.LOCAL_DEBUG_EVIDENCE);
 
 /** Roles described per run. Each one is its own model call. */
 const DEFAULT_MAX_ROLES = 40;
-
-/**
- * Smallest model handed the full house prompt from src/lib/prompts.ts.
- *
- * That prompt is around a hundred lines: a canonical format, tier ceilings, a
- * banned-construction list, worked examples and a cut test. A 3B model drops
- * it. An 8B model holds it, and it is the best statement of house style in the
- * codebase, so it is reused rather than paraphrased.
- */
-const HOUSE_PROMPT_MIN_PARAMETERS_B = 7;
 
 /** Commercial descriptions are tighter than film/TV ones. */
 const COMMERCIAL_BUDGET = 420;
@@ -172,8 +161,6 @@ export interface LocalDiagnostics {
   repeatedPhrases: string[];
   /** Roles that first answered with prompt text and had to be regenerated. */
   rolesCopiedPrompt: string[];
-  /** Which description prompt ran: the house one, or the lean local one. */
-  descriptionPrompt: "house" | "local";
   /** Ethnicity claims dropped because the script did not state them. */
   unsupportedEthnicityDropped: number;
   /** Age claims dropped because the script gave nothing to base them on. */
@@ -339,17 +326,7 @@ export async function analyzeLocally(
   const isScreenplay = script.looksLikeScreenplay;
   const tiers = assignTiers(characters);
 
-  // A model big enough to hold the house prompt gets it. Below that it drops
-  // the format or answers from the examples, which is why the local path had
-  // its own lean prompt in the first place.
-  const useHousePrompt = (config.parameters ?? 0) >= HOUSE_PROMPT_MIN_PARAMETERS_B;
-  const descriptionSystem = useHousePrompt
-    ? houseDescriptionSystem(mode, locale)
-    : DESCRIPTION_SYSTEM;
-  log("local: description prompt", {
-    prompt: useHousePrompt ? "house (src/lib/prompts.ts)" : "local lean",
-    parameters: config.parameters,
-  });
+  const descriptionSystem = houseDescriptionSystem(mode, locale);
 
   // --- Pass 3: one description per role, from that role's own lines. --------
   const roles: Role[] = [];
@@ -418,12 +395,16 @@ export async function analyzeLocally(
       modelCalls++;
 
       // The house prompt's worked examples are vivid, and a model short of
-      // evidence hands one back as the character. Retry on the lean prompt,
-      // which has no examples to lift, rather than discarding the role.
+      // evidence hands one back as the character. Retry saying so outright
+      // rather than discarding the role.
       if (sharesWording(clean(reply.description), descriptionSystem)) {
-        log("local: description copied the prompt, retrying without examples", { role: name });
+        log("local: description copied the prompt, retrying", { role: name });
         leaked.push(name);
-        reply = await askFor(DESCRIPTION_SYSTEM);
+        reply = await askFor(
+          `${descriptionSystem}\n\nYour previous answer copied wording from the worked ` +
+            `examples above. Those are other people. Describe ONLY the character in the ` +
+            `evidence below, using words that appear nowhere in these instructions.`,
+        );
         modelCalls++;
       }
     } catch (error) {
@@ -445,7 +426,7 @@ export async function analyzeLocally(
 
     // Last resort: a retry that copied the prompt too is discarded outright.
     // Text lifted from instructions is a fabrication about a real person.
-    if (body && (sharesWording(body, DESCRIPTION_SYSTEM) || sharesWording(body, descriptionSystem))) {
+    if (body && sharesWording(body, descriptionSystem)) {
       log("local: description still copied the prompt, discarded", { role: name, body });
       body = "";
     }
@@ -563,7 +544,6 @@ export async function analyzeLocally(
       narrativeVoiceFlagged: flagged,
       repeatedPhrases,
       rolesCopiedPrompt: leaked,
-      descriptionPrompt: useHousePrompt ? "house" : "local",
       unsupportedEthnicityDropped: unsupportedEthnicity,
       unsupportedAgeDropped: unsupportedAge,
       rolesThin: thin,

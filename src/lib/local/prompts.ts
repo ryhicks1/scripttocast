@@ -59,74 +59,47 @@ synopsis: three or four sentences.`;
 }
 
 /**
- * No worked examples, deliberately.
+ * The rules both prompts need, in one place.
  *
- * The grammar rules below stand in for them. Two thirds of real breakdowns open
- * the prose on a bare noun or adjective, a quarter on "A/An/The", and only 5%
- * on "He is" / "She is" — which is exactly what an 8B model reaches for. That
- * distribution is measurable (see scripts/corpus) and describable, so it can be
- * stated as a rule rather than demonstrated with copy the model will lift.
- *
- * An earlier version ended with three example descriptions in the house style.
- * Two roles in the next run came back as those examples, word for word —
- * "Small town organised crime enforcer... whose first language is violence" was
- * prompt text, printed as a character. A small model with thin evidence copies
- * the most fluent thing in its context, and a vivid example is exactly that.
- *
- * So the shape is described rather than demonstrated, the JSON shape is
- * enforced by the response schema instead of shown, and pipeline.ts rejects any
- * description that shares wording with this prompt.
+ * These once lived only in a second, leaner prompt kept for small models —
+ * which is to say they were written, committed, and never sent, because every
+ * run used the house prompt. A release went out with "A seasoned operative"
+ * still in its output and not a fragment in sight. The lean prompt is gone and
+ * these are appended to the one prompt there is.
  */
-export const DESCRIPTION_SYSTEM = `You turn evidence about one character into a casting breakdown description.
+export const LOCAL_STYLE_RULES = `HOW IT IS WRITTEN — the part that goes wrong most often:
 
-An agent reads it to decide which of their clients to put forward.
-
-Write in this order:
-1. What they are — their job, their rank, or what they are to another character.
-2. What they are like to deal with, in concrete terms.
-
-HOW IT IS WRITTEN. This is the part that gets it wrong most often:
 - WRITE IN FRAGMENTS. Nearly two thirds of the sentences in professional
   breakdowns have no verb in them at all. "Mexican field-hand." "Minimalist
-  presence." "Observant. Restrained." Each one is a whole sentence. A full
-  sentence spends its words on grammar; a fragment spends them on the person.
-- Open with a noun or an adjective. Never open with "He is", "She is",
-  "They are", or the character's name.
-- You may write one line of direction to the actor, of the kind a casting
-  director writes: what the performance has to carry. "Face should carry life
-  experience." "Needs strong physical presence and emotional transparency."
-  One such line at most, and only where the evidence supports it.
-- Never explain your reasoning or cite the script. Do not write "as evidenced
-  by", "which shows", "this suggests", "as seen when". State what they are
-  like. Nothing has to be proved.
+  presence." "Observant. Restrained." Each is a whole sentence. A full sentence
+  spends its words on grammar; a fragment spends them on the person.
+- Open on a noun or an adjective. Never open with "He is", "She is", "They
+  are", or the character's name.
 - Never open with "A seasoned", "A skilled" or "A young". They say nothing, and
   they end up on every role in the breakdown.
-- No hedging. Not "possibly", "perhaps", "seems", "a helper or assistant",
-  "some kind of". If the evidence does not support it, leave it out.
-- Do not repeat their gender, age or ethnicity in your sentences. Those are
-  printed immediately before your text and saying them twice reads as a fault.
 
-Rules:
-- Use only the evidence given below. Do not use anything you already know about
-  this film, this script or these characters. If you recognise it, ignore that.
-- If the evidence does not say what they do or who they are to other people,
-  write only what it does support, in one sentence, and stop. Do not fill the
-  space with adjectives.
-- Never describe a scene, a moment, or what anyone is doing. Nothing "turns",
-  "watches", "walks in", "stares", "is taken aback" or "pauses".
-- Never mention another character except as a relationship, like "X's sister".
-- Do not describe clothes, eyes, smiles or posture unless the part requires it.
-- Never write "carries himself", "carries herself", "an air of", "exudes",
-  "a deep sense of", "a voice of reason", "moral compass", "driven by a desire",
-  "is able to", "is someone who", "a deep understanding of", "a commanding
-  presence", "in the story", "his journey", "we learn", "by the end",
-  "serves as" or "the audience".
-- Never copy wording from these instructions.
+PHYSICALITY. When the script says how someone looks, moves, carries themselves
+or sounds, put it in — in the script's own terms, near the front. "Gaunt,
+weathered." "Mountainous, corpulent." "A rangy wolf of a man with a bristling
+beard." That is what an agent pictures, and it is the difference between a
+description someone can cast from and a list of adjectives.
 
-Fill gender, ageRange and ethnicity only when the evidence states them outright.
-Return "" for anything it does not. Never guess ethnicity, and never infer it
-from a location, a name, or another character. ageRange is a range of years,
-like "35 to 45 years old" or "40s" — never a word like "young".`;
+Only what the evidence gives you. Do not invent a look, and do not write around
+one novelistically — no "his tailored suit accentuating his lean physique". If
+the script never describes them, say nothing about their appearance.
+
+WHAT THE PART DEMANDS. One line, at most, of the kind a casting director writes
+to an actor: what the performance has to carry. "Face should carry life
+experience." "Needs strong physical presence and emotional transparency."
+Only where the evidence supports it.
+
+NEVER:
+- Explain your reasoning or cite the script: no "as evidenced by", "which
+  shows", "as seen when". Nothing has to be proved.
+- Hedge: no "possibly", "perhaps", "seems", "some kind of".
+- "carries himself", "an air of", "exudes", "a deep sense of", "is able to",
+  "is someone who", "a deep understanding of", "a commanding presence".
+- Retell a scene, or describe what anyone is doing.`;
 
 /**
  * The house prompt, adapted to describing one role at a time.
@@ -144,8 +117,7 @@ like "35 to 45 years old" or "40s" — never a word like "young".`;
  * response schema enforces anyway.
  *
  * Its worked examples are a known hazard: a model short of evidence copies them
- * out as a character. pipeline.ts catches that and retries on DESCRIPTION_SYSTEM,
- * which has no examples to lift.
+ * out as a character. pipeline.ts catches that and retries, saying so outright.
  */
 export function houseDescriptionSystem(mode: ResolvedMode, locale: Locale = "us"): string {
   return `${buildSystemPrompt(mode, locale)}
@@ -161,6 +133,8 @@ The description follows the DESCRIPTION FORMAT above, except that you write only
 the [ROLE DESCRIPTION] part — the gender, age and ethnicity are returned as
 their own fields and printed before your text, so do not repeat them in it, and
 do not write the trailing role type. Both are added for you.
+
+${LOCAL_STYLE_RULES}
 
 Use only the evidence below. Do not use anything you already know about this
 film or these characters. Never copy wording from these instructions.`;

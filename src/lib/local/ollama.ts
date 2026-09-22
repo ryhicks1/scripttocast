@@ -67,7 +67,6 @@ export const DEFAULT_BASE_URL = "http://127.0.0.1:11434";
  * per token. A smaller one still works; the descriptions just come out thinner.
  */
 export const DEFAULT_MODEL = recommended.model;
-export const SMALLER_ALTERNATIVE = recommended.smallerAlternative;
 
 /**
  * Context window to ask for when the model's own limit is unknown or larger.
@@ -239,7 +238,7 @@ async function ollamaFetch(
     throw new OllamaError(
       timedOut
         ? `Ollama did not respond within ${Math.round(timeoutMs / 1000)}s at ${config.baseUrl}. ` +
-            `A large model on a small machine can exceed this — try a smaller model, e.g. OLLAMA_MODEL=llama3.2.`
+            `A large model on a busy machine can exceed this — close other apps and try again.`
         : `Cannot reach Ollama at ${config.baseUrl}. Start it with: ollama serve`,
       503,
       reason,
@@ -299,9 +298,8 @@ export async function preflight(config: OllamaConfig): Promise<OllamaConfig> {
     : parameters !== null && parameters < MIN_USEFUL_PARAMETERS_B
       ? `Running ${config.model}, which has ${parameters}B parameters. This path needs ` +
         `about ${MIN_USEFUL_PARAMETERS_B}B to write usable descriptions — below that they come ` +
-        `back thin or generic however the prompt is written. Close this, double-click ` +
-        `"Start ScriptToCast" again and it will offer to download ${DEFAULT_MODEL}, ` +
-        `or run "ollama pull ${DEFAULT_MODEL}" yourself.`
+        `back thin or generic however the prompt is written. Install ${DEFAULT_MODEL} from ` +
+        `the button on this page, or run "ollama pull ${DEFAULT_MODEL}" yourself.`
       : undefined;
 
   if (warning) console.warn(`analyze_local: ${warning}`);
@@ -425,7 +423,7 @@ export async function chatJson<T>(
       // nothing about what to do next.
       throw new OllamaError(
         `"${config.model}" needs more free memory than this Mac has right now. ` +
-          `Close some apps and retry, or run a smaller model: OLLAMA_MODEL=llama3.2 npm run dev`,
+          `Close some other apps and try again.`,
         502,
         detail,
       );

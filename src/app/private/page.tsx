@@ -97,7 +97,6 @@ function PrivateLocalTool({
               current={model}
               approxGb={recommended.approxMemoryGb}
               fits={recommendedFits}
-              alternative={recommended.smallerAlternative}
             />
           )}
           <h2 className="text-2xl font-bold text-gray-900 text-center mb-2">Private casting setup</h2>
