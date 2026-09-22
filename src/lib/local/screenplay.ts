@@ -222,20 +222,42 @@ export const SENTENCE_CEILING: Record<Tier, number> = {
 };
 
 /**
- * The lines a model needs to describe one character: how they are introduced,
- * plus a spread of their dialogue from across the script.
+ * The evidence a model needs to describe one character.
  *
- * Spread matters — the first eight speeches of a lead are all one scene, and a
- * description written off one scene reads like a plot summary of that scene.
+ * The first version of this handed over an introduction line and a spread of
+ * dialogue, and the descriptions that came back were scene summaries: "A quiet,
+ * introspective woman who stares out at the sea, lost in thought." That is not
+ * the model failing to follow instructions. It is the model reporting what it
+ * was given — an action beat — because nothing in front of it said who the
+ * person was.
+ *
+ * A casting description answers: what do they do, who are they to the other
+ * characters, and what are they like to deal with. None of that is in a
+ * character's own dialogue. It is in how the script introduces them, what other
+ * characters say about them, and where they turn up. So that is what gets
+ * collected here, and the model's job drops from inventing a person to
+ * compressing evidence — which is a job a 3B model can do.
  */
-export function excerptsFor(
+export function buildEvidence(
   script: ParsedScript,
   character: ParsedCharacter,
   charBudget: number,
 ): string {
   const parts: string[] = [];
+
   const intro = findIntroduction(script.pages, character.name);
-  if (intro) parts.push(`How they are introduced:\n${intro}`);
+  if (intro) parts.push(`How the script introduces them:\n${intro}`);
+
+  const mentions = mentionsOf(script, character);
+  if (mentions.length) {
+    parts.push(`What other characters say about them:\n${mentions.join("\n")}`);
+  }
+
+  const world = settingsFor(script, character);
+  if (world.length) parts.push(`Where they turn up:\n${world.join("\n")}`);
+
+  const withWhom = sharesScenesWith(script, character);
+  if (withWhom.length) parts.push(`On the page with: ${withWhom.join(", ")}`);
 
   const wanted = 8;
   const step = Math.max(1, Math.floor(character.blocks.length / wanted));
@@ -243,9 +265,11 @@ export function excerptsFor(
   for (let i = 0; i < character.blocks.length && sampled.length < wanted; i += step) {
     sampled.push(character.blocks[i]);
   }
-
-  const lines = sampled.map((block) => `(p${block.page}) ${block.text}`);
-  parts.push(`What they say:\n${lines.join("\n")}`);
+  if (sampled.length) {
+    parts.push(
+      `What they say:\n${sampled.map((b) => `(p${b.page}) ${b.text}`).join("\n")}`,
+    );
+  }
 
   let out = parts.join("\n\n");
   if (out.length > charBudget) out = `${out.slice(0, charBudget)}…`;
@@ -253,25 +277,95 @@ export function excerptsFor(
 }
 
 /**
- * A character's introduction — the action line that first names them in caps,
- * which in a screenplay is where age and look are written down
- * ("MARA VOSS, late thirties, unhurried...").
+ * The token to look for when another character mentions this one. Dialogue
+ * writes "Mal", not "MAL", so matching is case-insensitive on the most
+ * distinctive word of the cue name — "PELL" out of "NURSE PELL".
+ */
+function mentionToken(name: string): string | null {
+  const words = name.split(/\s+/).filter((w) => w.length >= 3 && /^[A-Z][A-Z'’.-]*$/.test(w));
+  if (!words.length) return null;
+  const token = words.reduce((a, b) => (b.length > a.length ? b : a));
+  // Generic cue names ("MAN", "COP") match half the script and prove nothing.
+  const GENERIC = new Set(["MAN", "BOY", "GIRL", "COP", "KID", "GUY", "DOC", "MOM", "DAD", "SON"]);
+  if (GENERIC.has(token)) return null;
+  return token.replace(/[.'’]/g, "");
+}
+
+/**
+ * Lines spoken by other characters that name this one.
  *
- * Matched on the line rather than the paragraph: extracted PDF text has no
- * blank lines, so paragraphs do not survive extraction. An introduction line
- * names the character in caps and then continues in prose, which is what the
- * lowercase test below looks for.
+ * This is where a script says what somebody does for a living and who they are
+ * to everyone else — "She's my wife", "ask the doctor", "that's Reema's
+ * brother" — none of which a character ever says about themselves.
+ */
+function mentionsOf(script: ParsedScript, character: ParsedCharacter): string[] {
+  const token = mentionToken(character.name);
+  if (!token) return [];
+  const pattern = new RegExp(`\\b${token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+
+  const found: string[] = [];
+  for (const other of script.characters) {
+    if (other.name === character.name) continue;
+    for (const block of other.blocks) {
+      if (!pattern.test(block.text)) continue;
+      found.push(`${other.name}: "${block.text.slice(0, 160)}"`);
+      if (found.length >= 5) return found;
+    }
+  }
+  return found;
+}
+
+/** The scene headings on the pages where this character speaks — their world. */
+function settingsFor(script: ParsedScript, character: ParsedCharacter): string[] {
+  const pages = new Set(character.pages);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const heading of script.sceneHeadings) {
+    if (!pages.has(heading.page)) continue;
+    const key = heading.text.toUpperCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(heading.text);
+    if (out.length >= 6) break;
+  }
+  return out;
+}
+
+/** Characters who speak on the same pages, most-shared first. */
+function sharesScenesWith(script: ParsedScript, character: ParsedCharacter): string[] {
+  const pages = new Set(character.pages);
+  return script.characters
+    .filter((other) => other.name !== character.name)
+    .map((other) => ({ name: other.name, shared: other.pages.filter((p) => pages.has(p)).length }))
+    .filter((entry) => entry.shared > 0)
+    .sort((a, b) => b.shared - a.shared)
+    .slice(0, 3)
+    .map((entry) => `${entry.name} (${entry.shared} page${entry.shared === 1 ? "" : "s"})`);
+}
+
+/**
+ * A character's introduction — the action line that first names them in caps,
+ * which in a screenplay is where age, look and occupation are written down
+ * ("MARA VOSS, late thirties, an unhurried paramedic...").
+ *
+ * The name must appear in caps in a line that also runs in prose: that
+ * combination is the screenplay convention for introducing someone, and it is
+ * what separates a real introduction from a line that merely mentions them.
+ *
+ * Matched on the line rather than the paragraph, because extracted PDF text has
+ * no blank lines and paragraphs do not survive extraction.
  */
 function findIntroduction(pages: string[], name: string): string | null {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const mention = new RegExp(`\\b${escaped}\\b`);
+  const capsMention = new RegExp(`\\b${escaped}\\b`);
   for (const page of pages) {
     const lines = page.split(/\r?\n/);
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
       if (line.length < 25) continue;
-      if (!mention.test(line)) continue;
-      if (!/[a-z]/.test(line)) continue; // all-caps: a cue or a transition
+      if (!capsMention.test(line)) continue;
+      if (!/[a-z]/.test(line)) continue; // all caps: a cue or a transition
+      if (looksLikeCue(line)) continue;
       const next = lines[i + 1]?.trim() ?? "";
       const extra = next && /[a-z]/.test(next) && !looksLikeCue(next) ? ` ${next}` : "";
       return `${line}${extra}`.slice(0, 600);

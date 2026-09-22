@@ -156,10 +156,22 @@ try {
     !/carries herself|an air of/i.test(mara?.description ?? ""),
     mara?.description,
   );
+  const descriptionPrompts = stub.calls.filter((c) =>
+    c.system.includes("casting breakdown"),
+  );
+  check(
+    "evidence includes where the character turns up",
+    descriptionPrompts.some((c) => c.user.includes("Where they turn up:")),
+    "scene headings are what tell a small model the character's world",
+  );
+  check(
+    "evidence includes what others say about them",
+    descriptionPrompts.some((c) => c.user.includes("What other characters say about them:")),
+    "this is where a script states a job or a relationship",
+  );
   check(
     "model was never handed the sentence ceiling",
-    stub.calls.filter((c) => c.system.includes("casting breakdown description"))
-      .every((c) => !/at most \d+ sentence/i.test(c.user)),
+    descriptionPrompts.every((c) => !/at most \d+ sentence/i.test(c.user)),
     "a number in the prompt becomes a target",
   );
   check("self-tape instructions per role", body.selfTapeInstructions?.length === body.roles?.length);

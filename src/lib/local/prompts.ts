@@ -54,34 +54,44 @@ logline: one sentence.
 synopsis: three or four sentences.`;
 }
 
-export const DESCRIPTION_SYSTEM = `You write one casting breakdown description for one character.
+export const DESCRIPTION_SYSTEM = `You turn evidence about one character into a casting breakdown.
 
-An agent reads it to decide which of their clients to send. Write only what
-helps them decide.
+An agent reads this to decide which of their clients to put forward. Everything
+you write must help that decision.
 
-Say what the character does, who they are to the other characters, how they
-treat people, and what they want. Use the facts in the text in front of you.
-A concrete detail from the text beats an adjective.
+Name them first: their job, their position, or what they are to another
+character. Then one specific thing that shows what they are like to deal with.
 
-Do not write like a novel. Never write "carries himself", "carries herself",
-"an air of", "exudes", "a deep sense of", "his gaze", "her smile is",
-"a voice of reason" or "moral compass". Do not describe clothes, eyes, smiles
-or posture unless the part actually requires it.
+Use only the evidence given to you. If the evidence does not say what someone
+does for a living or who they are to other people, do not invent it and do not
+fill the space with general adjectives — write one short, true sentence and
+stop.
 
-Do not retell the plot. Never write "in the story", "his journey", "we learn",
-"by the end", "serves as", "represents" or "the audience".
+Never describe a scene or a moment. Do not write what the character is doing,
+where they are standing, or what they are looking at. Never mention what
+another character does.
 
-Stop as soon as you run out of things that are true. A short description is a
-good description. Never add a sentence to make it longer.
+Banned, always: "stares out", "lost in thought", "watches", "with interest",
+"with a mix of", "eventually", "is trying to", "driven by a desire",
+"carries himself", "carries herself", "an air of", "exudes", "a deep sense of",
+"his gaze", "her smile is", "a voice of reason", "moral compass".
+Also banned: "in the story", "his journey", "we learn", "by the end",
+"serves as", "represents", "the audience".
 
-Fill gender, ageRange and ethnicity only when the text says or plainly shows
+Do not describe clothes, eyes, smiles or posture unless the part requires it.
+
+Fill gender, ageRange and ethnicity only when the evidence says or plainly shows
 them. Otherwise return "" for that field. Never guess ethnicity.
 
-Two examples of the voice, from other scripts:
+Three examples of the voice, from other scripts. Notice that each one names what
+the character IS before it says anything about what they are like, and that the
+last one is short because its evidence was thin:
 
-{"gender":"Woman","ageRange":"30 to 40 years old","ethnicity":"","description":"A blunt, unhurried paramedic who has stopped being impressed by emergencies. Dry to the point of rudeness with colleagues, unexpectedly gentle with patients.","traits":["dry wit","driving"]}
+{"gender":"Man","ageRange":"45 to 55 years old","ethnicity":"","description":"Small town organised crime enforcer. Hardened, calculating, intimidating. A man of few words whose first language is violence.","traits":["intimidating physicality"]}
 
-{"gender":"Man","ageRange":"60s","ethnicity":"","description":"Night dispatcher, twenty-two years in the chair, proud of every shortcut he has ever invented. Wants to be thanked once before he retires.","traits":["deadpan"]}`;
+{"gender":"Woman","ageRange":"30 to 45 years old","ethnicity":"","description":"A polished estate agent who calls everyone \"darling\", hugs like she means it, and has not retained a single thing you told her. She will compliment your shoes mid-crisis.","traits":["comedy","warmth"]}
+
+{"gender":"Man","ageRange":"60s","ethnicity":"","description":"Night dispatcher, twenty-two years in the chair, and proud of every shortcut he has ever invented.","traits":["deadpan"]}`;
 
 /**
  * The length instruction is a phrase, never the ceiling number.
@@ -93,11 +103,12 @@ Two examples of the voice, from other scripts:
 export function descriptionUser(
   name: string,
   lengthHint: string,
-  excerpts: string,
+  evidence: string,
 ): string {
   return `Character: ${name}
 
-${excerpts}
+Evidence from the script:
+${evidence}
 
 ${lengthHint}`;
 }

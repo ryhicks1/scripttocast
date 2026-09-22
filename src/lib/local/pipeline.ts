@@ -35,7 +35,7 @@ import { defaultFormQuestions, defaultSelfTape } from "./defaults";
 import { LocalAnalysisError } from "./errors";
 import type { ExtractedDocument } from "./extract";
 import { chatJson, type OllamaConfig } from "./ollama";
-import { findBookVoice } from "./style";
+import { findBookVoice, findRepeatedPhrases } from "./style";
 import {
   CAST_LIST_SYSTEM,
   castListUser,
@@ -49,7 +49,7 @@ import {
 import {
   assignTiers,
   displayName,
-  excerptsFor,
+  buildEvidence,
   parseScript,
   SENTENCE_CEILING,
   type ParsedCharacter,
@@ -136,6 +136,8 @@ export interface LocalDiagnostics {
   modelCalls: number;
   /** Descriptions that still trip a style check after trimming. */
   narrativeVoiceFlagged: number;
+  /** Phrases reused across roles — the tell that the model ran out of evidence. */
+  repeatedPhrases: string[];
   elapsedMs: number;
 }
 
@@ -278,15 +280,15 @@ export async function analyzeLocally(
     const lengthHint =
       ceiling <= 2
         ? "Write one sentence. Two at most."
-        : "Write two or three sentences.";
+        : "Write two sentences. Three only if the evidence supports a third.";
     const name = displayName(character.name);
-    const excerpts = excerptsFor(script, character, budgetFor(config, DESCRIPTION_SYSTEM, 2400));
+    const evidence = buildEvidence(script, character, budgetFor(config, DESCRIPTION_SYSTEM, 2400));
 
     let reply: DescriptionReply | null = null;
     try {
       reply = await chatJson<DescriptionReply>(config, {
         system: DESCRIPTION_SYSTEM,
-        user: descriptionUser(name, lengthHint, excerpts),
+        user: descriptionUser(name, lengthHint, evidence),
         schema: DESCRIPTION_SCHEMA,
         label: `role: ${name}`,
         maxOutputTokens: 400,
@@ -333,6 +335,11 @@ export async function analyzeLocally(
     );
   }
 
+  const repeatedPhrases = findRepeatedPhrases(roles.map((role) => role.description)).slice(0, 8);
+  if (repeatedPhrases.length) {
+    log("local: stock phrases reused across roles", { repeatedPhrases });
+  }
+
   const selfTapeInstructions: SelfTapeInstruction[] = roles.map((role) => defaultSelfTape(role.name));
   const formQuestions: FormQuestion[] = roles.map((role) =>
     defaultFormQuestions(role.name, mode, role.contentAdvisories),
@@ -357,6 +364,7 @@ export async function analyzeLocally(
       rolesOmitted: Math.max(0, totalFound - roles.length),
       modelCalls,
       narrativeVoiceFlagged: flagged,
+      repeatedPhrases,
       elapsedMs: Date.now() - startedAt,
     },
   };
