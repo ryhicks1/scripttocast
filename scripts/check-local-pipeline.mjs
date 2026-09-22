@@ -462,8 +462,9 @@ try {
     "most visits after the first are someone looking for their tool, not installing it",
   );
   check(
-    "and is pointed at the launcher rather than a URL to type",
-    /Start ScriptToCast/.test(guide),
+    "with a link straight to the local tool",
+    guide.includes("http://localhost:3000/private") && guide.includes("CLICK HERE"),
+    "a returning user should not have to read anything to get back to work",
   );
 } finally {
   await stopDevServer(server);
