@@ -22,11 +22,11 @@ export default async function PrivatePage() {
   if (isVercelHosted()) return <PrivateSetupGuide />;
   // Read per request, like isVercelHosted above: the environment is one way
   // this gets set, and it must not be baked in at build time.
-  const { model, reason } = await pickBestModel(resolveConfig(), totalmem());
-  return <PrivateLocalTool model={model} reason={reason} />;
+  const { model } = await pickBestModel(resolveConfig(), totalmem());
+  return <PrivateLocalTool model={model} />;
 }
 
-function PrivateLocalTool({ model, reason }: { model: string; reason: string }) {
+function PrivateLocalTool({ model }: { model: string }) {
   return (
     <div className="min-h-screen bg-[#fafafa]">
       <nav className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
@@ -53,7 +53,6 @@ function PrivateLocalTool({ model, reason }: { model: string; reason: string }) 
                 it produces plausible copy that is simply worse. */}
             <p className="mt-1.5 text-emerald-800/90">
               Model: <code className="text-xs bg-white/80 px-1 rounded">{model}</code>
-              <span className="text-emerald-700/70"> · {reason}</span>
             </p>
           </div>
         </div>
