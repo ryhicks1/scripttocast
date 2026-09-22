@@ -76,13 +76,13 @@ export interface LiveProgress {
 /**
  * Progress the server actually reported.
  *
- * The scripted version below reaches 95% in ninety seconds and then sits there,
- * which on a feature script is most of the run. Describing roles is where the
- * time goes and it is countable, so this counts it.
+ * done/total are script parts for the chunked full-breakdown path — not
+ * individual roles. The bar advances when a part finishes.
  */
 function LiveAnalyzingProgress({ progress }: { progress: LiveProgress }) {
   const { done = 0, total = 0, phase, message } = progress;
-  // Everything before the per-role loop is a small, fixed share of the work.
+  // Chunked full-breakdown: done/total are script parts, not roles. The bar
+  // moves when a chunk finishes, not while one long call is thinking.
   const pct =
     phase === "assembling"
       ? 98
@@ -106,11 +106,16 @@ function LiveAnalyzingProgress({ progress }: { progress: LiveProgress }) {
       </div>
       {phase === "roles" && total > 0 && (
         <p className="text-xs text-gray-500 mt-3 tabular-nums">
-          {done} of {total} roles described
+          {total === 1
+            ? done === 0
+              ? "Writing the full breakdown…"
+              : "Breakdown written"
+            : `${done} of ${total} parts written`}
         </p>
       )}
       <p className="text-[11px] text-gray-400 mt-4">
-        Running on this machine. A feature script takes several minutes — one pass per role.
+        Running on this machine. A long script is split into parts; each part is
+        one full breakdown pass. That can take several minutes per part.
       </p>
     </div>
   );

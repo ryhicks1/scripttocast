@@ -123,10 +123,14 @@ async function extractLines(buffer: Buffer): Promise<Line[][]> {
  * Convert absolute left edges into indents relative to the document's action
  * margin.
  *
- * The action margin is the LEFTMOST edge that recurs — not the most common one.
- * In a screenplay, dialogue and character cues each outnumber action lines, so
- * picking the most common edge lands on the dialogue column and every real
- * indent comes out negative.
+ * The action margin is the leftmost edge that is actually a column — not the
+ * most common one. Dialogue and cues outnumber action, so the most common edge
+ * is often the dialogue column, and every real indent comes out negative.
+ *
+ * A sparse gutter to the left of that column is not the margin either. Scene
+ * numbers and revision marks sit there. Treating them as the margin made every
+ * action line look indented, so the parser read action as dialogue and the
+ * model described a sword fight instead of the person.
  *
  * Relative rather than absolute so this survives any page size or margin
  * preset. When a document has no meaningful spread of left edges — a plain text
@@ -146,11 +150,28 @@ function normaliseIndents(pages: { text: string; x: number }[][]): Line[][] {
   const total = [...counts.values()].reduce((sum, n) => sum + n, 0);
   const recurring = [...counts.entries()]
     .filter(([, n]) => n >= Math.max(3, total * 0.02))
-    .map(([bucket]) => bucket);
-  const margin = recurring.length ? Math.min(...recurring) : Math.min(...counts.keys());
+    .sort((a, b) => a[0] - b[0]);
+  const margin = actionMargin(recurring, total) ?? Math.min(...counts.keys());
   return pages.map((page) =>
     page.map((row) => ({ text: row.text, indent: Math.max(0, Math.round(row.x - margin)) })),
   );
+}
+
+/**
+ * Leftmost real column. A bucket that holds under 8% of lines is a gutter when
+ * a column at least three times larger sits within an inch to its right.
+ */
+function actionMargin(recurring: [number, number][], total: number): number | null {
+  if (!recurring.length) return null;
+  for (let i = 0; i < recurring.length; i++) {
+    const [bucket, count] = recurring[i];
+    const beside = recurring.find(
+      ([other, n]) => other > bucket && other - bucket <= 90 && n >= count * 3 && n >= total * 0.08,
+    );
+    if (count < total * 0.08 && beside) continue;
+    return bucket;
+  }
+  return recurring[0][0];
 }
 
 function linesWithoutLayout(pages: string[]): Line[][] {

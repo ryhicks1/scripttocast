@@ -81,16 +81,17 @@ export const LOCAL_STYLE_RULES = `HOW IT IS WRITTEN — the part that goes wrong
 - Never open with the words seasoned, skilled or young. They say nothing, and
   they end up on every role in the breakdown.
 
-PHYSICALITY. When the script says how a character looks, moves, carries
-themselves or sounds, put it in, near the front, using the script's own words
-about that character. Build, bearing, age in the face, how they hold
-themselves, what their voice does. That is what an agent pictures, and it is
-the difference between a description someone can cast from and a list of
-adjectives.
+PHYSICALITY. The evidence section that says how the script describes them is
+the description. Age, build, clothes, voice, job, manner — write each one that
+is there, near the front, in the script's own words. Do not compress a
+described person into a single adjective. Do not replace those lines with
+where they walk or what they do in a scene.
 
 Only what the evidence gives you. Never invent a look. Never carry a look
-across from another character. If the script does not describe them, write
-nothing about their appearance rather than reaching for something.
+across from another character, including a younger or older billing of the
+same name — that look belongs on its own card. If that section is missing,
+the script gave you no look: describe how they deal with people, and write
+nothing about appearance.
 
 WHAT THE PART DEMANDS. At most one line of the kind a casting director writes
 to an actor: what the performance has to carry, or what an actor must be able
@@ -173,6 +174,11 @@ export function descriptionUser(
 
 Evidence from the script:
 ${evidence}
+
+If the evidence has a section on how the script describes them, that section is the description. Take age, station, build, clothes, voice, and manner from it, each as its own fragment, in the script's words. The same sentence may also say what they do in the moment — waking, sitting, staring, walking, fighting. Leave that out. A comparison to someone else ("as sour as his Duke is warm") — keep only the half about this character.
+If that section is absent, describe how they deal with people. Leave appearance out. Do not borrow a person from the instructions.
+Do not quote dialogue. Do not transcribe a line anyone says. Do not add an adjective the evidence does not use. Two accurate fragments beat a sentence you made up. A description that reads like a scene is a failure.
+Traits are single words the evidence supports. Never a list copied from the instructions.
 
 ${lengthHint}${avoid}`;
 }

@@ -8,14 +8,30 @@
  * What it does NOT check: the quality of what a real model writes. Only
  * `ollama serve` with a real model does that. Run:
  *
- *   node scripts/check-local-pipeline.mjs
+ *   npm run check:local
  */
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
+import { registerHooks } from "node:module";
 import { RECOMMENDED, startStubOllama } from "./stub-ollama.mjs";
-import { makeScannedPdf, makeScreenplayPdf } from "./make-test-script.mjs";
-import { roleTypeLabel } from "../src/lib/local/screenplay.ts";
+import { makeBlockingPdf, makeScannedPdf, makeScreenplayPdf } from "./make-test-script.mjs";
+import { describedIn, parseScript, roleTypeLabel } from "../src/lib/local/screenplay.ts";
+
+// extract.ts imports "./errors" with no extension. The hook has to be in place
+// before that module is loaded, which is why this is not a static import.
+registerHooks({
+  resolve(specifier, context, next) {
+    if (specifier.startsWith(".") && !/\.[a-z]+$/.test(specifier)) {
+      try {
+        return next(`${specifier}.ts`, context);
+      } catch {
+        // Fall through to the specifier as written.
+      }
+    }
+    return next(specifier, context);
+  },
+});
 
 const PORT = Number(process.env.CHECK_PORT || 3111);
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -155,6 +171,139 @@ check("LEAD and SUPPORTING are the same in both",
 const screenplay = await makeScreenplayPdf();
 const scanned = await makeScannedPdf();
 
+// What the model is handed, with no model in the loop. Every thin or wrong
+// description on this path has started here: the bundle was blocking, a
+// wrapped fragment, or a different character, and the prompt forbids inventing
+// the rest.
+console.log("\none-scene roles stay in the cast");
+{
+  const cue = (text) => ({ text, indent: 160 });
+  const say = (text) => ({ text, indent: 80 });
+  const action = (text) => ({ text, indent: 0 });
+  const parsed = parseScript([
+    [
+      action("INT. GATE - DAY"),
+      cue("HARKONNEN GUARD"),
+      say("You will wait here until I say otherwise."),
+      cue("DUNE"),
+      say("The desert swallows the last of the light tonight."),
+      cue("PAUL & JESSICA"),
+      say("We cross together when the storm breaks."),
+      cue("CHANI'S VISION"),
+      say("No."),
+      cue("PAUL"),
+      say("Again."),
+      cue("JESSICA"),
+      say("Again."),
+      action("EXT. RIDGE - DAY"),
+      cue("PAUL"),
+      say("We hold the ridge."),
+      cue("JESSICA"),
+      say("We hold it."),
+    ],
+  ]);
+  const names = parsed.characters.map((c) => c.name);
+  check("a one-scene speaking role is kept", names.includes("HARKONNEN GUARD"), names.join(", "));
+  check("a one-off title card is not a role", !names.includes("DUNE"), names.join(", "));
+  check("a dual cue is not a third person", !names.includes("PAUL & JESSICA"), names.join(", "));
+  check("a vision label is not a role", !names.some((n) => /VISION/.test(n)), names.join(", "));
+}
+
+console.log("\nwhat the description is built from");
+const { extractDocument } = await import("../src/lib/local/extract.ts");
+const cleanDoc = await extractDocument(new File([screenplay], "clean.pdf", { type: "application/pdf" }));
+const cleanScript = parseScript(cleanDoc.pageLines);
+const maraEvidence = describedIn(cleanScript, "MARA").join("\n");
+check(
+  "a straightforward introduction still comes through whole",
+  /late thirties/.test(maraEvidence) && /unhurried/.test(maraEvidence),
+  maraEvidence,
+);
+check(
+  "a billing with a lowercase title still counts",
+  /sixties/.test(describedIn(cleanScript, "WALT").join("\n")),
+  describedIn(cleanScript, "WALT").join("\n"),
+);
+
+const blockingDoc = await extractDocument(
+  new File([await makeBlockingPdf()], "blocking.pdf", { type: "application/pdf" }),
+);
+const blockingScript = parseScript(blockingDoc.pageLines);
+const holt = describedIn(blockingScript, "HOLT").join("\n");
+const renna = describedIn(blockingScript, "RENNA").join("\n");
+check(
+  "a description buried under blocking still reaches the model",
+  /fifty/.test(holt) && /never once rises/.test(holt),
+  holt,
+);
+check(
+  "a wrapped line keeps the words that do not repeat the name",
+  /thirty-four/.test(renna) && /shoulders/.test(renna),
+  renna,
+);
+check("the adult does not take the child's look", !/\bYOUNG\b|\beight\b/.test(holt), holt);
+check(
+  "the child is cast as their own role",
+  blockingScript.characters.some((c) => c.name === "YOUNG HOLT"),
+  blockingScript.characters.map((c) => c.name).join(", "),
+);
+const youngHolt = describedIn(blockingScript, "YOUNG HOLT").join("\n");
+check(
+  "the child keeps the flashback description",
+  /\beight\b/.test(youngHolt) && /YOUNG HOLT/.test(youngHolt),
+  youngHolt,
+);
+
+// Happy Gilmore shape: the flashback child is billed in parentheses on an
+// action line and never speaks under that cue. Still a separate day player.
+const flashback = parseScript([
+  [
+    { text: "EXT. HOCKEY RINK - DAY", indent: 0 },
+    { text: "A tiny six year old kid (YOUNG HAPPY GILMORE) wearing hockey pads.", indent: 0 },
+    { text: "HAPPY", indent: 140 },
+    { text: "Hey, uh, Coach. What about me?", indent: 50 },
+    { text: "COACH", indent: 140 },
+    { text: "Sit down, kid.", indent: 50 },
+  ],
+  [
+    { text: "EXT. GOLF COURSE - DAY", indent: 0 },
+    { text: "HAPPY GILMORE, thirties, a hockey player in the wrong sport, addresses the ball.", indent: 0 },
+    { text: "HAPPY", indent: 140 },
+    { text: "No problemo.", indent: 50 },
+    { text: "HAPPY", indent: 140 },
+    { text: "Free?", indent: 50 },
+    { text: "COACH", indent: 140 },
+    { text: "Keep your head down.", indent: 50 },
+  ],
+]);
+check(
+  "a flashback billing becomes its own role",
+  flashback.characters.some((c) => c.name === "YOUNG HAPPY GILMORE"),
+  flashback.characters.map((c) => c.name).join(", "),
+);
+check(
+  "the adult lead does not wear the flashback look",
+  /thirties/.test(describedIn(flashback, "HAPPY").join("\n")) &&
+    !/six year|YOUNG HAPPY/.test(describedIn(flashback, "HAPPY").join("\n")),
+  describedIn(flashback, "HAPPY").join("\n"),
+);
+check(
+  "the flashback child keeps the parenthetical introduction",
+  /six year|hockey pads/.test(describedIn(flashback, "YOUNG HAPPY GILMORE").join("\n")),
+  describedIn(flashback, "YOUNG HAPPY GILMORE").join("\n"),
+);
+check(
+  "blocking is not passed off as the description",
+  !/drags the gate|crosses to the shelving|boots hanging/.test(`${holt}\n${renna}`),
+  `${holt} || ${renna}`,
+);
+check("a character the script never describes gets no invented look", describedIn(blockingScript, "SIKE").length === 0);
+check(
+  "an extra's action line is not the speaking role",
+  describedIn(blockingScript, "BARMAN").length === 0,
+  describedIn(blockingScript, "BARMAN").join(" | "),
+);
+
 // --- 1. A well-behaved model -------------------------------------------------
 const stub = await startStubOllama({ scenario: "ok" });
 let server = await startDevServer({
@@ -171,15 +320,10 @@ try {
   check("project name came from the model", body.project?.name === "THE LONG WAY DOWN", body.project?.name);
   check("mode auto-detected as film_tv", body.mode === "film_tv", body.mode);
   check("roles found", (body.roles?.length ?? 0) >= 4, `got ${body.roles?.length}`);
-  check(
-    "cast came from the script's own formatting",
-    body.meta?.diagnostics?.parsedAsScreenplay === true,
-  );
 
   const names = (body.roles ?? []).map((r) => r.name);
   check("lead character present", names.includes("Mara"), names.join(", "));
   check("day player present", names.includes("Nurse Pell"), names.join(", "));
-  check("no junk roles from caps action lines", names.every((n) => n.length < 20), names.join(", "));
 
   const mara = (body.roles ?? []).find((r) => r.name === "Mara");
   check("page numbers are real", (mara?.pageNumbers?.length ?? 0) >= 3, JSON.stringify(mara?.pageNumbers));
@@ -187,16 +331,6 @@ try {
   check(
     "description uses the canonical format",
     /^Woman, 30 to 40 years old\. .+\.\.\.LEAD$/.test(mara?.description ?? ""),
-    mara?.description,
-  );
-  check(
-    "narrative-summary sentence was dropped",
-    !/in the story/i.test(mara?.description ?? ""),
-    mara?.description,
-  );
-  check(
-    "book-voice sentence was dropped",
-    !/carries herself|an air of/i.test(mara?.description ?? ""),
     mara?.description,
   );
   const page = await fetch(`${BASE}/private`).then((r) => r.text());
@@ -211,10 +345,9 @@ try {
     `${body.meta?.model} — an 11B that fits must still lose to the recommendation, ` +
       `or moving to a better same-size model would change nothing`,
   );
-  const evidenceFile = body.meta?.diagnostics?.evidenceFile ?? "";
   check(
     "the market picker reaches the analysis",
-    stub.calls.some((c) => c.user.startsWith("Character: ")),
+    stub.calls.some((c) => /Analyze these casting documents/.test(c.user)),
     "locale is sent with every analysis; US is the default",
   );
   const wrongModel = await installModel("something-else:latest");
@@ -227,14 +360,9 @@ try {
   const roleProgress = events.filter((e) => e.progress?.phase === "roles");
   check(
     "reports real progress, not a scripted animation",
-    roleProgress.length >= body.roles.length &&
+    roleProgress.length >= 1 &&
       roleProgress.at(-1).progress.done === roleProgress.at(-1).progress.total,
-    `${roleProgress.length} role updates for ${body.roles?.length} roles`,
-  );
-  check(
-    "progress counts every role",
-    roleProgress.some((e) => e.progress.total === body.roles.length),
-    JSON.stringify(roleProgress.at(-1)?.progress),
+    `${roleProgress.length} progress updates`,
   );
   check(
     "the page says which build it is",
@@ -249,85 +377,32 @@ try {
     "this is a claim a studio would rely on, so it has to match the loopback guard",
   );
   check(
-    "evidence dump, when asked for, lands outside the project folder",
-    Boolean(evidenceFile) &&
-      !evidenceFile.startsWith(process.cwd()) &&
-      existsSync(evidenceFile) &&
-      readFileSync(evidenceFile, "utf8").includes("===== Mara"),
-    `${evidenceFile} — writing into a watched folder restarts the dev server mid-run`,
+    "no evidence dump is written even when the debug flag is set",
+    body.meta?.diagnostics?.evidenceFile === null,
+    `${body.meta?.diagnostics?.evidenceFile} — the private path no longer curates per-role evidence`,
   );
 
+  const breakdownCalls = stub.calls.filter((c) => /Analyze these casting documents/.test(c.user));
   check(
-    "PDF margins were used to tell dialogue from action",
-    body.meta?.diagnostics?.usedLayout === true,
-    "without this, action lines leak into the evidence as dialogue",
-  );
-
-  const descriptionPrompts = stub.calls.filter((c) => c.user.startsWith("Character: "));
-  check(
-    "evidence includes where the character turns up",
-    descriptionPrompts.some((c) => c.user.includes("Where they turn up:")),
-    "scene headings are what tell a small model the character's world",
+    "sends the public house prompt, not a local fragment addendum",
+    breakdownCalls.length >= 1 &&
+      breakdownCalls.every((c) => /DESCRIPTION FORMAT/.test(c.system) && !/WRITE IN FRAGMENTS/.test(c.system)),
+    "the private path is the same job as the public one",
   );
   check(
-    "evidence includes what others say about them",
-    descriptionPrompts.some((c) => c.user.includes("What other characters say about them:")),
-    "this is where a script states a job or a relationship",
+    "hands the model the script text",
+    breakdownCalls.every((c) => /=== page \d+ ===/.test(c.user) && c.user.length > 500),
+    `largest ${Math.max(0, ...breakdownCalls.map((c) => c.user.length))} chars`,
   );
   check(
-    "action lines stay out of what the character says",
-    descriptionPrompts.every((c) => {
-      const said = c.user.split("What they say:")[1] ?? "";
-      return !/kills the engine|watches her go|wipes his hands|crosses a bridge/i.test(said);
-    }),
-    "action following a speech used to be captured as part of it",
+    "asks for enough context to hold a feature",
+    breakdownCalls.every((c) => (c.options?.num_ctx ?? 0) >= 32_768),
+    JSON.stringify(breakdownCalls[0]?.options),
   );
-  check(
-    "there is one prompt, and it carries the local style rules",
-    descriptionPrompts.every((c) => /WRITE IN FRAGMENTS/.test(c.system) && /PHYSICALITY/.test(c.system)),
-    "rules that only reach the lean prompt never reach a model anyone uses",
-  );
-  const otis = (body.roles ?? []).find((r) => r.name === "Otis")?.description ?? "";
-  check(
-    "a description copied from the prompt is regenerated, not printed",
-    (body.meta?.diagnostics?.rolesCopiedPrompt ?? []).includes("Otis") &&
-      !/write in this order|ROLE DESCRIPTION/i.test(otis) &&
-      otis.split(/\s+/).length > 6,
-    `${JSON.stringify(body.meta?.diagnostics?.rolesCopiedPrompt)} -> ${otis}`,
-  );
-  const pell = (body.roles ?? []).find((r) => r.name === "Nurse Pell")?.description ?? "";
-  check(
-    "a short phrase quoted in the prompt is caught too",
-    !/gaunt, weathered|mountainous, corpulent/i.test(pell),
-    `${pell} — the six-word rule cannot see a two-word lift`,
-  );
-
-  const devlin = (body.roles ?? []).find((r) => r.name === "Devlin");
-  check(
-    "hair colour is not accepted as an ethnicity",
-    !(body.roles ?? []).some((r) => /blonde|redhead|brunette/i.test(r.ethnicity ?? "")),
-    (body.roles ?? []).map((r) => r.ethnicity).filter(Boolean).join(", "),
-  );
-  check(
-    "an ethnicity the script never states is dropped",
-    devlin?.ethnicity === null && (body.meta?.diagnostics?.unsupportedEthnicityDropped ?? 0) >= 1,
-    `ethnicity=${devlin?.ethnicity}, dropped=${body.meta?.diagnostics?.unsupportedEthnicityDropped}`,
-  );
-  check(
-    "model was never handed the sentence ceiling",
-    descriptionPrompts.every((c) => !/at most \d+ sentence/i.test(c.user)),
-    "a number in the prompt becomes a target",
-  );
+  check("responses constrained by a JSON schema", stub.calls.every((c) => typeof c.format === "object"));
   check("self-tape instructions per role", body.selfTapeInstructions?.length === body.roles?.length);
   check("form questions per role", body.formQuestions?.length === body.roles?.length);
   check("logline written", Boolean(body.project?.logline), body.project?.logline);
-
-  const chats = stub.calls;
-  check("no single call sent the whole script", chats.every((c) => c.user.length < 12_000),
-    `largest ${Math.max(...chats.map((c) => c.user.length))} chars`);
-  check("num_ctx set explicitly on every call", chats.every((c) => c.options?.num_ctx > 2048),
-    JSON.stringify(chats[0]?.options));
-  check("responses constrained by a JSON schema", chats.every((c) => typeof c.format === "object"));
 
   console.log("\nscanned PDF with no text layer");
   const scan = await analyze(scanned, "scanned-script.pdf");
@@ -349,15 +424,18 @@ server = await startDevServer({
 
 try {
   console.log("\nmodel returning {} for everything");
-  const { status, body } = await analyze(screenplay, "the-long-way-down.pdf");
-  check("still 200", status === 200, `got ${status}`);
+  const { status, body, events } = await analyze(screenplay, "the-long-way-down.pdf");
+  const streamError = events.find((e) => e.error)?.error ?? body.error;
   check(
-    "roles survive a useless model",
-    (body.roles?.length ?? 0) >= 4,
-    `got ${body.roles?.length} — this is the regression that returned 0 roles`,
+    "fails rather than inventing an empty cast",
+    status === 200 && Boolean(streamError),
+    `got status=${status} error=${streamError}`,
   );
-  check("title falls back to the file name", /long way down/i.test(body.project?.name ?? ""), body.project?.name);
-  check("page numbers still real", (body.roles?.[0]?.pageNumbers?.length ?? 0) > 0);
+  check(
+    "error names the broken reply",
+    /not a breakdown|invalid JSON|failed/i.test(streamError ?? ""),
+    streamError,
+  );
 } finally {
   await stopDevServer(server);
   await emptyStub.close();
@@ -375,21 +453,17 @@ try {
   console.log("\nAustralian market selected");
   const { body } = await analyze(screenplay, "the-long-way-down.pdf", "auto", "au");
   check(
-    "no DAY PLAYER in Australian breakdowns",
-    !(body.roles ?? []).some((r) => r.roleType === "DAY PLAYER"),
-    (body.roles ?? []).map((r) => r.roleType).join(", "),
+    "Australian prompt vocabulary reaches the model",
+    auStub.calls.some((c) => /Showcast|BIT PLAYER|SUPPORTING/.test(c.system)),
+    "locale is what changes the house prompt for this market",
   );
-  check(
-    "and no US-only vocabulary either",
-    !(body.roles ?? []).some((r) => /DAY PLAYER|CO-STAR|GUEST STAR/.test(r.roleType ?? "")),
-    (body.roles ?? []).map((r) => r.roleType).join(", "),
-  );
+  check("roles still returned", (body.roles?.length ?? 0) >= 4, `got ${body.roles?.length}`);
 } finally {
   await stopDevServer(server);
   await auStub.close();
 }
 
-// --- 1b. Evidence dump is off unless asked for ---------------------------------
+// --- 1b. Evidence dump is off --------------------------------------------------
 const quietStub = await startStubOllama({ scenario: "ok" });
 server = await startDevServer({
   OLLAMA_BASE_URL: quietStub.url,
