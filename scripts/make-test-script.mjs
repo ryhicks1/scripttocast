@@ -15,6 +15,7 @@ const SCENES = [
       ["OTIS", "You want me to lie to a supervisor on a Tuesday."],
       ["MARA", "I want you to say the bay was blocked, which it was, by a supervisor."],
     ],
+    closer: "She kills the engine and sits for a moment before getting out.",
   },
   {
     heading: "INT. HOSPITAL CORRIDOR - CONTINUOUS",
@@ -26,6 +27,7 @@ const SCENES = [
       ["DEVLIN", "That is not the point I am making and you know it."],
       ["MARA", "Then make a better one, Devlin."],
     ],
+    closer: "DEVLIN watches her go, then writes something on the clipboard.",
   },
   {
     heading: "EXT. PARKING STRUCTURE - LATER",
@@ -35,6 +37,7 @@ const SCENES = [
       ["MARA", "I am going to get coffee."],
       ["NURSE PELL", "Those are the same sentence around here."],
     ],
+    closer: "Rain runs off the awning in a sheet.",
   },
   {
     heading: "INT. DISPATCH - NIGHT",
@@ -45,6 +48,7 @@ const SCENES = [
       ["OTIS", "It always works. That is what makes it a shortcut."],
       ["DEVLIN", "I would like that on the record."],
     ],
+    closer: "OTIS BRAND wipes his hands on a napkin and turns back to the screens.",
   },
   {
     heading: "EXT. HIGHWAY - PRE-DAWN",
@@ -54,17 +58,29 @@ const SCENES = [
       ["OTIS", "And if they ask where we are?"],
       ["MARA", "Tell them we are exactly where we said we would be."],
     ],
+    closer: "The rig crosses a bridge as the sky goes grey.",
   },
 ];
 
-/** Screenplay-ish layout. Indentation is decorative — the parser trims it. */
+// Real screenplay margins on a 612pt page: action at 1.5", dialogue at 2.5",
+// character cue at 3.7". The parser reads these to tell elements apart, so a
+// test PDF that draws everything at one margin would not exercise it.
+const ACTION_X = 108;
+const DIALOGUE_X = 180;
+const CUE_X = 266;
+
 function pageLines(scene) {
-  const out = [scene.heading, "", scene.action, ""];
+  const out = [
+    { text: scene.heading, x: ACTION_X },
+    { text: scene.action, x: ACTION_X },
+  ];
   for (const [cue, line] of scene.lines) {
-    out.push(`                    ${cue}`);
-    out.push(`          ${line}`);
-    out.push("");
+    out.push({ text: cue, x: CUE_X });
+    out.push({ text: line, x: DIALOGUE_X });
   }
+  // An action line immediately after a speech, with no blank line between —
+  // the case that used to leak into the speech and come back as a description.
+  out.push({ text: scene.closer, x: ACTION_X });
   return out;
 }
 
@@ -77,8 +93,8 @@ export async function makeScreenplayPdf() {
     let y = 720;
     for (const line of pageLines(scene)) {
       // pdf-lib throws on characters Courier cannot encode.
-      const safe = line.replace(/[^\x20-\x7E]/g, "-");
-      page.drawText(safe, { x: 72, y, size: 11, font });
+      const safe = line.text.replace(/[^\x20-\x7E]/g, "-");
+      page.drawText(safe, { x: line.x, y, size: 11, font });
       y -= 16;
     }
   }

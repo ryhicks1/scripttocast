@@ -138,6 +138,12 @@ export interface LocalDiagnostics {
   narrativeVoiceFlagged: number;
   /** Phrases reused across roles — the tell that the model ran out of evidence. */
   repeatedPhrases: string[];
+  /** Descriptions discarded for repeating the prompt back. */
+  rolesCopiedPrompt: string[];
+  /** Ethnicity claims dropped because the script did not state them. */
+  unsupportedEthnicityDropped: number;
+  /** True when PDF margins were used to tell dialogue from action. */
+  usedLayout: boolean;
   elapsedMs: number;
 }
 
@@ -160,7 +166,7 @@ export async function analyzeLocally(
   const pages = documents.flatMap((doc) => doc.pages);
   if (!pages.length) throw new LocalAnalysisError("No readable pages in the upload.", 400);
 
-  const script = parseScript(pages);
+  const script = parseScript(documents.flatMap((doc) => doc.pageLines));
   const mode: ResolvedMode =
     requestedMode === "film_tv" || requestedMode === "commercial"
       ? requestedMode
@@ -262,7 +268,10 @@ export async function analyzeLocally(
   // --- Pass 3: one description per role, from that role's own lines. --------
   const roles: Role[] = [];
   const failed: string[] = [];
+  const leaked: string[] = [];
+  const castNames = characters.map((c) => displayName(c.name));
   let flagged = 0;
+  let unsupportedEthnicity = 0;
 
   for (const [index, character] of characters.entries()) {
     // Tiers come from how often a character speaks, which only exists when the
@@ -284,11 +293,19 @@ export async function analyzeLocally(
     const name = displayName(character.name);
     const evidence = buildEvidence(script, character, budgetFor(config, DESCRIPTION_SYSTEM, 2400));
 
+    // Set LOCAL_DEBUG_EVIDENCE=1 to print exactly what the model is handed for
+    // each role. Every bad description so far has been the model faithfully
+    // reporting bad evidence, and this is the only way to see that from the
+    // outside without a ten-minute run and a guess.
+    if (process.env.LOCAL_DEBUG_EVIDENCE) {
+      console.log(`\n===== evidence for ${name} (${roleType}) =====\n${evidence.text}\n`);
+    }
+
     let reply: DescriptionReply | null = null;
     try {
       reply = await chatJson<DescriptionReply>(config, {
         system: DESCRIPTION_SYSTEM,
-        user: descriptionUser(name, lengthHint, evidence),
+        user: descriptionUser(name, lengthHint, evidence.text),
         schema: DESCRIPTION_SCHEMA,
         label: `role: ${name}`,
         maxOutputTokens: 400,
@@ -301,21 +318,42 @@ export async function analyzeLocally(
 
     log("local: role done", { index: index + 1, of: characters.length, role: name });
 
-    const body = reply ? tightenDescription(clean(reply.description), ceiling, log, name) : "";
+    let body = reply ? tightenDescription(clean(reply.description), ceiling, log, name) : "";
+
+    // A description that repeats the instructions is not a description. This
+    // has happened: two roles came back as the prompt's own worked examples,
+    // and the examples are gone now, but the guard stays — anything the model
+    // copies out of its instructions is a fabrication about a real person.
+    if (body && sharesWording(body, DESCRIPTION_SYSTEM)) {
+      log("local: description copied the prompt, discarded", { role: name, body });
+      leaked.push(name);
+      body = "";
+    }
+
+    body = withoutOtherCharacters(body, name, castNames);
     if (body && (findNarrativeVoice(body).length || findBookVoice(body).length)) flagged++;
+
+    // Ethnicity only where the script says so. The model claimed a lead was
+    // Japanese because he shares scenes with a Japanese character; a wrong
+    // ethnic background on a breakdown is worse than a blank one.
+    const ethnicity = statedIn(evidence.identity, clean(reply?.ethnicity));
+    if (reply?.ethnicity && !ethnicity) {
+      log("local: dropped unsupported ethnicity", { role: name, claimed: reply.ethnicity });
+      unsupportedEthnicity++;
+    }
 
     roles.push({
       name,
       description: composeDescription({
         gender: clean(reply?.gender),
         ageRange: clean(reply?.ageRange),
-        ethnicity: clean(reply?.ethnicity),
+        ethnicity,
         body,
         roleType,
       }),
       ageRange: clean(reply?.ageRange) || null,
       gender: clean(reply?.gender) || null,
-      ethnicity: clean(reply?.ethnicity) || null,
+      ethnicity: ethnicity || null,
       roleType,
       // Without cue lines there is nothing to infer from, and a cast list on a
       // brief is a list of speaking roles far more often than not.
@@ -365,6 +403,9 @@ export async function analyzeLocally(
       modelCalls,
       narrativeVoiceFlagged: flagged,
       repeatedPhrases,
+      rolesCopiedPrompt: leaked,
+      unsupportedEthnicityDropped: unsupportedEthnicity,
+      usedLayout: script.usedLayout,
       elapsedMs: Date.now() - startedAt,
     },
   };
@@ -557,6 +598,56 @@ export function composeDescription({
   const core = [head, prose].filter(Boolean).join(" ").trim();
   if (!core) return roleType;
   return `${core.replace(/[.\s]+$/, "")}...${roleType}`;
+}
+
+/**
+ * Does the evidence actually state this? Used for ethnicity, where a wrong
+ * answer is worse than none: the claim has to appear in the script's own words
+ * about this character, not be inferred from anything around them.
+ */
+function statedIn(identityEvidence: string, claim: string): string {
+  if (!claim) return "";
+  const haystack = identityEvidence.toLowerCase();
+  const words = claim.toLowerCase().split(/[\s,/]+/).filter((w) => w.length > 3);
+  if (!words.length) return "";
+  return words.some((word) => haystack.includes(word)) ? claim : "";
+}
+
+/** Six consecutive words in common — enough to call it copied, not coincidence. */
+function sharesWording(candidate: string, source: string): boolean {
+  const normalise = (text: string) =>
+    text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
+  const words = normalise(candidate);
+  const haystack = ` ${normalise(source).join(" ")} `;
+  const WINDOW = 6;
+  for (let i = 0; i + WINDOW <= words.length; i++) {
+    if (haystack.includes(` ${words.slice(i, i + WINDOW).join(" ")} `)) return true;
+  }
+  return false;
+}
+
+/**
+ * Drop sentences that name another character other than as a relationship.
+ *
+ * "Cobb's wife" is exactly what a breakdown should say. "She is taken aback
+ * when Cobb traces the solution to a maze she drew" is a scene, and it arrives
+ * whenever the model starts recounting instead of describing. The possessive is
+ * the difference between the two.
+ */
+function withoutOtherCharacters(body: string, self: string, cast: string[]): string {
+  if (!body) return body;
+  const others = cast.filter((name) => name && name !== self);
+  if (!others.length) return body;
+
+  const sentences = body.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
+  const kept = sentences.filter((sentence) =>
+    !others.some((other) => {
+      const escaped = other.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const bare = new RegExp(`\\b${escaped}\\b(?!['’]s)`, "i");
+      return bare.test(sentence);
+    }),
+  );
+  return (kept.length ? kept : sentences.slice(0, 1)).join(" ");
 }
 
 function clean(value: string | undefined | null): string {

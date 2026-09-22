@@ -156,6 +156,12 @@ try {
     !/carries herself|an air of/i.test(mara?.description ?? ""),
     mara?.description,
   );
+  check(
+    "PDF margins were used to tell dialogue from action",
+    body.meta?.diagnostics?.usedLayout === true,
+    "without this, action lines leak into the evidence as dialogue",
+  );
+
   const descriptionPrompts = stub.calls.filter((c) =>
     c.system.includes("casting breakdown"),
   );
@@ -168,6 +174,28 @@ try {
     "evidence includes what others say about them",
     descriptionPrompts.some((c) => c.user.includes("What other characters say about them:")),
     "this is where a script states a job or a relationship",
+  );
+  check(
+    "action lines stay out of what the character says",
+    descriptionPrompts.every((c) => {
+      const said = c.user.split("What they say:")[1] ?? "";
+      return !/kills the engine|watches her go|wipes his hands|crosses a bridge/i.test(said);
+    }),
+    "action following a speech used to be captured as part of it",
+  );
+  check(
+    "a description copied from the prompt is discarded",
+    (body.meta?.diagnostics?.rolesCopiedPrompt ?? []).includes("Otis") &&
+      !/write in this order/i.test(
+        (body.roles ?? []).find((r) => r.name === "Otis")?.description ?? "",
+      ),
+    JSON.stringify(body.meta?.diagnostics?.rolesCopiedPrompt),
+  );
+  const devlin = (body.roles ?? []).find((r) => r.name === "Devlin");
+  check(
+    "an ethnicity the script never states is dropped",
+    devlin?.ethnicity === null && (body.meta?.diagnostics?.unsupportedEthnicityDropped ?? 0) >= 1,
+    `ethnicity=${devlin?.ethnicity}, dropped=${body.meta?.diagnostics?.unsupportedEthnicityDropped}`,
   );
   check(
     "model was never handed the sentence ceiling",

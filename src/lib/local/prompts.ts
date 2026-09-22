@@ -54,51 +54,53 @@ logline: one sentence.
 synopsis: three or four sentences.`;
 }
 
-export const DESCRIPTION_SYSTEM = `You turn evidence about one character into a casting breakdown.
+/**
+ * No worked examples, deliberately.
+ *
+ * An earlier version ended with three example descriptions in the house style.
+ * Two roles in the next run came back as those examples, word for word —
+ * "Small town organised crime enforcer... whose first language is violence" was
+ * prompt text, printed as a character. A small model with thin evidence copies
+ * the most fluent thing in its context, and a vivid example is exactly that.
+ *
+ * So the shape is described rather than demonstrated, the JSON shape is
+ * enforced by the response schema instead of shown, and pipeline.ts rejects any
+ * description that shares wording with this prompt.
+ */
+export const DESCRIPTION_SYSTEM = `You turn evidence about one character into a casting breakdown description.
 
-An agent reads this to decide which of their clients to put forward. Everything
-you write must help that decision.
+An agent reads it to decide which of their clients to put forward.
 
-Name them first: their job, their position, or what they are to another
-character. Then one specific thing that shows what they are like to deal with.
+Write in this order:
+1. What they are — their job, their rank, or what they are to another character.
+2. What they are like to deal with, in concrete terms.
 
-Use only the evidence given to you. If the evidence does not say what someone
-does for a living or who they are to other people, do not invent it and do not
-fill the space with general adjectives — write one short, true sentence and
-stop.
+Rules:
+- Use only the evidence given below. Do not use anything you already know about
+  this film, this script or these characters. If you recognise it, ignore that.
+- If the evidence does not say what they do or who they are to other people,
+  write only what it does support, in one sentence, and stop. Do not fill the
+  space with adjectives.
+- Never describe a scene, a moment, or what anyone is doing. Nothing "turns",
+  "watches", "walks in", "stares", "is taken aback" or "pauses".
+- Never mention another character except as a relationship, like "X's sister".
+- Do not describe clothes, eyes, smiles or posture unless the part requires it.
+- Never write "carries himself", "carries herself", "an air of", "exudes",
+  "a deep sense of", "a voice of reason", "moral compass", "driven by a desire",
+  "in the story", "his journey", "we learn", "by the end", "serves as",
+  "represents" or "the audience".
+- Never copy wording from these instructions.
 
-Never describe a scene or a moment. Do not write what the character is doing,
-where they are standing, or what they are looking at. Never mention what
-another character does.
-
-Banned, always: "stares out", "lost in thought", "watches", "with interest",
-"with a mix of", "eventually", "is trying to", "driven by a desire",
-"carries himself", "carries herself", "an air of", "exudes", "a deep sense of",
-"his gaze", "her smile is", "a voice of reason", "moral compass".
-Also banned: "in the story", "his journey", "we learn", "by the end",
-"serves as", "represents", "the audience".
-
-Do not describe clothes, eyes, smiles or posture unless the part requires it.
-
-Fill gender, ageRange and ethnicity only when the evidence says or plainly shows
-them. Otherwise return "" for that field. Never guess ethnicity.
-
-Three examples of the voice, from other scripts. Notice that each one names what
-the character IS before it says anything about what they are like, and that the
-last one is short because its evidence was thin:
-
-{"gender":"Man","ageRange":"45 to 55 years old","ethnicity":"","description":"Small town organised crime enforcer. Hardened, calculating, intimidating. A man of few words whose first language is violence.","traits":["intimidating physicality"]}
-
-{"gender":"Woman","ageRange":"30 to 45 years old","ethnicity":"","description":"A polished estate agent who calls everyone \"darling\", hugs like she means it, and has not retained a single thing you told her. She will compliment your shoes mid-crisis.","traits":["comedy","warmth"]}
-
-{"gender":"Man","ageRange":"60s","ethnicity":"","description":"Night dispatcher, twenty-two years in the chair, and proud of every shortcut he has ever invented.","traits":["deadpan"]}`;
+Fill gender, ageRange and ethnicity only when the evidence states them outright.
+Return "" for anything it does not. Never guess ethnicity, and never infer it
+from a location, a name, or another character.`;
 
 /**
  * The length instruction is a phrase, never the ceiling number.
  *
- * Handed "at most 5 sentences", a 3B model writes five and pads to get there.
- * The ceiling is enforced in code instead — see tightenDescription — so it can
- * stay a limit rather than becoming a target.
+ * Handed "at most 5 sentences", a small model writes five and pads to get
+ * there. The ceiling is enforced in code instead — see tightenDescription — so
+ * it stays a limit rather than becoming a target.
  */
 export function descriptionUser(
   name: string,

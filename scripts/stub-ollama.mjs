@@ -76,10 +76,30 @@ function reply(system, user) {
   if (system.includes("list the roles")) {
     return { roles: ["HERO DAD", "BARISTA"] };
   }
-  // Description. The last two sentences are deliberately in the two voices the
-  // quality gate exists to remove — plot summary, then novel — so the harness
-  // can prove they are dropped.
+  // Description. Each of these is a failure seen in a real run, reproduced so
+  // the harness proves the guard for it still works.
   const name = /Character: (.+)/.exec(user)?.[1] ?? "role";
+
+  // A real run returned the prompt's own worked examples as two characters'
+  // descriptions. Copy a phrase straight out of the instructions and the guard
+  // must discard the whole thing.
+  if (name === "Otis") {
+    const phrase = /Write in this order:\n1\. (.+)/.exec(system)?.[1] ?? "what they are";
+    return { gender: "Man", ageRange: "60s", ethnicity: "", description: phrase, traits: [] };
+  }
+
+  // A real run gave a lead the ethnicity of the character he shares scenes
+  // with. Nothing in Devlin's evidence says Japanese, so it must be dropped.
+  if (name === "Devlin") {
+    return {
+      gender: "Man",
+      ageRange: "40 to 50 years old",
+      ethnicity: "Japanese",
+      description: "Hospital administrator who came up through the process and trusts it more than people.",
+      traits: ["procedural"],
+    };
+  }
+
   return {
     gender: "Woman",
     ageRange: "30 to 40 years old",
