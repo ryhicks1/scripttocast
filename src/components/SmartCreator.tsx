@@ -1086,10 +1086,13 @@ export default function SmartCreator({ isLoggedIn, initialResult, authUnavailabl
         <button onClick={reset} className="flex items-center gap-1.5 px-4 py-2 text-gray-400 text-xs hover:text-gray-600">
           <RotateCcw size={12} /> Start Over
         </button>
-        {!isLoggedIn && (
+        {/* Saving is a cloud account feature. On the private page it would
+            invite someone to put confidential work where this page promises
+            it never goes, so it is not offered there at all. */}
+        {!isLoggedIn && !privateMode && (
           <a href="/signup" className="ml-auto text-xs text-gray-500 hover:text-gray-900 font-medium">Save this project →</a>
         )}
-        {isLoggedIn && !result.projectId && (
+        {isLoggedIn && !privateMode && !result.projectId && (
           <button onClick={async () => {
             const saved = await saveProject(result);
             if (saved.ok) {
