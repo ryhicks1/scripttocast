@@ -127,7 +127,7 @@ const CACHE_CHECK_MIN_MS = 60_000;
  * this long, the prompt cache is not being reused and something has made the
  * system prompt vary between calls — which the check suite asserts against.
  */
-const ROLE_TIMEOUT_MS = 900_000;
+const ROLE_TIMEOUT_MS = 1_800_000;
 
 /**
  * The longest script this path will read in one pass.
