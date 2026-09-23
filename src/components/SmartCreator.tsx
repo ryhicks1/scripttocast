@@ -76,13 +76,13 @@ export interface LiveProgress {
 /**
  * Progress the server actually reported.
  *
- * done/total are script parts for the chunked full-breakdown path — not
- * individual roles. The bar advances when a part finishes.
+ * The scripted version below reaches 95% in ninety seconds and then sits there,
+ * which on a feature script is most of the run. Describing roles is where the
+ * time goes and it is countable, so this counts it.
  */
 function LiveAnalyzingProgress({ progress }: { progress: LiveProgress }) {
   const { done = 0, total = 0, phase, message } = progress;
-  // Chunked full-breakdown: done/total are script parts, not roles. The bar
-  // moves when a chunk finishes, not while one long call is thinking.
+  // Everything before the per-role loop is a small, fixed share of the work.
   const pct =
     phase === "assembling"
       ? 98
@@ -106,16 +106,11 @@ function LiveAnalyzingProgress({ progress }: { progress: LiveProgress }) {
       </div>
       {phase === "roles" && total > 0 && (
         <p className="text-xs text-gray-500 mt-3 tabular-nums">
-          {total === 1
-            ? done === 0
-              ? "Writing the full breakdown…"
-              : "Breakdown written"
-            : `${done} of ${total} parts written`}
+          {done} of {total} roles described
         </p>
       )}
       <p className="text-[11px] text-gray-400 mt-4">
-        Running on this machine. A long script is split into parts; each part is
-        one full breakdown pass. That can take several minutes per part.
+        Running on this machine. A feature script takes several minutes — one pass per role.
       </p>
     </div>
   );
@@ -1091,10 +1086,13 @@ export default function SmartCreator({ isLoggedIn, initialResult, authUnavailabl
         <button onClick={reset} className="flex items-center gap-1.5 px-4 py-2 text-gray-400 text-xs hover:text-gray-600">
           <RotateCcw size={12} /> Start Over
         </button>
-        {!isLoggedIn && (
+        {/* Saving is a cloud account feature. On the private page it would
+            invite someone to put confidential work where this page promises
+            it never goes, so it is not offered there at all. */}
+        {!isLoggedIn && !privateMode && (
           <a href="/signup" className="ml-auto text-xs text-gray-500 hover:text-gray-900 font-medium">Save this project →</a>
         )}
-        {isLoggedIn && !result.projectId && (
+        {isLoggedIn && !privateMode && !result.projectId && (
           <button onClick={async () => {
             const saved = await saveProject(result);
             if (saved.ok) {

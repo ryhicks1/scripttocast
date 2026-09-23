@@ -9,7 +9,7 @@ import { extractDocument, type ExtractedDocument } from "@/lib/local/extract";
 import { analyzeLocally } from "@/lib/local/pipeline";
 import { pickBestModel, preflight, resolveConfig } from "@/lib/local/ollama";
 
-export const maxDuration = 1800;
+export const maxDuration = 300;
 
 /** How often to repeat the last progress line when a phase runs long. */
 const HEARTBEAT_MS = 5000;
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
 
     // Stream progress as newline-delimited JSON, then the result.
     //
-    // A feature script is one (or a few) long model calls — minutes of work.
+    // A feature script is forty roles and forty model calls — minutes of work.
     // Two things go wrong if nothing is sent back in that time: a browser drops
     // a request that quiet, and the person watching has no way to tell a slow
     // run from a dead one.
@@ -130,7 +130,12 @@ export async function POST(request: Request) {
                 // Anything the run left out, said on the page rather than only
                 // in a log. A breakdown missing roles that looks complete is
                 // the worst thing this can hand a casting director.
-                notice: undefined,
+                notice:
+                  diagnostics.rolesOmitted > 0
+                    ? `${diagnostics.rolesOmitted} more speaking role${
+                        diagnostics.rolesOmitted === 1 ? "" : "s"
+                      } were found in this script than were described. Set OLLAMA_MAX_ROLES higher to include them.`
+                    : undefined,
                 diagnostics,
               },
             },

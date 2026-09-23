@@ -1,0 +1,5 @@
+# Left out of release archives (git archive): notes for coding agents working in
+# this repository, not for anyone installing or running it.
+CLAUDE.md export-ignore
+AGENTS.md export-ignore
+.gitattributes export-ignore

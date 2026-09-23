@@ -8,9 +8,7 @@
  * the one thing the private path exists to prevent.
  */
 
-import http from "node:http";
-import https from "node:https";
-import { URL } from "node:url";
+import { request as httpRequest } from "node:http";
 import recommended from "../../../recommended-model.json";
 import { LocalAnalysisError } from "./errors";
 
@@ -33,6 +31,15 @@ export interface OllamaConfig {
   warning?: string;
   /** Parameter count in billions, when Ollama reports it. */
   parameters?: number | null;
+  /**
+   * The model's own context ceiling, as Ollama reports it.
+   *
+   * Preflight used to clamp numCtx against this and then discard the number,
+   * so a later caller sizing its own window — the whole-script pass does
+   * exactly that — had nothing to clamp against and could ask for more context
+   * than the model has.
+   */
+  modelContextLimit?: number | null;
 }
 
 /**
@@ -74,12 +81,14 @@ export const DEFAULT_MODEL = recommended.model;
 /**
  * Context window to ask for when the model's own limit is unknown or larger.
  *
- * A feature script plus the house prompt is tens of thousands of tokens.
- * llama3.1:8b offers 128k; asking for 8k again would silently drop most of the
- * script and return a breakdown written from a fragment. The real ceiling is
- * applied in preflight against the model's reported context length.
+ * This is the single most important number on this path. Ollama's default
+ * num_ctx is small (2048 on most builds); anything longer is silently
+ * truncated before the model ever sees it. Sending a feature script in one
+ * prompt therefore produced a model that had seen neither the instructions
+ * nor most of the script, and returned an empty breakdown that parsed fine.
+ * Every prompt below is built to fit inside this budget instead.
  */
-export const DEFAULT_NUM_CTX = 32_768;
+export const DEFAULT_NUM_CTX = 8192;
 
 /**
  * Below this the pipeline cannot work: a character's lines plus the
@@ -91,10 +100,51 @@ export const MIN_NUM_CTX = 4096;
 /** Rough chars-per-token for English prose. Deliberately conservative. */
 const CHARS_PER_TOKEN = 3.2;
 /** Tokens held back from the context window for the model's own answer. */
-const OUTPUT_RESERVE_TOKENS = 12_000;
+const OUTPUT_RESERVE_TOKENS = 1200;
 
-export function promptCharBudgetFor(numCtx: number, outputReserve = OUTPUT_RESERVE_TOKENS): number {
-  return Math.max(1500, Math.floor((numCtx - outputReserve) * CHARS_PER_TOKEN));
+export function promptCharBudgetFor(numCtx: number): number {
+  return Math.max(1500, Math.floor((numCtx - OUTPUT_RESERVE_TOKENS) * CHARS_PER_TOKEN));
+}
+
+/**
+ * A context window sized to hold this exact prompt, rounded up to 4k.
+ *
+ * The private path reads the whole script in one prefill and then writes one
+ * role at a time against it. That only works if num_ctx actually holds the
+ * script: Ollama truncates silently, so a window one token short does not
+ * error, it just returns a breakdown written from a fragment — which is how
+ * this path shipped descriptions of a film the model had mostly not read.
+ *
+ * It reserves OUTPUT_RESERVE_TOKENS — the same constant promptCharBudgetFor
+ * subtracts — and that is not an incidental detail. The two must agree, or the
+ * budget derived from this window is smaller than the prompt it was sized for
+ * and every call is rejected before it is sent. Sizing with a 700-token
+ * reserve against a budget computed with 1200 is what made a script that fit
+ * comfortably in memory fail on all twenty-four roles, by 845 characters.
+ *
+ * With one constant the relationship holds by construction:
+ * promptCharBudgetFor(contextFor(n)) >= n for every n. The check suite asserts
+ * it across a range of sizes.
+ *
+ * Capped by the caller against the model's own reported limit. If it does not
+ * fit, the caller refuses rather than sending it.
+ */
+export function contextFor(promptChars: number): number {
+  const needed = Math.ceil(promptChars / CHARS_PER_TOKEN) + OUTPUT_RESERVE_TOKENS;
+  return Math.max(MIN_NUM_CTX, Math.ceil(needed / 4096) * 4096);
+}
+
+/**
+ * KV cache cost of a context window, in bytes, for a llama3.1-8B-shaped model.
+ *
+ * 32 layers, 8 key/value heads, 128 dimensions, keys and values, two bytes
+ * each: 128 KiB per token. Ollama allocates it up front, so this is the number
+ * that decides whether a script fits on someone's laptop or swaps it to death.
+ * Reported rather than enforced — the machine's free memory is not knowable
+ * from here, and a user with 64GB should not be held to an Air's budget.
+ */
+export function kvCacheBytes(numCtx: number): number {
+  return numCtx * 128 * 1024;
 }
 
 function envNumber(name: string): number | null {
@@ -223,75 +273,80 @@ export async function pickBestModel(
 }
 
 /**
- * Talk to Ollama over node:http, not global fetch.
+ * One HTTP request to Ollama, over node:http rather than fetch.
  *
- * Node's undici-backed fetch kills a quiet connection after five minutes
- * (headersTimeout). A full-script breakdown on an 8B is quiet for longer than
- * that while the model thinks — the request must wait as long as we asked.
+ * Node's fetch abandons any request whose response headers take longer than
+ * five minutes (undici's headersTimeout), and nothing passed to fetch can lift
+ * it. Ollama sends no headers until the first token of its answer — streamed
+ * or not — and the first role of a feature spends longer than five minutes
+ * reading the whole script before it can produce one. So every first role
+ * failed at five minutes with UND_ERR_HEADERS_TIMEOUT, reported as Ollama
+ * being unreachable while it was busy doing exactly what it was asked.
+ *
+ * node:http has no such limit. The only ceiling here is the one the caller
+ * sets, which is what the caller's timeout always claimed to be.
  */
+function loopbackRequest(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  return new Promise((resolve, reject) => {
+    const req = httpRequest(
+      url,
+      {
+        method: init.method ?? "GET",
+        headers: init.headers as Record<string, string> | undefined,
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("end", () => {
+          clearTimeout(timer);
+          resolve(new Response(Buffer.concat(chunks), { status: res.statusCode ?? 500 }));
+        });
+        res.on("error", (error) => {
+          clearTimeout(timer);
+          reject(error);
+        });
+      },
+    );
+    const timer = setTimeout(() => {
+      const error = new Error(`timed out after ${timeoutMs}ms`);
+      error.name = "TimeoutError";
+      req.destroy(error);
+      reject(error);
+    }, timeoutMs);
+    req.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    if (init.body) req.write(init.body as string);
+    req.end();
+  });
+}
+
+/** The underlying network error — "fetch failed" alone says nothing. */
+function causeOf(error: unknown): string {
+  const direct = (error as { code?: string })?.code;
+  const cause = (error as { cause?: { code?: string; message?: string } })?.cause;
+  return direct || cause?.code || cause?.message || "";
+}
+
 async function ollamaFetch(
   config: OllamaConfig,
   path: string,
   init: RequestInit & { timeoutMs?: number },
 ): Promise<Response> {
-  const { timeoutMs = 60_000, method = "GET", headers, body } = init;
-  const url = new URL(`${config.baseUrl}${path}`);
-  const transport = url.protocol === "https:" ? https : http;
-  const payload =
-    typeof body === "string" ? body : body == null ? null : String(body);
-
+  const { timeoutMs = 60_000, ...rest } = init;
   try {
-    return await new Promise<Response>((resolve, reject) => {
-      const req = transport.request(
-        {
-          hostname: url.hostname,
-          port: url.port || (url.protocol === "https:" ? 443 : 80),
-          path: `${url.pathname}${url.search}`,
-          method,
-          headers: {
-            ...(headers as Record<string, string> | undefined),
-            ...(payload != null
-              ? { "Content-Length": Buffer.byteLength(payload).toString() }
-              : {}),
-          },
-          timeout: timeoutMs,
-        },
-        (res) => {
-          const chunks: Buffer[] = [];
-          res.on("data", (chunk: Buffer) => chunks.push(chunk));
-          res.on("end", () => {
-            const buf = Buffer.concat(chunks);
-            resolve(
-              new Response(buf, {
-                status: res.statusCode ?? 502,
-                statusText: res.statusMessage,
-                headers: res.headers as HeadersInit,
-              }),
-            );
-          });
-          res.on("error", reject);
-        },
-      );
-      req.on("timeout", () => {
-        req.destroy();
-        reject(Object.assign(new Error(`timeout after ${timeoutMs}ms`), { name: "TimeoutError" }));
-      });
-      req.on("error", reject);
-      if (payload != null) req.write(payload);
-      req.end();
-    });
+    return await loopbackRequest(`${config.baseUrl}${path}`, rest, timeoutMs);
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    const timedOut =
-      error instanceof Error &&
-      (error.name === "TimeoutError" ||
-        error.name === "AbortError" ||
-        /aborted|timeout/i.test(error.message));
+    const timedOut = error instanceof Error && error.name === "TimeoutError";
     throw new OllamaError(
       timedOut
         ? `Ollama did not respond within ${Math.round(timeoutMs / 1000)}s at ${config.baseUrl}. ` +
             `A large model on a busy machine can exceed this — close other apps and try again.`
-        : `Cannot reach Ollama at ${config.baseUrl}. Start it with: ollama serve`,
+        : `Cannot reach Ollama at ${config.baseUrl} (${causeOf(error) || reason}). ` +
+            `If Ollama is running, it may have stopped mid-request — check its window for ` +
+            `an out-of-memory message. Otherwise start it with: ollama serve`,
       503,
       reason,
     );
@@ -356,7 +411,14 @@ export async function preflight(config: OllamaConfig): Promise<OllamaConfig> {
 
   if (warning) console.warn(`analyze_local: ${warning}`);
 
-  return { ...config, numCtx, promptCharBudget: promptCharBudgetFor(numCtx), warning, parameters };
+  return {
+    ...config,
+    numCtx,
+    promptCharBudget: promptCharBudgetFor(numCtx),
+    warning,
+    parameters,
+    modelContextLimit: modelCtx ?? null,
+  };
 }
 
 /**
@@ -418,6 +480,13 @@ export interface ChatJsonOptions {
   label: string;
   timeoutMs?: number;
   maxOutputTokens?: number;
+  /**
+   * How long Ollama keeps the model — and its prompt cache — resident after
+   * the call. The whole-script design depends on this: the script is read once
+   * and every later role reuses that work. Default it to nothing and the cache
+   * can be evicted between roles, which turns one prefill into forty.
+   */
+  keepAlive?: string;
 }
 
 /**
@@ -427,7 +496,15 @@ export interface ChatJsonOptions {
  */
 export async function chatJson<T>(
   config: OllamaConfig,
-  { system, user, schema, label, timeoutMs = 600_000, maxOutputTokens = 12_000 }: ChatJsonOptions,
+  {
+    system,
+    user,
+    schema,
+    label,
+    timeoutMs = 180_000,
+    maxOutputTokens = 1024,
+    keepAlive = "30m",
+  }: ChatJsonOptions,
 ): Promise<T> {
   const promptChars = system.length + user.length;
   if (promptChars > config.promptCharBudget) {
@@ -446,8 +523,15 @@ export async function chatJson<T>(
     timeoutMs,
     body: JSON.stringify({
       model: config.model,
-      stream: false,
+      // Streamed, and not for the progress. Node's fetch gives up if response
+      // headers take longer than five minutes, and with stream:false Ollama
+      // sends none until the whole answer exists. The first role of a feature
+      // spends longer than that reading the script, so the call died at the
+      // five-minute mark whatever timeout was set here — and was reported as
+      // "Cannot reach Ollama". Streaming sends headers at once.
+      stream: true,
       format: schema,
+      keep_alive: keepAlive,
       options: {
         temperature: 0,
         num_ctx: config.numCtx,
@@ -491,10 +575,28 @@ export async function chatJson<T>(
     throw new OllamaError(`Ollama error ${res.status} while generating ${label}.`, 502, detail);
   }
 
-  const data = (await res.json().catch(() => null)) as
-    | { message?: { content?: string }; done_reason?: string }
-    | null;
-  const content = data?.message?.content ?? "";
+  // Newline-delimited chunks, each carrying a piece of the answer; the last
+  // carries done_reason. A single unstreamed object parses the same way.
+  let content = "";
+  let doneReason: string | undefined;
+  const raw = await res.text().catch(() => "");
+  for (const line of raw.split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const chunk = JSON.parse(line) as {
+        message?: { content?: string };
+        done_reason?: string;
+        error?: string;
+      };
+      if (chunk.error) throw new OllamaError(`Ollama reported an error on ${label}: ${chunk.error}`, 502);
+      content += chunk.message?.content ?? "";
+      if (chunk.done_reason) doneReason = chunk.done_reason;
+    } catch (error) {
+      if (error instanceof OllamaError) throw error;
+      // A partial line; ignore it.
+    }
+  }
+  const data = { done_reason: doneReason };
 
   if (data?.done_reason === "length") {
     throw new OllamaError(

@@ -31,8 +31,22 @@ registerHooks({
     }
     return next(specifier, context);
   },
+  // ollama.ts reads recommended-model.json. A bundler supplies the import
+  // attribute Node now demands; a plain node script has to supply it here, or
+  // the module cannot be loaded at all and its pure functions cannot be tested
+  // against the real thing.
+  load(url, context, next) {
+    if (url.endsWith(".json")) {
+      return next(url, { ...context, importAttributes: { type: "json" } });
+    }
+    return next(url, context);
+  },
 });
 
+// ollama.ts reaches "./errors" the same way, so it loads after the hook too.
+const { contextFor, promptCharBudgetFor } = await import("../src/lib/local/ollama.ts");
+
+const stubCallsFor = (stub) => stub.calls;
 const PORT = Number(process.env.CHECK_PORT || 3111);
 const BASE = `http://127.0.0.1:${PORT}`;
 
@@ -158,6 +172,38 @@ async function analyze(bytes, fileName, mode = "auto", locale) {
 // Tier vocabulary, checked directly. DAY PLAYER needs a character with under
 // 1.5% of a script's cues, which a six-scene fixture cannot produce — asserting
 // it end to end would only ever prove the fixture is short.
+console.log("\ncontext sizing agrees with the prompt budget");
+// A pure property, checked because breaking it broke everything at once.
+//
+// contextFor picks a window for a prompt; promptCharBudgetFor derives from
+// that window the longest prompt allowed in it. If the second is ever smaller
+// than the prompt the first was sized for, every call is rejected before it is
+// sent. That happened: the two used different output reserves, and a script
+// that fit in memory failed on all twenty-four roles by 845 characters. They
+// share one constant now, which makes the relationship hold by construction —
+// this asserts it stays that way, including at the sizes a real feature hits.
+{
+  const sizes = [
+    500, 1_500, 5_000, 20_000, 50_000, 120_000,
+    166_700, 167_398, // the exact prompt that failed, and its system half
+    250_000, 400_000,
+  ];
+  const short = sizes.filter((n) => promptCharBudgetFor(contextFor(n)) < n);
+  check(
+    "every prompt fits the window sized for it",
+    short.length === 0,
+    short.length
+      ? short
+          .map((n) => `${n} chars -> ctx ${contextFor(n)} -> budget ${promptCharBudgetFor(contextFor(n))}`)
+          .join("; ")
+      : "",
+  );
+  // The window is sized for the prompt, not wildly past it: a context twice
+  // what is needed doubles the memory Ollama reserves for nothing.
+  const wasteful = sizes.filter((n) => contextFor(n) > contextFor(n * 2));
+  check("a bigger prompt never gets a smaller window", wasteful.length === 0);
+}
+
 console.log("\ntier vocabulary by market");
 check("US keeps DAY PLAYER", roleTypeLabel("DAY PLAYER", "us") === "DAY PLAYER");
 check(
@@ -320,10 +366,15 @@ try {
   check("project name came from the model", body.project?.name === "THE LONG WAY DOWN", body.project?.name);
   check("mode auto-detected as film_tv", body.mode === "film_tv", body.mode);
   check("roles found", (body.roles?.length ?? 0) >= 4, `got ${body.roles?.length}`);
+  check(
+    "cast came from the script's own formatting",
+    body.meta?.diagnostics?.parsedAsScreenplay === true,
+  );
 
   const names = (body.roles ?? []).map((r) => r.name);
   check("lead character present", names.includes("Mara"), names.join(", "));
   check("day player present", names.includes("Nurse Pell"), names.join(", "));
+  check("no junk roles from caps action lines", names.every((n) => n.length < 20), names.join(", "));
 
   const mara = (body.roles ?? []).find((r) => r.name === "Mara");
   check("page numbers are real", (mara?.pageNumbers?.length ?? 0) >= 3, JSON.stringify(mara?.pageNumbers));
@@ -331,6 +382,16 @@ try {
   check(
     "description uses the canonical format",
     /^Woman, 30 to 40 years old\. .+\.\.\.LEAD$/.test(mara?.description ?? ""),
+    mara?.description,
+  );
+  check(
+    "narrative-summary sentence was dropped",
+    !/in the story/i.test(mara?.description ?? ""),
+    mara?.description,
+  );
+  check(
+    "book-voice sentence was dropped",
+    !/carries herself|an air of/i.test(mara?.description ?? ""),
     mara?.description,
   );
   const page = await fetch(`${BASE}/private`).then((r) => r.text());
@@ -345,9 +406,10 @@ try {
     `${body.meta?.model} — an 11B that fits must still lose to the recommendation, ` +
       `or moving to a better same-size model would change nothing`,
   );
+  const evidenceFile = body.meta?.diagnostics?.evidenceFile ?? "";
   check(
     "the market picker reaches the analysis",
-    stub.calls.some((c) => /Analyze these casting documents/.test(c.user)),
+    stub.calls.some((c) => c.user.startsWith("Character: ")),
     "locale is sent with every analysis; US is the default",
   );
   const wrongModel = await installModel("something-else:latest");
@@ -360,9 +422,14 @@ try {
   const roleProgress = events.filter((e) => e.progress?.phase === "roles");
   check(
     "reports real progress, not a scripted animation",
-    roleProgress.length >= 1 &&
+    roleProgress.length >= body.roles.length &&
       roleProgress.at(-1).progress.done === roleProgress.at(-1).progress.total,
-    `${roleProgress.length} progress updates`,
+    `${roleProgress.length} role updates for ${body.roles?.length} roles`,
+  );
+  check(
+    "progress counts every role",
+    roleProgress.some((e) => e.progress.total === body.roles.length),
+    JSON.stringify(roleProgress.at(-1)?.progress),
   );
   check(
     "the page says which build it is",
@@ -377,32 +444,173 @@ try {
     "this is a claim a studio would rely on, so it has to match the loopback guard",
   );
   check(
-    "no evidence dump is written even when the debug flag is set",
-    body.meta?.diagnostics?.evidenceFile === null,
-    `${body.meta?.diagnostics?.evidenceFile} — the private path no longer curates per-role evidence`,
+    "evidence dump, when asked for, lands outside the project folder",
+    Boolean(evidenceFile) &&
+      !evidenceFile.startsWith(process.cwd()) &&
+      existsSync(evidenceFile) &&
+      readFileSync(evidenceFile, "utf8").includes("===== Mara"),
+    `${evidenceFile} — writing into a watched folder restarts the dev server mid-run`,
   );
 
-  const breakdownCalls = stub.calls.filter((c) => /Analyze these casting documents/.test(c.user));
   check(
-    "sends the public house prompt, not a local fragment addendum",
-    breakdownCalls.length >= 1 &&
-      breakdownCalls.every((c) => /DESCRIPTION FORMAT/.test(c.system) && !/WRITE IN FRAGMENTS/.test(c.system)),
-    "the private path is the same job as the public one",
+    "PDF margins were used to tell dialogue from action",
+    body.meta?.diagnostics?.usedLayout === true,
+    "without this, action lines leak into the evidence as dialogue",
+  );
+
+  const descriptionPrompts = stub.calls.filter((c) => c.user.startsWith("Character: "));
+  // The packet is gone: the model is handed the script, not a digest of it.
+  // These three replace the checks that asserted the digest's contents, which
+  // asserted a design that produced descriptions written from six lines of
+  // blocking.
+  check(
+    "the script itself reaches the model",
+    descriptionPrompts.every((c) => /THE SCRIPT:/.test(c.system)) &&
+      descriptionPrompts.some((c) => /MARA VOSS/.test(c.system)),
+    "a role described without the script is the packet design again",
+  );
+
+  // The load-bearing one. Every role call shares one byte-identical prefix, so
+  // llama.cpp reuses the attention state it built for the script on the first
+  // role and each later role pays only for what it writes. Let the system
+  // prompt vary by even a character — a name interpolated into it, a counter,
+  // a timestamp — and every role re-reads the whole script instead. That is
+  // the difference between a run of minutes and a run that never finishes.
+  const systems = new Set(descriptionPrompts.map((c) => c.system));
+  check(
+    "every role call shares one identical system prompt",
+    descriptionPrompts.length > 1 && systems.size === 1,
+    `${descriptionPrompts.length} role calls produced ${systems.size} distinct prompts; ` +
+      `anything but 1 means the script is re-read per role`,
+  );
+
+  check(
+    "the model is kept resident so the cache survives between roles",
+    stub.calls.every((c) => c.keepAlive),
+    "without keep_alive Ollama may unload between calls and discard the cached script",
+  );
+
+  // The addendum told an 8B to write fragments and stop, under a house prompt
+  // that allows a lead about a hundred and ten words. That is why leads came
+  // back four words long, and it must not come back.
+  check(
+    "nothing tells the model to stop early",
+    descriptionPrompts.every(
+      (c) => !/WRITE IN FRAGMENTS/.test(c.system) && !/Two accurate fragments/.test(c.user),
+    ),
+    "the fragments addendum is what produced four-word leads",
+  );
+
+  // The failure this is here to catch: every card came back as its demographic
+  // line and its tier — "Man...LEAD", "SUPPORTING" — and nothing else. The
+  // cause was the copied-prompt guard being handed the whole system prompt to
+  // check against, which now contains the script. A description is SUPPOSED to
+  // reuse the script's words, and across a quarter of a million characters of
+  // prose a six-word run collides by chance anyway, so all twenty-four roles
+  // were flagged as copied, retried, flagged again and discarded.
+  //
+  // Asserted on the whole cast rather than one role, because that is the shape
+  // it takes when it goes wrong: not one bad card, all of them.
+  const prose = (d) =>
+    String(d ?? "")
+      .replace(/\.\.\.[A-Z ]+$/, "")
+      .replace(/^[^.]*\.\s*/, "")
+      .trim();
+  const described = (body.roles ?? []).filter((r) => prose(r.description).split(/\s+/).filter(Boolean).length >= 8);
+  check(
+    "the run does not come back as a breakdown of empty cards",
+    (body.roles ?? []).length > 0 && described.length >= Math.ceil((body.roles ?? []).length / 2),
+    `${described.length} of ${(body.roles ?? []).length} roles carry any prose at all`,
   );
   check(
-    "hands the model the script text",
-    breakdownCalls.every((c) => /=== page \d+ ===/.test(c.user) && c.user.length > 500),
-    `largest ${Math.max(0, ...breakdownCalls.map((c) => c.user.length))} chars`,
+    "the script is not mistaken for the instructions it was appended to",
+    (body.meta?.diagnostics?.rolesCopiedPrompt ?? []).length < (body.roles ?? []).length,
+    `${JSON.stringify(body.meta?.diagnostics?.rolesCopiedPrompt)} — every role flagged means the ` +
+      `guard is checking descriptions against the script`,
+  );
+
+  // Node's fetch abandons a request whose headers take longer than five
+  // minutes, and an unstreamed Ollama call sends none until it has finished.
+  // Reading a feature takes longer than that on a laptop, so every call must
+  // stream — or the first role dies at five minutes as "Cannot reach Ollama".
+  check(
+    "every model call streams, so a long read cannot hit fetch's header timeout",
+    stub.calls.length > 0 && stub.calls.every((c) => c.stream === true),
+    `${stub.calls.filter((c) => c.stream !== true).length} unstreamed calls`,
+  );
+
+  const first = descriptionPrompts[0];
+  check(
+    "the script comes before the instructions, so the question sits next to the answer",
+    first && first.system.indexOf("THE SCRIPT:") === 0 &&
+      first.system.indexOf("END OF SCRIPT") < first.system.indexOf("DESCRIPTION FORMAT"),
+    "instructions an entire screenplay away from the answer produced empty fields",
   );
   check(
-    "asks for enough context to hold a feature",
-    breakdownCalls.every((c) => (c.options?.num_ctx ?? 0) >= 32_768),
-    JSON.stringify(breakdownCalls[0]?.options),
+    "the ask spells out the description field, right before the answer",
+    descriptionPrompts.every((c) => /description:/.test(c.user) && /must never be empty/.test(c.user)),
   );
-  check("responses constrained by a JSON schema", stub.calls.every((c) => typeof c.format === "object"));
+  check(
+    "nothing next to the answer asks for fragments",
+    descriptionPrompts.every((c) => !/fragments|a line or two/i.test(c.user)),
+    "the length hint said fragments on every call and survived the addendum's deletion",
+  );
+  const barman = (body.roles ?? []).find((r) => r.name === "Barman")?.description ?? "";
+  check(
+    "a role whose first answer is empty is asked again, and gets described",
+    /judges none of them/i.test(barman) &&
+      descriptionPrompts.some((c) => /left the description empty/.test(c.user) && /Barman/.test(c.user)),
+    `Barman -> ${JSON.stringify(barman)}`,
+  );
+
+  const walt = (body.roles ?? []).find((r) => r.name === "Walt")?.description ?? "";
+  check(
+    "a description written in the script's own words survives",
+    /keeps cooking anyway/i.test(walt),
+    `Walt -> ${JSON.stringify(walt)} — reusing the script's wording is the job, not a leak`,
+  );
+
+  const otis = (body.roles ?? []).find((r) => r.name === "Otis")?.description ?? "";
+  check(
+    "a description copied from the prompt is regenerated, not printed",
+    (body.meta?.diagnostics?.rolesCopiedPrompt ?? []).includes("Otis") &&
+      !/write in this order|ROLE DESCRIPTION/i.test(otis) &&
+      otis.split(/\s+/).length > 6,
+    `${JSON.stringify(body.meta?.diagnostics?.rolesCopiedPrompt)} -> ${otis}`,
+  );
+  const pell = (body.roles ?? []).find((r) => r.name === "Nurse Pell")?.description ?? "";
+  check(
+    "a short phrase quoted in the prompt is caught too",
+    !/gaunt, weathered|mountainous, corpulent/i.test(pell),
+    `${pell} — the six-word rule cannot see a two-word lift`,
+  );
+
+  const devlin = (body.roles ?? []).find((r) => r.name === "Devlin");
+  check(
+    "hair colour is not accepted as an ethnicity",
+    !(body.roles ?? []).some((r) => /blonde|redhead|brunette/i.test(r.ethnicity ?? "")),
+    (body.roles ?? []).map((r) => r.ethnicity).filter(Boolean).join(", "),
+  );
+  check(
+    "an ethnicity the script never states is dropped",
+    devlin?.ethnicity === null && (body.meta?.diagnostics?.unsupportedEthnicityDropped ?? 0) >= 1,
+    `ethnicity=${devlin?.ethnicity}, dropped=${body.meta?.diagnostics?.unsupportedEthnicityDropped}`,
+  );
+  check(
+    "model was never handed the sentence ceiling",
+    descriptionPrompts.every((c) => !/at most \d+ sentence/i.test(c.user)),
+    "a number in the prompt becomes a target",
+  );
   check("self-tape instructions per role", body.selfTapeInstructions?.length === body.roles?.length);
   check("form questions per role", body.formQuestions?.length === body.roles?.length);
   check("logline written", Boolean(body.project?.logline), body.project?.logline);
+
+  const chats = stub.calls;
+  check("no single call sent the whole script", chats.every((c) => c.user.length < 12_000),
+    `largest ${Math.max(...chats.map((c) => c.user.length))} chars`);
+  check("num_ctx set explicitly on every call", chats.every((c) => c.options?.num_ctx > 2048),
+    JSON.stringify(chats[0]?.options));
+  check("responses constrained by a JSON schema", chats.every((c) => typeof c.format === "object"));
 
   console.log("\nscanned PDF with no text layer");
   const scan = await analyze(scanned, "scanned-script.pdf");
@@ -423,19 +631,31 @@ server = await startDevServer({
 });
 
 try {
+  // This used to assert "still 200": a model that returned nothing produced a
+  // successful breakdown of blank cards, and the suite REQUIRED it to. That is
+  // exactly what reached the user — forty cards reading "LEAD", after an hour.
+  // A useless model is an error, reported fast, with what the model said.
   console.log("\nmodel returning {} for everything");
-  const { status, body, events } = await analyze(screenplay, "the-long-way-down.pdf");
-  const streamError = events.find((e) => e.error)?.error ?? body.error;
+  const { status, body } = await analyze(screenplay, "the-long-way-down.pdf");
+  const said = JSON.stringify(body);
+  // The route streams progress as NDJSON, so the status is 200 before the
+  // pipeline runs; a pipeline failure arrives as an error event instead.
   check(
-    "fails rather than inventing an empty cast",
-    status === 200 && Boolean(streamError),
-    `got status=${status} error=${streamError}`,
+    "a useless model is an error, not a breakdown of blank cards",
+    Boolean(body.error) && !body.roles,
+    `status ${status}, ${body.roles ? `${body.roles.length} roles returned` : "no roles"}`,
   );
   check(
-    "error names the broken reply",
-    /not a breakdown|invalid JSON|failed/i.test(streamError ?? ""),
-    streamError,
+    "it stops after the first roles instead of grinding through the cast",
+    stubCallsFor(emptyStub).filter((c) => c.user.startsWith("Character: ")).length <= 4,
+    `${stubCallsFor(emptyStub).filter((c) => c.user.startsWith("Character: ")).length} role calls made`,
   );
+  check(
+    "the error says the description came back empty, and shows what the model said",
+    /no description/i.test(said) && /actual reply was/i.test(said),
+    said.slice(0, 300),
+  );
+  check("and says nothing left the machine", /entirely on this machine/i.test(said));
 } finally {
   await stopDevServer(server);
   await emptyStub.close();
@@ -453,17 +673,21 @@ try {
   console.log("\nAustralian market selected");
   const { body } = await analyze(screenplay, "the-long-way-down.pdf", "auto", "au");
   check(
-    "Australian prompt vocabulary reaches the model",
-    auStub.calls.some((c) => /Showcast|BIT PLAYER|SUPPORTING/.test(c.system)),
-    "locale is what changes the house prompt for this market",
+    "no DAY PLAYER in Australian breakdowns",
+    !(body.roles ?? []).some((r) => r.roleType === "DAY PLAYER"),
+    (body.roles ?? []).map((r) => r.roleType).join(", "),
   );
-  check("roles still returned", (body.roles?.length ?? 0) >= 4, `got ${body.roles?.length}`);
+  check(
+    "and no US-only vocabulary either",
+    !(body.roles ?? []).some((r) => /DAY PLAYER|CO-STAR|GUEST STAR/.test(r.roleType ?? "")),
+    (body.roles ?? []).map((r) => r.roleType).join(", "),
+  );
 } finally {
   await stopDevServer(server);
   await auStub.close();
 }
 
-// --- 1b. Evidence dump is off --------------------------------------------------
+// --- 1b. Evidence dump is off unless asked for ---------------------------------
 const quietStub = await startStubOllama({ scenario: "ok" });
 server = await startDevServer({
   OLLAMA_BASE_URL: quietStub.url,
@@ -504,6 +728,15 @@ try {
   check(
     "the result still arrives at the end of the stream",
     (body.roles?.length ?? 0) > 0,
+  );
+  // A bar with no estimate is how a working run and a stuck one look the same
+  // for an hour. Once one cached role has been timed, the progress line says
+  // how long is left.
+  const messages = events.filter((e) => e.progress).map((e) => JSON.stringify(e.progress));
+  check(
+    "progress names the character and says how long is left",
+    messages.some((m) => /Described [A-Z][a-z]+.*min left/.test(m)),
+    messages.slice(-3).join(" | "),
   );
 } finally {
   await stopDevServer(server);
