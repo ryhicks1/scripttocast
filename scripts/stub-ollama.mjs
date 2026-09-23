@@ -64,14 +64,25 @@ export function startStubOllama({ scenario = "ok", port = 0 } = {}) {
         options: request.options,
         format: request.format,
         keepAlive: request.keep_alive,
+        stream: request.stream,
       });
 
-      if (scenario === "empty") {
-        return json(200, { message: { content: "{}" }, done_reason: "stop" });
-      }
+      // Answer the way Ollama does when asked to stream: the content in
+      // pieces, one JSON object per line, done_reason on the last. The
+      // pipeline streams because Node's fetch drops a request whose headers
+      // take over five minutes, and the parser has to put the pieces back.
+      const respond = (content) => {
+        if (!request.stream) return json(200, { message: { content }, done_reason: "stop" });
+        res.writeHead(200, { "Content-Type": "application/x-ndjson" });
+        for (let i = 0; i < content.length; i += 7) {
+          res.write(`${JSON.stringify({ message: { content: content.slice(i, i + 7) }, done: false })}\n`);
+        }
+        res.end(`${JSON.stringify({ message: { content: "" }, done: true, done_reason: "stop" })}\n`);
+      };
 
-      const send = () =>
-        json(200, { message: { content: JSON.stringify(reply(system, user)) }, done_reason: "stop" });
+      if (scenario === "empty") return respond("{}");
+
+      const send = () => respond(JSON.stringify(reply(system, user)));
 
       // A real 8B model takes seconds per role; a feature runs for minutes.
       // This reproduces that without the wait being real.

@@ -529,6 +529,16 @@ try {
       `guard is checking descriptions against the script`,
   );
 
+  // Node's fetch abandons a request whose headers take longer than five
+  // minutes, and an unstreamed Ollama call sends none until it has finished.
+  // Reading a feature takes longer than that on a laptop, so every call must
+  // stream — or the first role dies at five minutes as "Cannot reach Ollama".
+  check(
+    "every model call streams, so a long read cannot hit fetch's header timeout",
+    stub.calls.length > 0 && stub.calls.every((c) => c.stream === true),
+    `${stub.calls.filter((c) => c.stream !== true).length} unstreamed calls`,
+  );
+
   const first = descriptionPrompts[0];
   check(
     "the script comes before the instructions, so the question sits next to the answer",

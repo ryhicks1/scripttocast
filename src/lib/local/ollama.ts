@@ -271,6 +271,12 @@ export async function pickBestModel(
   };
 }
 
+/** The underlying network error — "fetch failed" alone says nothing. */
+function causeOf(error: unknown): string {
+  const cause = (error as { cause?: { code?: string; message?: string } })?.cause;
+  return cause?.code || cause?.message || "";
+}
+
 async function ollamaFetch(
   config: OllamaConfig,
   path: string,
@@ -289,7 +295,9 @@ async function ollamaFetch(
       timedOut
         ? `Ollama did not respond within ${Math.round(timeoutMs / 1000)}s at ${config.baseUrl}. ` +
             `A large model on a busy machine can exceed this — close other apps and try again.`
-        : `Cannot reach Ollama at ${config.baseUrl}. Start it with: ollama serve`,
+        : `Cannot reach Ollama at ${config.baseUrl} (${causeOf(error) || reason}). ` +
+            `If Ollama is running, it may have stopped mid-request — check its window for ` +
+            `an out-of-memory message. Otherwise start it with: ollama serve`,
       503,
       reason,
     );
@@ -466,7 +474,13 @@ export async function chatJson<T>(
     timeoutMs,
     body: JSON.stringify({
       model: config.model,
-      stream: false,
+      // Streamed, and not for the progress. Node's fetch gives up if response
+      // headers take longer than five minutes, and with stream:false Ollama
+      // sends none until the whole answer exists. The first role of a feature
+      // spends longer than that reading the script, so the call died at the
+      // five-minute mark whatever timeout was set here — and was reported as
+      // "Cannot reach Ollama". Streaming sends headers at once.
+      stream: true,
       format: schema,
       keep_alive: keepAlive,
       options: {
@@ -512,10 +526,28 @@ export async function chatJson<T>(
     throw new OllamaError(`Ollama error ${res.status} while generating ${label}.`, 502, detail);
   }
 
-  const data = (await res.json().catch(() => null)) as
-    | { message?: { content?: string }; done_reason?: string }
-    | null;
-  const content = data?.message?.content ?? "";
+  // Newline-delimited chunks, each carrying a piece of the answer; the last
+  // carries done_reason. A single unstreamed object parses the same way.
+  let content = "";
+  let doneReason: string | undefined;
+  const raw = await res.text().catch(() => "");
+  for (const line of raw.split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const chunk = JSON.parse(line) as {
+        message?: { content?: string };
+        done_reason?: string;
+        error?: string;
+      };
+      if (chunk.error) throw new OllamaError(`Ollama reported an error on ${label}: ${chunk.error}`, 502);
+      content += chunk.message?.content ?? "";
+      if (chunk.done_reason) doneReason = chunk.done_reason;
+    } catch (error) {
+      if (error instanceof OllamaError) throw error;
+      // A partial line; ignore it.
+    }
+  }
+  const data = { done_reason: doneReason };
 
   if (data?.done_reason === "length") {
     throw new OllamaError(
