@@ -8,6 +8,7 @@
  * the one thing the private path exists to prevent.
  */
 
+import { request as httpRequest } from "node:http";
 import recommended from "../../../recommended-model.json";
 import { LocalAnalysisError } from "./errors";
 
@@ -271,10 +272,61 @@ export async function pickBestModel(
   };
 }
 
+/**
+ * One HTTP request to Ollama, over node:http rather than fetch.
+ *
+ * Node's fetch abandons any request whose response headers take longer than
+ * five minutes (undici's headersTimeout), and nothing passed to fetch can lift
+ * it. Ollama sends no headers until the first token of its answer — streamed
+ * or not — and the first role of a feature spends longer than five minutes
+ * reading the whole script before it can produce one. So every first role
+ * failed at five minutes with UND_ERR_HEADERS_TIMEOUT, reported as Ollama
+ * being unreachable while it was busy doing exactly what it was asked.
+ *
+ * node:http has no such limit. The only ceiling here is the one the caller
+ * sets, which is what the caller's timeout always claimed to be.
+ */
+function loopbackRequest(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  return new Promise((resolve, reject) => {
+    const req = httpRequest(
+      url,
+      {
+        method: init.method ?? "GET",
+        headers: init.headers as Record<string, string> | undefined,
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("end", () => {
+          clearTimeout(timer);
+          resolve(new Response(Buffer.concat(chunks), { status: res.statusCode ?? 500 }));
+        });
+        res.on("error", (error) => {
+          clearTimeout(timer);
+          reject(error);
+        });
+      },
+    );
+    const timer = setTimeout(() => {
+      const error = new Error(`timed out after ${timeoutMs}ms`);
+      error.name = "TimeoutError";
+      req.destroy(error);
+      reject(error);
+    }, timeoutMs);
+    req.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    if (init.body) req.write(init.body as string);
+    req.end();
+  });
+}
+
 /** The underlying network error — "fetch failed" alone says nothing. */
 function causeOf(error: unknown): string {
+  const direct = (error as { code?: string })?.code;
   const cause = (error as { cause?: { code?: string; message?: string } })?.cause;
-  return cause?.code || cause?.message || "";
+  return direct || cause?.code || cause?.message || "";
 }
 
 async function ollamaFetch(
@@ -284,10 +336,7 @@ async function ollamaFetch(
 ): Promise<Response> {
   const { timeoutMs = 60_000, ...rest } = init;
   try {
-    return await fetch(`${config.baseUrl}${path}`, {
-      ...rest,
-      signal: AbortSignal.timeout(timeoutMs),
-    });
+    return await loopbackRequest(`${config.baseUrl}${path}`, rest, timeoutMs);
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     const timedOut = error instanceof Error && error.name === "TimeoutError";
