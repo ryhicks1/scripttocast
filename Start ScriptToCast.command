@@ -36,18 +36,26 @@ npm install --no-audit --no-fund --silent
 # typed into a terminal, so the setting is given to macOS and the app is
 # restarted to pick it up. Nobody should have to do this by hand.
 launchctl setenv OLLAMA_NUM_PARALLEL 1
-if [ "$(launchctl getenv OLLAMA_NUM_PARALLEL_APPLIED 2>/dev/null)" != "1" ] \
+# Flash attention and an 8-bit key/value cache are what make a whole feature
+# script workable on a laptop: every word written attends over the entire
+# script, and these make that faster and halve the memory it holds.
+launchctl setenv OLLAMA_FLASH_ATTENTION 1
+launchctl setenv OLLAMA_KV_CACHE_TYPE q8_0
+# Bumped whenever the settings above change, so Ollama is restarted once to
+# take them — the menu-bar app only reads them when it starts.
+SETTINGS_VERSION=2
+if [ "$(launchctl getenv OLLAMA_NUM_PARALLEL_APPLIED 2>/dev/null)" != "$SETTINGS_VERSION" ] \
    && curl -sf http://127.0.0.1:11434/api/tags > /dev/null; then
   echo "Restarting Ollama with the right settings..."
   osascript -e 'quit app "Ollama"' 2>/dev/null || true
   pkill -x ollama 2>/dev/null || true
   sleep 2
 fi
-launchctl setenv OLLAMA_NUM_PARALLEL_APPLIED 1
+launchctl setenv OLLAMA_NUM_PARALLEL_APPLIED "$SETTINGS_VERSION"
 
 if ! curl -sf http://127.0.0.1:11434/api/tags > /dev/null; then
   echo "Starting Ollama..."
-  open -a Ollama 2>/dev/null || (OLLAMA_NUM_PARALLEL=1 nohup ollama serve > /dev/null 2>&1 &)
+  open -a Ollama 2>/dev/null || (OLLAMA_NUM_PARALLEL=1 OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0 nohup ollama serve > /dev/null 2>&1 &)
   for _ in $(seq 1 30); do
     curl -sf http://127.0.0.1:11434/api/tags > /dev/null && break
     sleep 1
