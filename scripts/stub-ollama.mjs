@@ -151,6 +151,24 @@ function reply(system, user) {
     }
   }
 
+  // The Barman's first answer leaves the description empty, which is what a
+  // real 8B model did for every role once the field definitions ended up an
+  // entire screenplay away from the answer. The pipeline must ask again, and
+  // the second answer — prompted by the correction — is a real one.
+  if (name === "Barman") {
+    if (!/left the description empty/.test(user)) {
+      return { gender: "", ageRange: "", ethnicity: "", description: "", traits: [] };
+    }
+    return {
+      gender: "Man",
+      ageRange: "",
+      ethnicity: "",
+      description:
+        "Night barman who has seen every kind of regular and judges none of them out loud. Keeps the place running on patience and a television nobody watches.",
+      traits: ["patient", "observant"],
+    };
+  }
+
   // Walt answers in the script's own words, which is what a good description
   // does. The system prompt now carries the whole script, so a guard that asks
   // "did this copy the prompt?" against the whole system prompt sees a

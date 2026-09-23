@@ -103,6 +103,23 @@ const DEFAULT_MAX_ROLES = 120;
  */
 const MAX_ROLE_USER_CHARS = 4_000;
 
+/** Below this a description is treated as empty: asked again, then reported. */
+const MIN_DESCRIPTION_WORDS = 5;
+
+/**
+ * How many roles must come back described before the run is trusted to
+ * continue. Two, because the first also absorbs the cold prefill and the
+ * second is the first to run from the cache — a failure in either is a
+ * failure of the whole design, not of one character.
+ */
+const FAIL_FAST_ROLES = 2;
+
+/**
+ * Below this, the first call is too quick for the cache comparison to mean
+ * anything — a short script, or a machine fast enough not to care.
+ */
+const CACHE_CHECK_MIN_MS = 60_000;
+
 /**
  * Ceiling for one role call, generous enough to include a cold prefill.
  *
@@ -413,7 +430,7 @@ export async function analyzeLocally(
   const descriptionInstructions =
     `${buildSystemPrompt(mode, locale)}\n\n` +
     `────────────────────────────────────────\n` +
-    `You are writing ONE role's entry at a time. The full script is below. ` +
+    `You are writing ONE role's entry at a time. The full script is above. ` +
     `Read it and answer about the character named in the request, using ` +
     `everything the script shows of them across all of its pages.\n\n` +
     `Return only that character's fields: gender, ageRange, ethnicity, ` +
@@ -421,7 +438,20 @@ export async function analyzeLocally(
     `questions. Write only the [ROLE DESCRIPTION] part — gender, age and ` +
     `ethnicity are printed for you from their own fields, so do not repeat ` +
     `them in the prose and do not write the trailing role type.`;
-  const descriptionSystem = `${descriptionInstructions}\n\nTHE SCRIPT:\n${scriptText}`;
+  // Script first, instructions after it. The other order put the house prompt's
+  // field definitions fifty thousand tokens before the point of generation,
+  // with nothing but screenplay in between — and under a JSON grammar at
+  // temperature zero, an 8B model that has lost track of what each field is
+  // for emits the smallest object the grammar allows: every string empty.
+  // That is a breakdown of cards reading "LEAD". Long-context models answer
+  // best with the document first and the question last, next to the answer.
+  //
+  // Still byte-identical on every call, so the prefix cache holds. The script
+  // being first actually helps it: it is the longest stable run in the prompt.
+  const descriptionSystem =
+    `THE SCRIPT:\n${scriptText}\n\n` +
+    `════════════════════ END OF SCRIPT ════════════════════\n\n` +
+    descriptionInstructions;
 
   // Size the window to the script, and refuse rather than truncate. Ollama
   // drops anything past num_ctx without saying so, and a breakdown written
@@ -460,6 +490,21 @@ export async function analyzeLocally(
   // that every role failed and suggest checking that Ollama worked, which is
   // the one thing that was never wrong.
   let firstFailure: unknown = null;
+  // Roles whose FIRST answer had no description, and the first such reply
+  // verbatim — the one thing every previous empty run lacked was what the
+  // model actually said.
+  const emptyFirst: string[] = [];
+  // Wall-clock per model call, in order. The first includes loading the model
+  // at this context size and reading the whole script; every later one should
+  // cost only what it writes. The ratio between them is the whole design
+  // working or not, and it is measurable two roles in.
+  const callTimes: number[] = [];
+  let firstEmptyReply = "";
+  const emptyBecause = { failed: [] as string[], modelEmpty: [] as string[], discarded: [] as string[] };
+  // What the copied-prompt guard checks against: the instructions and the
+  // fixed part of the ask. Never the script — a description is supposed to
+  // reuse the script's words.
+  const guardText = (name: string) => `${descriptionInstructions}\n${descriptionUser(name, "")}`;
   const leaked: string[] = [];
   // Openings spent so far, fed into each subsequent prompt.
   const usedOpenings: string[] = [];
@@ -492,12 +537,21 @@ export async function analyzeLocally(
         : DESCRIPTION_BUDGET.SUPPORTING;
     // Length, described rather than numbered. The budget is enforced in code
     // afterwards; a model handed a number writes to it whatever it has to say.
+    // How long, in the terms that actually get length out of an 8B model.
+    //
+    // This said "a few fragments" and "a line or two", on every call, as the
+    // last instruction before the answer — which makes it the most influential
+    // line in the prompt, whatever the house prompt a hundred lines earlier
+    // allows. It survived the deletion of the fragments addendum because it
+    // lived here instead, and it is why leads kept coming back four words
+    // long. The numbers are the corpus medians: 84 words for a lead, 61 for a
+    // supporting role, 44 for a day player.
     const lengthHint =
       budget <= 400
-        ? "A line or two. Use the age, look, job and manner the script states. Do not pad, and do not invent a look."
+        ? "Two or three sentences, around forty words."
         : budget >= 650
-          ? "Several fragments. Use the age, look, job and manner the script states — a lead the script actually describes is more than one adjective. Do not retell scenes, and do not invent a look."
-          : "A few fragments. Use the age, look, job and manner the script states. Do not retell scenes, and do not invent a look.";
+          ? "Four to six sentences, around eighty to a hundred words."
+          : "Three or four sentences, around sixty words.";
     const name = displayName(character.name);
     const evidence = buildEvidence(script, character, 2400);
 
@@ -524,7 +578,15 @@ export async function analyzeLocally(
     // instead of reusing the attention state every other role shares. The
     // check suite asserts every role call sends one identical system prompt
     // for exactly this reason, and it caught this the first time it ran.
-    const askFor = async (correction = "") =>
+    const askFor = async (correction = "") => {
+      const callStarted = Date.now();
+      try {
+        return await askOnce(correction);
+      } finally {
+        callTimes.push(Date.now() - callStarted);
+      }
+    };
+    const askOnce = async (correction: string) =>
       chatJson<DescriptionReply>(roleConfig, {
         system: descriptionSystem,
         user: `${descriptionUser(name, lengthHint, usedOpenings)}${correction}`,
@@ -547,7 +609,21 @@ export async function analyzeLocally(
       // The house prompt's worked examples are vivid, and a model short of
       // evidence hands one back as the character. Retry saying so outright
       // rather than discarding the role.
-      if (sharesWording(clean(reply.description), descriptionInstructions)) {
+      // An empty description is asked for once more, with the reason stated.
+      // It costs one short call — the script is already cached — and the
+      // alternative is a card that reads "LEAD" and nothing else.
+      if (wordCount(clean(reply.description)) < MIN_DESCRIPTION_WORDS) {
+        log("local: empty description, asking again", { role: name, reply });
+        emptyFirst.push(name);
+        if (!firstEmptyReply) firstEmptyReply = JSON.stringify(reply).slice(0, 400);
+        reply = await askFor(
+          `\n\nYour previous answer left the description empty. The description is ` +
+            `the one field that matters: write it now, about ${name}, from the script above.`,
+        );
+        modelCalls++;
+      }
+
+      if (sharesWording(clean(reply.description), guardText(name))) {
         log("local: description copied the prompt, retrying", { role: name });
         leaked.push(name);
         reply = await askFor(
@@ -563,10 +639,41 @@ export async function analyzeLocally(
       log("local: role description failed", { role: name, error: String(error) });
     }
 
-    log("local: role done", { index: index + 1, of: characters.length, role: name });
+    // Is the script being read once, or once per role? Two roles in, the
+    // numbers say. A cached call writes a couple of hundred tokens against
+    // attention state that already exists; an uncached one re-reads the whole
+    // screenplay first and takes as long as the cold call did. If that is what
+    // is happening, the run would take an hour — so stop now and say so,
+    // instead of letting the person find out an hour from now.
+    const warm = callTimes.slice(1);
+    if (
+      index === 1 &&
+      warm.length &&
+      callTimes[0] > CACHE_CHECK_MIN_MS &&
+      median(warm) > callTimes[0] * 0.6
+    ) {
+      const total = Math.round(((callTimes[0] * characters.length) / 60_000) * 10) / 10;
+      throw new LocalAnalysisError(
+        `Stopped after two roles: the script is being re-read for every role instead of ` +
+          `read once and reused. The first role took ${seconds(callTimes[0])} (that one ` +
+          `includes reading the whole script) and the next took ${seconds(median(warm))}; ` +
+          `it should take a small fraction of the first. At this rate ${characters.length} ` +
+          `roles would take about ${total} minutes. Usually this is Ollama unloading the ` +
+          `model between calls, or running more than one request slot — start it with ` +
+          `OLLAMA_NUM_PARALLEL=1 ollama serve and try again.`,
+        503,
+      );
+    }
+    const remaining = characters.length - (index + 1);
+    const eta =
+      warm.length && remaining > 0
+        ? ` — about ${Math.max(1, Math.round((median(warm) * remaining * 1.1) / 60_000))} min left`
+        : "";
+
+    log("local: role done", { index: index + 1, of: characters.length, role: name, callTimes });
     onProgress({
       phase: "roles",
-      message: `Described ${name}`,
+      message: `Described ${name}${eta}`,
       done: index + 1,
       total: characters.length,
     });
@@ -579,7 +686,7 @@ export async function analyzeLocally(
 
     // Last resort: a retry that copied the prompt too is discarded outright.
     // Text lifted from instructions is a fabrication about a real person.
-    if (body && sharesWording(body, descriptionInstructions)) {
+    if (body && sharesWording(body, guardText(name))) {
       log("local: description still copied the prompt, discarded", { role: name, body });
       body = "";
     }
@@ -609,6 +716,31 @@ export async function analyzeLocally(
     if (reply?.ethnicity && !ethnicity) {
       log("local: dropped unsupported ethnicity", { role: name, claimed: reply.ethnicity });
       unsupportedEthnicity++;
+    }
+
+    // Why a card has no prose, so a run full of them can say which it was.
+    if (!body) {
+      if (!reply) emptyBecause.failed.push(name);
+      else if (wordCount(clean(reply.description)) < MIN_DESCRIPTION_WORDS) {
+        emptyBecause.modelEmpty.push(name);
+        if (!firstEmptyReply) firstEmptyReply = JSON.stringify(reply).slice(0, 400);
+      } else emptyBecause.discarded.push(name);
+    }
+
+    // Fail fast. The first role pays for reading the script — a few minutes —
+    // and everything after it is cheap. If the first roles come back empty
+    // even after being asked twice, the next thirty-eight will too, and the
+    // old behaviour was to grind through all of them for an hour and then
+    // print a breakdown of blank cards. Stop here and say why, in minutes.
+    if (index < FAIL_FAST_ROLES && !body) {
+      throw new LocalAnalysisError(
+        `Stopped after ${index + 1} role${index ? "s" : ""} rather than spend the next hour ` +
+          `producing empty cards: ${name} came back with no description. ` +
+          emptyReason(emptyBecause, firstFailure, firstEmptyReply) +
+          ` Nothing was sent anywhere; this ran entirely on this machine.`,
+        502,
+        firstEmptyReply || (firstFailure ? String(firstFailure) : ""),
+      );
     }
 
     body = withoutOtherCharacters(body, name, castNames);
@@ -654,6 +786,18 @@ export async function analyzeLocally(
       submissionNotes: [],
       pageNumbers: character.pages,
     });
+  }
+
+  const blank =
+    emptyBecause.failed.length + emptyBecause.modelEmpty.length + emptyBecause.discarded.length;
+  if (blank && blank >= Math.ceil(roles.length / 4) && failed.length !== roles.length) {
+    throw new LocalAnalysisError(
+      `${blank} of ${roles.length} roles came back with no description, so this is not ` +
+        `returned as a finished breakdown. ` +
+        emptyReason(emptyBecause, firstFailure, firstEmptyReply),
+      502,
+      firstEmptyReply || (firstFailure ? String(firstFailure) : ""),
+    );
   }
 
   if (failed.length === roles.length) {
@@ -1073,6 +1217,57 @@ function quotedExamples(prompt: string): string[] {
 }
 
 /** Six consecutive words in common — enough to call it copied, not coincidence. */
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function seconds(ms: number): string {
+  return ms >= 90_000 ? `${Math.round(ms / 6_000) / 10} minutes` : `${Math.round(ms / 1000)} seconds`;
+}
+
+function wordCount(text: string): number {
+  return text.split(/\s+/).filter(Boolean).length;
+}
+
+/**
+ * Why cards came back blank, in words a person can act on. Three different
+ * failures look identical on the page — a card reading "LEAD" — and each has
+ * a different fix, so the message names which it was and shows the evidence.
+ */
+function emptyReason(
+  because: { failed: string[]; modelEmpty: string[]; discarded: string[] },
+  firstFailure: unknown,
+  firstEmptyReply: string,
+): string {
+  const parts: string[] = [];
+  if (because.failed.length) {
+    parts.push(
+      `${because.failed.length} call${because.failed.length === 1 ? "" : "s"} failed outright` +
+        (firstFailure ? ` (first error: ${String(firstFailure).slice(0, 300)})` : "") +
+        `.`,
+    );
+  }
+  if (because.modelEmpty.length) {
+    parts.push(
+      `The model answered but left the description empty for ` +
+        `${because.modelEmpty.slice(0, 5).join(", ")}` +
+        `${because.modelEmpty.length > 5 ? ` and ${because.modelEmpty.length - 5} more` : ""}, ` +
+        `even when asked a second time` +
+        (firstEmptyReply ? `. Its actual reply was: ${firstEmptyReply}` : "") +
+        `.`,
+    );
+  }
+  if (because.discarded.length) {
+    parts.push(
+      `${because.discarded.length} description${because.discarded.length === 1 ? " was" : "s were"} ` +
+        `discarded for copying the instructions.`,
+    );
+  }
+  return parts.join(" ");
+}
+
 function sharesWording(candidate: string, source: string): boolean {
   const words = normalise(candidate);
   const haystack = ` ${normalise(source).join(" ")} `;

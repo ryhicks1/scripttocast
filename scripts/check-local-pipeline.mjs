@@ -46,6 +46,7 @@ registerHooks({
 // ollama.ts reaches "./errors" the same way, so it loads after the hook too.
 const { contextFor, promptCharBudgetFor } = await import("../src/lib/local/ollama.ts");
 
+const stubCallsFor = (stub) => stub.calls;
 const PORT = Number(process.env.CHECK_PORT || 3111);
 const BASE = `http://127.0.0.1:${PORT}`;
 
@@ -528,6 +529,30 @@ try {
       `guard is checking descriptions against the script`,
   );
 
+  const first = descriptionPrompts[0];
+  check(
+    "the script comes before the instructions, so the question sits next to the answer",
+    first && first.system.indexOf("THE SCRIPT:") === 0 &&
+      first.system.indexOf("END OF SCRIPT") < first.system.indexOf("DESCRIPTION FORMAT"),
+    "instructions an entire screenplay away from the answer produced empty fields",
+  );
+  check(
+    "the ask spells out the description field, right before the answer",
+    descriptionPrompts.every((c) => /description:/.test(c.user) && /must never be empty/.test(c.user)),
+  );
+  check(
+    "nothing next to the answer asks for fragments",
+    descriptionPrompts.every((c) => !/fragments|a line or two/i.test(c.user)),
+    "the length hint said fragments on every call and survived the addendum's deletion",
+  );
+  const barman = (body.roles ?? []).find((r) => r.name === "Barman")?.description ?? "";
+  check(
+    "a role whose first answer is empty is asked again, and gets described",
+    /judges none of them/i.test(barman) &&
+      descriptionPrompts.some((c) => /left the description empty/.test(c.user) && /Barman/.test(c.user)),
+    `Barman -> ${JSON.stringify(barman)}`,
+  );
+
   const walt = (body.roles ?? []).find((r) => r.name === "Walt")?.description ?? "";
   check(
     "a description written in the script's own words survives",
@@ -596,16 +621,31 @@ server = await startDevServer({
 });
 
 try {
+  // This used to assert "still 200": a model that returned nothing produced a
+  // successful breakdown of blank cards, and the suite REQUIRED it to. That is
+  // exactly what reached the user — forty cards reading "LEAD", after an hour.
+  // A useless model is an error, reported fast, with what the model said.
   console.log("\nmodel returning {} for everything");
   const { status, body } = await analyze(screenplay, "the-long-way-down.pdf");
-  check("still 200", status === 200, `got ${status}`);
+  const said = JSON.stringify(body);
+  // The route streams progress as NDJSON, so the status is 200 before the
+  // pipeline runs; a pipeline failure arrives as an error event instead.
   check(
-    "roles survive a useless model",
-    (body.roles?.length ?? 0) >= 4,
-    `got ${body.roles?.length} — this is the regression that returned 0 roles`,
+    "a useless model is an error, not a breakdown of blank cards",
+    Boolean(body.error) && !body.roles,
+    `status ${status}, ${body.roles ? `${body.roles.length} roles returned` : "no roles"}`,
   );
-  check("title falls back to the file name", /long way down/i.test(body.project?.name ?? ""), body.project?.name);
-  check("page numbers still real", (body.roles?.[0]?.pageNumbers?.length ?? 0) > 0);
+  check(
+    "it stops after the first roles instead of grinding through the cast",
+    stubCallsFor(emptyStub).filter((c) => c.user.startsWith("Character: ")).length <= 4,
+    `${stubCallsFor(emptyStub).filter((c) => c.user.startsWith("Character: ")).length} role calls made`,
+  );
+  check(
+    "the error says the description came back empty, and shows what the model said",
+    /no description/i.test(said) && /actual reply was/i.test(said),
+    said.slice(0, 300),
+  );
+  check("and says nothing left the machine", /entirely on this machine/i.test(said));
 } finally {
   await stopDevServer(server);
   await emptyStub.close();
@@ -678,6 +718,15 @@ try {
   check(
     "the result still arrives at the end of the stream",
     (body.roles?.length ?? 0) > 0,
+  );
+  // A bar with no estimate is how a working run and a stuck one look the same
+  // for an hour. Once one cached role has been timed, the progress line says
+  // how long is left.
+  const messages = events.filter((e) => e.progress).map((e) => JSON.stringify(e.progress));
+  check(
+    "progress names the character and says how long is left",
+    messages.some((m) => /Described [A-Z][a-z]+.*min left/.test(m)),
+    messages.slice(-3).join(" | "),
   );
 } finally {
   await stopDevServer(server);

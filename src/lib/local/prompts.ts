@@ -96,19 +96,26 @@ export function descriptionUser(
         .join("\n")}`
     : "";
 
+  // The fields are spelled out HERE, in the last few hundred tokens before the
+  // answer, because the house prompt that defines them now sits after an
+  // entire screenplay. An 8B model generating under a JSON grammar that has
+  // lost track of what a field is for fills it with an empty string — and the
+  // one place it cannot lose track is the text right next to where it writes.
+  //
+  // Nothing here is in quotation marks. Every leak this path has had came from
+  // a quoted phrase in the prompt turning up as a character's description.
   return `Character: ${name}
 
-Write this character's entry from the script above.
+Write ${name}'s entry, from the script above.
 
-Use everything the script shows of them, wherever it appears — how they are
-introduced, what they do, how other people speak to and about them, what they
-say and how they say it. Their age, standing, look, clothing, voice and manner
-belong in it where the script gives them.
+Fill every field:
+- description: who ${name} is, for an actor deciding whether to submit. What they are, who they are to the other characters, what they are like to deal with, and what the part asks of the actor. Include their age, look, bearing and voice where the script gives them. ${lengthHint} This field must never be empty.
+- gender: as the script presents them.
+- ageRange: only if the script states or clearly implies an age. Otherwise leave it empty.
+- ethnicity: only if the script states it. Otherwise leave it empty.
+- traits: three to six single words.
 
-Do not retell scenes. Do not quote dialogue. Do not state anything the script
-does not support.
-
-${lengthHint}${avoid}`;
+Do not retell scenes. Do not quote dialogue. Do not invent anything the script does not support.${avoid}`;
 }
 
 export const CAST_LIST_SYSTEM = `You list the roles that a casting document is asking to cast.
