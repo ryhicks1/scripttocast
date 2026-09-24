@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { Upload, Copy, Check, ChevronDown, ChevronRight, FileDown, RotateCcw, Sparkles, Download } from "lucide-react";
 import type { AnalysisResult, BreakdownMode, Project, Role, SelfTapeInstruction } from "@/lib/breakdown";
 import type { Locale } from "@/lib/locale";
+import type { SidesChoice } from "@/lib/sides";
 
 const PROGRESS_STEPS = [
   { pct: 3, msg: "Uploading documents..." },
@@ -219,6 +220,11 @@ export default function SmartCreator({ isLoggedIn, initialResult, authUnavailabl
   const [doneRoles, setDoneRoles] = useState<Set<number>>(new Set());
   const [sidesUrls, setSidesUrls] = useState<Record<number, string>>({});
   const [generatingSides, setGeneratingSides] = useState<Record<number, boolean>>({});
+  // Scenes proposed for each role's sides, and which the casting director has
+  // ticked. Opened by Generate Sides; the PDF is built from the ticked ones.
+  const [sidesPicks, setSidesPicks] = useState<
+    Record<number, { candidates: SidesChoice[]; selected: number[]; open: boolean }>
+  >({});
   const [copied, setCopied] = useState<string | null>(null);
   const [sections, setSections] = useState({ roles: true, instructions: true, forms: true });
   const [formModal, setFormModal] = useState<{ provider: "jotform" | "google"; questions: string; title: string; url: string } | null>(null);
@@ -510,18 +516,68 @@ export default function SmartCreator({ isLoggedIn, initialResult, authUnavailabl
     copyText(script, `cn-role-${roleIndex}`);
   }
 
-  async function generateSides(roleIndex: number) {
+  /** Ask which scenes this role should read. Rules, not a model: instant. */
+  async function pickSides(roleIndex: number): Promise<SidesChoice[] | null> {
+    if (!result) return null;
+    const role = result.roles[roleIndex];
+    const scriptFile = files.find(f => f.name.toLowerCase().endsWith('.pdf'));
+    if (!scriptFile) { setError("No PDF script file found. Upload a script PDF to generate sides."); return null; }
+    const formData = new FormData();
+    formData.append("script", scriptFile);
+    formData.append("roleName", role.name);
+    formData.append("roleType", role.roleType || "");
+    const res = await fetch("/api/select-sides", { method: "POST", body: formData });
+    const data = await res.json().catch(() => ({ error: `Status ${res.status}` }));
+    if (!res.ok) { setError(`Sides for "${role.name}": ${data.error || "Could not pick scenes"}`); return null; }
+    const candidates: SidesChoice[] = data.candidates;
+    const chosen: SidesChoice[] = data.chosen;
+    setSidesPicks(p => ({
+      ...p,
+      [roleIndex]: { candidates, selected: chosen.map(c => c.sceneIndex), open: true },
+    }));
+    return chosen;
+  }
+
+  /** Open the scene picker for a role, fetching suggestions the first time. */
+  async function openSides(roleIndex: number) {
+    if (sidesPicks[roleIndex]) {
+      setSidesPicks(p => ({ ...p, [roleIndex]: { ...p[roleIndex], open: !p[roleIndex].open } }));
+      return;
+    }
+    setGeneratingSides(p => ({ ...p, [roleIndex]: true }));
+    try { await pickSides(roleIndex); } finally { setGeneratingSides(p => ({ ...p, [roleIndex]: false })); }
+  }
+
+  function toggleScene(roleIndex: number, sceneIndex: number) {
+    setSidesPicks(p => {
+      const pick = p[roleIndex];
+      const selected = pick.selected.includes(sceneIndex)
+        ? pick.selected.filter(i => i !== sceneIndex)
+        : [...pick.selected, sceneIndex];
+      return { ...p, [roleIndex]: { ...pick, selected } };
+    });
+    setSidesUrls(p => { const next = { ...p }; delete next[roleIndex]; return next; });
+  }
+
+  /** Build the marked-up sides PDF from the chosen scenes. */
+  async function generateSides(roleIndex: number, choices?: SidesChoice[]) {
     if (!result) return;
     const role = result.roles[roleIndex];
     const scriptFile = files.find(f => f.name.toLowerCase().endsWith('.pdf'));
     if (!scriptFile) { setError("No PDF script file found. Upload a script PDF to generate sides."); return; }
+
+    const pick = sidesPicks[roleIndex];
+    const selections = choices ?? (pick
+      ? pick.candidates.filter(c => pick.selected.includes(c.sceneIndex)).sort((a, b) => a.sceneIndex - b.sceneIndex)
+      : []);
+    if (!selections.length) { setError(`Sides for "${role.name}": tick at least one scene.`); return; }
 
     setGeneratingSides(p => ({ ...p, [roleIndex]: true }));
     try {
       const formData = new FormData();
       formData.append("script", scriptFile);
       formData.append("roleName", role.name);
-      formData.append("pageNumbers", JSON.stringify(role.pageNumbers || [])); // from AI analysis
+      formData.append("selections", JSON.stringify(selections));
 
       const res = await fetch("/api/generate-sides", { method: "POST", body: formData });
 
@@ -533,10 +589,6 @@ export default function SmartCreator({ isLoggedIn, initialResult, authUnavailabl
       }
 
       const blob = await res.blob();
-      if (blob.size < 100) {
-        setError(`Sides for "${role.name}": Generated PDF was empty — character may not appear in the script`);
-        return;
-      }
       const url = URL.createObjectURL(blob);
       setSidesUrls(p => ({ ...p, [roleIndex]: url }));
     } catch {
@@ -546,10 +598,16 @@ export default function SmartCreator({ isLoggedIn, initialResult, authUnavailabl
     }
   }
 
+  /** Every role, with the suggested scenes and no review step. */
   async function generateAllSides() {
     if (!result) return;
     for (let i = 0; i < result.roles.length; i++) {
-      if (!sidesUrls[i]) await generateSides(i);
+      if (sidesUrls[i]) continue;
+      const chosen = sidesPicks[i]
+        ? undefined
+        : await pickSides(i).then(c => { setSidesPicks(p => p[i] ? { ...p, [i]: { ...p[i], open: false } } : p); return c; });
+      if (chosen === null) continue;
+      await generateSides(i, chosen);
     }
   }
 
@@ -949,7 +1007,7 @@ export default function SmartCreator({ isLoggedIn, initialResult, authUnavailabl
                     <CopyBtn text={roleToText(r)} id={`r-${i}-all`} label="Copy All" />
                     {files.some(f => f.name.toLowerCase().endsWith('.pdf')) && (
                       <>
-                        {sidesUrls[i] ? (
+                        {sidesUrls[i] && (
                           <a
                             href={sidesUrls[i]}
                             download={`Sides_${r.name.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`}
@@ -957,16 +1015,64 @@ export default function SmartCreator({ isLoggedIn, initialResult, authUnavailabl
                           >
                             <FileDown size={10} /> Download Sides
                           </a>
-                        ) : generatingSides[i] ? (
-                          <span className="text-[10px] text-gray-400 px-2">Generating...</span>
+                        )}
+                        {generatingSides[i] ? (
+                          <span className="text-[10px] text-gray-400 px-2">Working...</span>
                         ) : (
-                          <button onClick={() => generateSides(i)} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 hover:bg-gray-200">
-                            <FileDown size={10} /> Generate Sides
+                          <button onClick={() => openSides(i)} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 hover:bg-gray-200">
+                            <FileDown size={10} /> {sidesPicks[i] ? (sidesPicks[i].open ? "Hide Scenes" : "Choose Scenes") : "Generate Sides"}
                           </button>
                         )}
                       </>
                     )}
                   </div>
+
+                  {/* The scenes proposed for this role's sides, with why. The
+                      casting director ticks what to use; held-out scenes are
+                      listed but unticked, with the reason. */}
+                  {sidesPicks[i]?.open && (() => {
+                    const pick = sidesPicks[i];
+                    const ticked = pick.candidates.filter(c => pick.selected.includes(c.sceneIndex));
+                    const pages = ticked.reduce((n, c) => n + c.lengthPages, 0);
+                    return (
+                      <div className="mt-2 border border-gray-200 rounded-lg bg-white">
+                        <div className="px-3 py-2 border-b border-gray-100 flex items-center justify-between">
+                          <span className="text-[10px] font-medium text-gray-600">
+                            Scenes for sides · {ticked.length} ticked · about {pages} page{pages === 1 ? "" : "s"}
+                          </span>
+                          <button
+                            onClick={() => generateSides(i)}
+                            disabled={!ticked.length || generatingSides[i]}
+                            className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-40"
+                          >
+                            {sidesUrls[i] ? "Rebuild PDF" : "Build Sides PDF"}
+                          </button>
+                        </div>
+                        <ul className="max-h-64 overflow-y-auto divide-y divide-gray-100">
+                          {pick.candidates.slice(0, 12).map(c => (
+                            <li key={c.sceneIndex} className="px-3 py-2 flex gap-2 items-start">
+                              <input
+                                type="checkbox"
+                                className="mt-0.5"
+                                checked={pick.selected.includes(c.sceneIndex)}
+                                onChange={() => toggleScene(i, c.sceneIndex)}
+                              />
+                              <div className="min-w-0">
+                                <p className="text-[11px] text-gray-800">
+                                  <span className="font-medium">{c.heading}</span>
+                                  <span className="text-gray-400"> · p{c.startPage}{c.endPage !== c.startPage ? `–${c.endPage}` : ""} · {c.lengthPages} pg</span>
+                                </p>
+                                <p className="text-[10px] text-gray-500">{c.reasons.join(" · ")}</p>
+                                {c.flags.length > 0 && (
+                                  <p className="text-[10px] text-amber-700">{c.flags.join(" · ")}</p>
+                                )}
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}

@@ -24,6 +24,11 @@ export interface Line {
   text: string;
   /** Left edge in points, relative to this document's action margin. */
   indent: number;
+  /**
+   * Baseline in PDF points from the bottom of the page, when the PDF gave one.
+   * Sides use it to mark exactly where a scene starts and ends on the page.
+   */
+  y?: number;
 }
 
 export interface ExtractedDocument {
@@ -87,14 +92,14 @@ export async function extractDocument(file: File): Promise<ExtractedDocument> {
 /** Group a PDF's text items into lines, and measure each line's left edge. */
 async function extractLines(buffer: Buffer): Promise<Line[][]> {
   const pdf = await getDocumentProxy(new Uint8Array(buffer));
-  const raw: { text: string; x: number }[][] = [];
+  const raw: { text: string; x: number; y: number }[][] = [];
 
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
     const page = await pdf.getPage(pageNumber);
     const content = await page.getTextContent();
 
     // Items arrive in reading order but split mid-line, so regroup by baseline.
-    const rows = new Map<number, { text: string; x: number }>();
+    const rows = new Map<number, { text: string; x: number; y: number }>();
     const order: number[] = [];
     for (const item of content.items) {
       const str = (item as { str?: string }).str ?? "";
@@ -108,7 +113,7 @@ async function extractLines(buffer: Buffer): Promise<Line[][]> {
         existing.text += str;
         existing.x = Math.min(existing.x, x);
       } else {
-        rows.set(y, { text: str, x });
+        rows.set(y, { text: str, x, y });
         order.push(y);
       }
     }
@@ -137,7 +142,7 @@ async function extractLines(buffer: Buffer): Promise<Line[][]> {
  * file, or a PDF whose indentation is spaces inside one text run — every indent
  * comes out at zero and the text-only heuristics take over.
  */
-function normaliseIndents(pages: { text: string; x: number }[][]): Line[][] {
+function normaliseIndents(pages: { text: string; x: number; y?: number }[][]): Line[][] {
   const counts = new Map<number, number>();
   for (const page of pages) {
     for (const row of page) {
@@ -145,7 +150,7 @@ function normaliseIndents(pages: { text: string; x: number }[][]): Line[][] {
       counts.set(bucket, (counts.get(bucket) ?? 0) + 1);
     }
   }
-  if (!counts.size) return pages.map((page) => page.map((row) => ({ text: row.text, indent: 0 })));
+  if (!counts.size) return pages.map((page) => page.map((row) => ({ text: row.text, indent: 0, y: row.y })));
 
   const total = [...counts.values()].reduce((sum, n) => sum + n, 0);
   const recurring = [...counts.entries()]
@@ -153,7 +158,7 @@ function normaliseIndents(pages: { text: string; x: number }[][]): Line[][] {
     .sort((a, b) => a[0] - b[0]);
   const margin = actionMargin(recurring, total) ?? Math.min(...counts.keys());
   return pages.map((page) =>
-    page.map((row) => ({ text: row.text, indent: Math.max(0, Math.round(row.x - margin)) })),
+    page.map((row) => ({ text: row.text, indent: Math.max(0, Math.round(row.x - margin)), y: row.y })),
   );
 }
 

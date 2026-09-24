@@ -737,3 +737,68 @@ export function displayName(cue: string): string {
     .replace(/\b(Mr|Mrs|Ms|Dr|Sgt|Lt|Capt)\b/g, (m) => `${m}.`)
     .replace(/\.\./g, ".");
 }
+
+/** One line of a scene, with who is speaking it when it is dialogue. */
+export interface SceneLine {
+  page: number;
+  /** Baseline in PDF points, when extraction had one. */
+  y?: number;
+  kind: "scene" | "cue" | "dialogue" | "action";
+  text: string;
+  /** Cue name of the speaker, for cue and dialogue lines. */
+  speaker?: string;
+}
+
+export interface Scene {
+  index: number;
+  heading: string;
+  startPage: number;
+  endPage: number;
+  lines: SceneLine[];
+}
+
+/**
+ * The script as scenes, each line tagged with what it is and who says it.
+ *
+ * Sides are chosen scene by scene, so this is the unit they need. It reads the
+ * page with the same classifier the cast list uses, so a line that counts as a
+ * character's dialogue there counts as theirs here too. Anything before the
+ * first scene heading — a title page, a cast list — is not a scene and is
+ * dropped.
+ */
+export function segmentScenes(pageLines: Line[][]): Scene[] {
+  const useLayout = pageLines.some((lines) => lines.some((line) => line.indent >= CUE_INDENT));
+  const scenes: Scene[] = [];
+  let current: Scene | null = null;
+  let speaker: string | undefined;
+
+  pageLines.forEach((lines, index) => {
+    const page = index + 1;
+    for (const line of lines) {
+      const text = line.text.trim();
+      if (!text || PAGE_MARKER.test(text)) continue;
+      const kind = classify(line, useLayout);
+
+      if (kind === "scene") {
+        current = { index: scenes.length, heading: text.slice(0, 120), startPage: page, endPage: page, lines: [] };
+        scenes.push(current);
+        speaker = undefined;
+      }
+      if (!current) continue;
+      current.endPage = page;
+
+      if (kind === "cue") {
+        speaker = cueName(text) || undefined;
+        current.lines.push({ page, y: line.y, kind, text, speaker });
+      } else if (kind === "dialogue") {
+        // Parentheticals belong to the speech they sit in.
+        current.lines.push({ page, y: line.y, kind, text, speaker });
+      } else {
+        if (kind === "action") speaker = undefined;
+        current.lines.push({ page, y: line.y, kind, text });
+      }
+    }
+  });
+
+  return scenes;
+}

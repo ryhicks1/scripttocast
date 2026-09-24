@@ -1,11 +1,12 @@
 {
   "name": "scripttocast",
-  "version": "3.6.1",
+  "version": "3.7.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "check:sides": "node --no-warnings --experimental-transform-types scripts/check-sides.mjs",
     "check:local": "node --no-warnings --experimental-transform-types scripts/check-local-pipeline.mjs",
     "eval:local": "node --no-warnings scripts/eval-local.mjs",
     "evidence:local": "node --no-warnings --experimental-transform-types scripts/inspect-evidence.mjs",

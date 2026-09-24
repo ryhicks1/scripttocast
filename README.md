@@ -100,6 +100,23 @@ download whatever it names.
 Treat the output as a strong first draft. Have someone review it before it
 reaches agents.
 
+### Audition sides
+
+**Generate Sides** proposes scenes the way a casting director picks them, not
+every page a character is on. It uses rules, no AI, so it's the same on both
+versions.
+
+- **Length by role size:** a lead reads two contrasting scenes, up to 5 pages; a
+  supporting role one scene, up to 2; a day player about a page. A scene over 3
+  pages is trimmed to the stretch where the character speaks most.
+- **Playable:** two- or three-person dialogue scenes score above monologues,
+  crowd scenes and action.
+- **Protected:** scenes in the last pages of the script, where the ending is, and
+  scenes with nudity or intimacy are listed but left unticked.
+- **The casting director decides:** every scene the character speaks in is
+  listed with the reasons for its rank. Tick or untick, then build the PDF. Each
+  excerpt is marked START and END on the page, with the text outside it faded.
+
 ### Known limits
 
 - Scanned PDFs with no text layer are refused; run them through OCR first.
@@ -124,6 +141,7 @@ Locally: `npm install`, then `npm run dev`.
 
 ```
 npm run check:local           # the private route end to end, against a stub Ollama
+npm run check:sides           # how audition scenes are chosen, and the marked-up PDF
 npm run evidence:local -- f.pdf  # what the parser extracts from a script, no model needed
 npm run eval:local -- f.pdf   # score a real run against reference breakdown statistics
 ```
