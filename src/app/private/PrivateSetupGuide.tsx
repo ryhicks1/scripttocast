@@ -10,8 +10,23 @@ import { Shield, Laptop, Download, Terminal, ArrowRight, ExternalLink } from "lu
  * Node.js altogether — so on a Mac that did not already have it, following the
  * steps exactly could not work. Two double-click installers and one pasted
  * line is the smallest honest version of this.
+ *
+ * The pasted line is now optional: the tool itself is a download, and the
+ * launcher inside it does everything the line used to.
  */
-const SETUP_COMMAND = `cd ~ && git clone https://github.com/ryhicks1/scripttocast.git; cd ~/scripttocast && ollama pull llama3.1:8b && npm install && npm run dev`;
+/**
+ * Always the latest release: GitHub's own zip of main. No hosting to manage,
+ * and .gitattributes keeps the notes for coding agents out of it.
+ */
+const DOWNLOAD_URL = "https://github.com/ryhicks1/scripttocast/archive/refs/heads/main.zip";
+
+/**
+ * For people who would rather have updates arrive by themselves: a git
+ * checkout lets the launcher pull each time it starts, which a downloaded
+ * folder cannot. It hands straight to the launcher, so the Ollama settings,
+ * model download and browser opening are the same either way.
+ */
+const SETUP_COMMAND = `cd ~ && git clone https://github.com/ryhicks1/scripttocast.git && cd ~/scripttocast && ./Start\\ ScriptToCast.command`;
 
 const STEPS = [
   {
@@ -61,38 +76,42 @@ const STEPS = [
   },
   {
     n: "3",
-    title: "Copy the line below into Terminal",
+    title: "Download Script To Cast",
     body: (
       <>
-        Hold down <strong>Command</strong> and press the <strong>space bar</strong>, type{" "}
-        <strong>Terminal</strong>, and press Return. A plain window full of text opens —
-        that&apos;s normal. Copy the line below, click into that window, paste it
-        (<strong>Command</strong> and <strong>V</strong>), and press Return.
+        <a
+          href={DOWNLOAD_URL}
+          className="text-gray-900 underline underline-offset-2 hover:text-emerald-700 font-medium"
+        >
+          Download it here
+        </a>
+        . It&apos;s small, and opens into a folder called <strong>scripttocast-main</strong>{" "}
+        in your Downloads. Move that folder somewhere it can stay — your Documents folder is
+        fine.
         <span className="block mt-1.5 text-gray-400">
-          The first time takes ten minutes or so — it&apos;s downloading the model, which
-          is a big file. Leave it alone until the text stops scrolling. If a box appears
-          asking to install developer tools, click Install, wait for it, then paste the
-          line again.
+          If it downloads as a .zip instead of a folder, double-click the .zip to open it.
         </span>
       </>
     ),
   },
   {
     n: "4",
-    title: "Open the tool",
+    title: "Start it",
     body: (
       <>
-        When the Terminal window says <strong>Ready</strong>, open Safari or Chrome and go
-        to{" "}
-        <code className="text-[11px] bg-gray-100 px-1.5 py-0.5 rounded">
-          localhost:3000/private
-        </code>
-        . That&apos;s the tool.
+        Open the folder and double-click <strong>Start ScriptToCast</strong>. A Terminal
+        window opens, sets everything up, and then opens the tool in your browser by itself.
         <span className="block mt-1.5 text-gray-400">
-          Leave the Terminal window open while you use it — closing it switches the app
-          off. Next time, open your <strong>scripttocast</strong> folder in Finder and
-          double-click <strong>Start ScriptToCast</strong> instead of doing any of this
-          again.
+          The first time, macOS may refuse to open it because it didn&apos;t come from the App
+          Store. Open <strong>System Settings → Privacy &amp; Security</strong>, scroll down,
+          click <strong>Open Anyway</strong>, and double-click it again. The first start also
+          downloads the AI model — about 5GB, ten minutes or so. After that, starting takes
+          seconds.
+        </span>
+        <span className="block mt-1.5 text-gray-400">
+          Leave the Terminal window open while you use the tool — closing it switches the app
+          off. Next time, just double-click <strong>Start ScriptToCast</strong> again. It will
+          tell you when a newer version is available to download.
         </span>
       </>
     ),
@@ -176,17 +195,24 @@ export default function PrivateSetupGuide() {
           ))}
         </ol>
 
-        <p className="text-center text-xs text-gray-400 uppercase tracking-wider mt-10 mb-3 font-medium">
-          The line to copy, for step 3
-        </p>
-        <div className="bg-gray-50 border border-gray-200 rounded-xl p-5">
-          <div className="flex items-start gap-3">
+        <details className="mt-8 bg-white border border-gray-200 rounded-xl p-5 text-sm text-gray-500">
+          <summary className="cursor-pointer font-medium text-gray-700">
+            Prefer updates to install themselves? Use Terminal instead of steps 3 and 4
+          </summary>
+          <p className="mt-3 leading-relaxed">
+            Hold <strong>Command</strong> and press the <strong>space bar</strong>, type{" "}
+            <strong>Terminal</strong>, press Return, paste this line and press Return. It puts
+            the tool in a <strong>scripttocast</strong> folder in your home folder, and from
+            then on <strong>Start ScriptToCast</strong> fetches each new version itself. If a
+            box asks to install developer tools, click Install, wait, then paste the line again.
+          </p>
+          <div className="mt-3 bg-gray-50 border border-gray-200 rounded-lg p-4 flex items-start gap-3">
             <Terminal size={16} className="text-gray-400 mt-0.5 shrink-0" />
             <pre className="text-[12px] text-gray-700 leading-relaxed overflow-x-auto font-mono">
 {SETUP_COMMAND}
             </pre>
           </div>
-        </div>
+        </details>
 
         <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -206,14 +232,22 @@ export default function PrivateSetupGuide() {
             Get Ollama
             <ExternalLink size={12} />
           </a>
+          <a
+            href={DOWNLOAD_URL}
+            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900"
+          >
+            <Download size={14} />
+            Download Script To Cast
+          </a>
         </div>
       </section>
 
       <section className="max-w-3xl mx-auto px-6 pb-14">
         <p className="text-xs text-gray-400 leading-relaxed mb-4">
-          The model needs about 6GB of free memory. On a Mac with less than that to spare,
-          it will run but the descriptions come out thinner — there is no lighter version
-          of this that is worth having.
+          Needs a Mac with Apple silicon (M1 or later) and at least 16GB of memory: the
+          model and the whole script it is reading have to fit at once. A feature takes
+          about an hour on a MacBook Air. More memory runs a larger model, which gives more
+          accurate descriptions.
         </p>
         <div className="border-t border-gray-200 pt-6 flex gap-3 text-xs text-gray-400 leading-relaxed">
           <Shield size={14} className="shrink-0 mt-0.5" />
