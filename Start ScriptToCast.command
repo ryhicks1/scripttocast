@@ -14,14 +14,33 @@ cd "$(dirname "$0")"
 export NEXT_TELEMETRY_DISABLED=1
 
 echo "Checking for updates..."
-BEFORE=$(git rev-parse HEAD 2>/dev/null || echo "none")
-git pull --quiet 2>/dev/null || echo "  Couldn't check — carrying on with the version you have."
-AFTER=$(git rev-parse HEAD 2>/dev/null || echo "none")
-
-if [ "$BEFORE" != "$AFTER" ]; then
-  echo "  Updated to the latest version."
+if [ -d .git ]; then
+  BEFORE=$(git rev-parse HEAD 2>/dev/null || echo "none")
+  git pull --quiet 2>/dev/null || echo "  Couldn't check — carrying on with the version you have."
+  AFTER=$(git rev-parse HEAD 2>/dev/null || echo "none")
+  if [ "$BEFORE" != "$AFTER" ]; then
+    echo "  Updated to the latest version."
+  else
+    echo "  You're up to date."
+  fi
 else
-  echo "  You're up to date."
+  # A downloaded folder has no git history and cannot update itself, so say
+  # when a newer version exists rather than letting it quietly go stale. The
+  # check reads only the published version number; nothing is sent.
+  HAVE=$(node -p "require('./package.json').version" 2>/dev/null || echo "")
+  LATEST=$(curl -sf --max-time 5 https://raw.githubusercontent.com/ryhicks1/scripttocast/main/package.json \
+    | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d).version)}catch{}})" 2>/dev/null || echo "")
+  if [ -n "$LATEST" ] && [ -n "$HAVE" ] && [ "$LATEST" != "$HAVE" ] \
+     && [ "$(printf '%s\n%s\n' "$HAVE" "$LATEST" | sort -V | tail -1)" = "$LATEST" ]; then
+    echo
+    echo "  A newer version is available: $LATEST (you have $HAVE)."
+    echo "  Download it from https://www.scripttocast.com/private and replace this folder."
+    echo
+    read -r -p "  Open the download page now? [y/N] " OPEN_IT
+    case "$OPEN_IT" in [Yy]*) open "https://www.scripttocast.com/private" ;; esac
+  else
+    echo "  You're up to date."
+  fi
 fi
 
 # Always, not just when node_modules is missing: an update that adds a new

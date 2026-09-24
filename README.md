@@ -29,9 +29,13 @@ More memory runs a larger model and gives better breakdowns; see
    it, and drag it into Applications. A llama appears in the menu bar.
 2. **Install Node.js:** download the LTS installer from
    [nodejs.org](https://nodejs.org) and run it.
-3. **Put this folder somewhere permanent**, e.g. your home folder.
-4. **Double-click `Start ScriptToCast.command`** in this folder. The first time,
-   macOS may refuse: right-click it, choose **Open**, then **Open** again.
+3. **Download Script To Cast**:
+   [the latest version as a zip](https://github.com/ryhicks1/scripttocast/archive/refs/heads/main.zip).
+   It opens into a `scripttocast-main` folder; move it somewhere permanent, such as
+   Documents.
+4. **Double-click `Start ScriptToCast.command`** in that folder. The first time,
+   macOS may refuse to open it: go to **System Settings → Privacy & Security**,
+   click **Open Anyway**, and double-click it again.
 
 The launcher does the rest, every time:
 
@@ -45,8 +49,16 @@ The launcher does the rest, every time:
 Leave the Terminal window it opens running while you use the tool. Close it to
 stop. Upload as many scripts as you like in one session.
 
-If this folder is a git checkout, the launcher also pulls updates each time it
-starts. For a production machine, use a tagged release and update deliberately.
+**Updates.** A downloaded folder cannot update itself, so the launcher checks
+the published version each time it starts and tells you when a newer one is
+available. If you'd rather updates install themselves, clone the repository
+instead of downloading it. The launcher then pulls each new version on start:
+
+```
+cd ~ && git clone https://github.com/ryhicks1/scripttocast.git && cd ~/scripttocast && ./Start\ ScriptToCast.command
+```
+
+For a production machine, prefer the download and update deliberately.
 
 ### What happens to a script
 
