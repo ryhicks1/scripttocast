@@ -108,6 +108,14 @@ export function startStubOllama({ scenario = "ok", port = 0 } = {}) {
 const copiedOnce = new Set();
 
 function reply(system, user) {
+  // The benchmark's judge. One description it is handed contradicts the
+  // reference — an administrator described as a surgeon — so a scoring run
+  // has a contradiction to find.
+  if (system.startsWith("You compare two casting descriptions")) {
+    const wrong = /SECOND[\s\S]*surgeon/i.test(user);
+    return { contradictions: wrong ? ["Describes him as a surgeon; he is an administrator."] : [], coverage: wrong ? 0.3 : 0.7 };
+  }
+
   // Route on the USER message first. Both description prompts are long and the
   // house one mentions loglines, project fields and role lists, so matching on
   // system text alone sends description calls to the wrong branch.

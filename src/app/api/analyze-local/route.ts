@@ -48,6 +48,12 @@ export async function POST(request: Request) {
     const requestedLocale = formData.get("locale");
     const locale: Locale = isLocale(requestedLocale) ? requestedLocale : "us";
 
+    // Benchmarks only: describe just these roles. The page never sends it.
+    const onlyRoles = String(formData.get("onlyRoles") ?? "")
+      .split(",")
+      .map((name) => name.trim())
+      .filter(Boolean);
+
     const requested = formData.get("mode");
     const mode: BreakdownMode =
       requested === "film_tv" || requested === "commercial" ? requested : "auto";
@@ -105,6 +111,7 @@ export async function POST(request: Request) {
               send({ progress });
             },
             locale,
+            { onlyRoles },
           );
 
           // The hash identifies a run in the logs without recording the script.

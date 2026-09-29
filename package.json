@@ -1,11 +1,14 @@
 {
   "name": "scripttocast",
-  "version": "3.7.0",
+  "version": "3.8.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "bench:inspect": "node --no-warnings scripts/bench/bench.mjs inspect",
+    "bench:run": "node --no-warnings scripts/bench/bench.mjs run",
+    "bench:score": "node --no-warnings scripts/bench/bench.mjs score",
     "check:sides": "node --no-warnings --experimental-transform-types scripts/check-sides.mjs",
     "check:local": "node --no-warnings --experimental-transform-types scripts/check-local-pipeline.mjs",
     "eval:local": "node --no-warnings scripts/eval-local.mjs",
