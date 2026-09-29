@@ -39,12 +39,19 @@ import { defaultFormQuestions, defaultSelfTape } from "../local/defaults";
 import { LocalAnalysisError } from "../local/errors";
 import type { ExtractedDocument } from "../local/extract";
 import { chatJson, type OllamaConfig } from "../local/ollama";
-import { composeDescription, tightenDescription } from "../local/pipeline";
+import { composeDescription } from "../local/pipeline";
 import { PROJECT_SYSTEM, projectUser, STORY_SYSTEM, storyUser } from "../local/prompts";
 import { carriesLook, displayName, roleTypeLabel } from "../local/screenplay";
-import { findBookVoice, findEssayVoice, stripEssayClauses } from "../local/style";
+import { findBookVoice, findEssayVoice } from "../local/style";
 import { ageFromWords, extractCast, rankCast, type CastMember, type V2Tier } from "./cast";
-import { estimateAge, stripAgeClaims, validateReply, type RoleReply } from "./helpers";
+import { chatRole } from "./chat";
+import { buildEvidence } from "./evidence";
+import {
+  applyProblems, assembleBody, checkFields, clampByRank, estimateAge, narrowRange, occupationUngrounded, statedDecade, stripAgeClaims, TIER_RULES, validateFields,
+  type Problem, type RoleFields,
+} from "./helpers";
+import { PAIR_ANSWER_TEXTS, ROLE_SCHEMA, ROLE_SYSTEM, roleUser } from "./prompt";
+import { loadBank, retrieve, retrievalEnabled } from "./retrieval";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -78,21 +85,16 @@ export interface V2Diagnostics {
   numCtx: number;
   model: string;
   elapsedMs: number;
+  /** v2.1: what the description step did. */
+  retrieval: { enabled: boolean; bank: string | null; entries: number; note: string | null };
+  promptTokens: { min: number; median: number; max: number; systemChars: number; roles: number };
+  descriptionRejects: { role: string; field: string; why: string; text: string }[];
+  descriptionDropped: number;
+  descriptionRetries: string[];
+  gendersDefaulted: string[];
+  occupationsReplaced: string[];
+  perRole: { role: string; tier: string; promptTokens: number; outTokens: number; ms: number; retrieved: number }[];
 }
-
-const ROLE_SCHEMA = {
-  type: "object",
-  required: ["gender", "ageMin", "ageMax", "ethnicity", "description", "traits"],
-  additionalProperties: false,
-  properties: {
-    gender: { type: "string", enum: ["Male", "Female", "Non-binary"] },
-    ageMin: { type: "integer", minimum: 1, maximum: 99 },
-    ageMax: { type: "integer", minimum: 1, maximum: 99 },
-    ethnicity: { type: "string" },
-    description: { type: "string" },
-    traits: { type: "array", items: { type: "string" }, maxItems: 6 },
-  },
-} as const;
 
 const PROJECT_SCHEMA = {
   type: "object",
@@ -115,95 +117,6 @@ const STORY_SCHEMA = {
 
 /** Hard ceiling on the window v2 will ask for, whatever OLLAMA_NUM_CTX says. */
 export const V2_MAX_NUM_CTX = 16_384;
-
-const DESCRIPTION_CHARS: Record<V2Tier, number> = { LEAD: 640, SUPPORTING: 480, "DAY PLAYER": 320 };
-const LENGTH_HINT: Record<V2Tier, string> = {
-  LEAD: "Four or five sentences, about ninety words.",
-  SUPPORTING: "Three or four sentences, about sixty words.",
-  "DAY PLAYER": "One or two short sentences, about thirty words.",
-};
-
-// ---------------------------------------------------------------------------
-// Prompt
-// ---------------------------------------------------------------------------
-
-/** Identical on every role call, so Ollama's prompt cache holds it. */
-const ROLE_SYSTEM = `You write one casting-breakdown entry for a character in a screenplay, in the plain trade style of Casting Networks and Breakdown Services.
-
-You are given evidence taken from the script about ONE character: action lines that name them, and a few of their spoken lines. Use only that evidence and ordinary common sense about the job or rank they hold.
-
-Fields:
-- gender: Male, Female or Non-binary, as the script presents them.
-- ageMin and ageMax: whole numbers, the playing-age range an agent would search on. Always give both, even when the script does not state an age: judge from any stated age, the job or rank, and how they are written. Keep the range within 10 years for a stated age and within 20 years otherwise.
-- ethnicity: only when the script itself says it. Otherwise an empty string.
-- description: who this person is for an actor deciding whether to submit. Their job or place in the story, temperament, how they carry themselves, how they treat other people, and what the part asks of the actor. Write the person, not the plot: do not retell scenes, do not quote dialogue, do not say what happens to them, and never mention the script, the film or the audience. Do not state gender or age in the description, they are printed separately. Do not attribute anything to this character that the evidence gives to someone else. Silent characters are still described from the action lines. When the evidence is thin, write one short sentence that stays with what the name and lines support, and never give the character a different job or gender than their name says.
-- traits: up to six single words or short phrases a casting director could filter on.
-
-Answer with the JSON object only.`;
-
-interface Evidence {
-  text: string;
-  /** The words the script gives about this person, for checking claims. */
-  identity: string;
-}
-
-const MAX_EVIDENCE_CHARS = 3000;
-
-function buildRoleEvidence(member: CastMember): Evidence {
-  const lines: string[] = [];
-  // Sentences that say what the person is like come first, then blocking, all in page order.
-  const scored = member.sentences.map((s, i) => ({
-    ...s,
-    i,
-    score: (carriesLook(s.text) ? 2 : 0) + (i === 0 ? 2 : 0) + (s.text.length > 200 ? -1 : 0),
-  }));
-  const chosen: typeof scored = [];
-  let chars = 0;
-  for (const s of [...scored].sort((a, b) => b.score - a.score || a.page - b.page)) {
-    if (chosen.length >= 12 || chars + s.text.length > 1900) continue;
-    chosen.push(s);
-    chars += s.text.length;
-  }
-  chosen.sort((a, b) => a.page - b.page || a.i - b.i);
-  if (chosen.length) {
-    lines.push(`Action lines that name ${displayNameOf(member)}:`);
-    for (const s of chosen) lines.push(`(p${s.page}) ${s.text.slice(0, 360)}`);
-  } else {
-    lines.push(`No action line names ${displayNameOf(member)} beyond the cue.`);
-  }
-
-  if (member.dialogue.length) {
-    const want = 5;
-    const step = Math.max(1, Math.floor(member.dialogue.length / want));
-    const picked: { page: number; text: string }[] = [];
-    for (let i = 0; i < member.dialogue.length && picked.length < want; i += step) picked.push(member.dialogue[i]);
-    lines.push("", `${displayNameOf(member)} says (${member.cues} speech${member.cues === 1 ? "" : "es"} in all):`);
-    for (const d of picked) lines.push(`(p${d.page}) ${d.text.slice(0, 200)}`);
-  } else {
-    lines.push("", `${displayNameOf(member)} has no dialogue.`);
-  }
-
-  let text = lines.join("\n");
-  if (text.length > MAX_EVIDENCE_CHARS) text = `${text.slice(0, MAX_EVIDENCE_CHARS)}…`;
-  const identity = [...chosen.map((s) => s.text), ...member.dialogue.map((d) => d.text)].join("\n");
-  return { text, identity };
-}
-
-function displayNameOf(member: CastMember): string {
-  return member.name;
-}
-
-function roleUser(member: CastMember, tier: V2Tier, evidence: Evidence, correction = ""): string {
-  const also = member.aliases.length ? ` (also written as ${member.aliases.join(", ")})` : "";
-  return (
-    `Character: ${member.name}${also}\n` +
-    `Speaks in the script: ${member.speaking ? "yes" : "no, silent"}\n` +
-    `Size of part: ${tier}\n` +
-    `Description length: ${LENGTH_HINT[tier]}\n\n` +
-    `EVIDENCE\n${evidence.text}\n\n` +
-    `Write ${member.name}'s entry now.${correction}`
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Validation, and the age rule
@@ -241,7 +154,9 @@ function pronounGender(member: CastMember): "Male" | "Female" | null {
 }
 
 /** Ethnicity only when the script's own words about them contain it. */
+const NATIONALITY_ONLY = /^(?:british|english|scottish|welsh|irish|french|german|dutch|american|australian|canadian|swedish|texan|russian|italian|spanish)(?:\s+(?:or|and)\s+\w+)?$/i;
 function ethnicityStated(claim: string, identity: string): string {
+  if (NATIONALITY_ONLY.test(claim.trim())) return "";
   if (!claim || /^(none|n\/a|unknown|not stated|unspecified|all ethnicities)$/i.test(claim)) return "";
   const words = claim.toLowerCase().split(/[^a-z]+/).filter((w) => w.length > 3);
   if (!words.length) return "";
@@ -368,35 +283,101 @@ export async function analyzeLocallyV2(
   const castNames = members.map((m) => m.name);
   let firstFailure: unknown = null;
 
-  for (const [index, member] of members.entries()) {
-    onProgress({ phase: "roles", message: `Describing ${member.name}`, done: index, total: members.length });
-    const tier = tiers.get(member.key) ?? "DAY PLAYER";
-    const evidence = buildRoleEvidence(member);
+  const wantRetrieval = retrievalEnabled();
+  const loaded = wantRetrieval ? loadBank() : { bank: null, error: "retrieval switched off" };
+  const bank = loaded.bank;
+  if (wantRetrieval && !bank) log("v2: retrieval requested but no bank", { reason: loaded.error });
+  const traitUse = new Map<string, number>();
+  const gendersFlipped: string[] = [];
+  const occupationsReplaced: string[] = [];
+  const rejects: V2Diagnostics["descriptionRejects"] = [];
+  const retries: string[] = [];
+  const perRole: V2Diagnostics["perRole"] = [];
+  let dropped = 0;
 
-    const ask = (correction: string) =>
-      chatJson<unknown>(cfg, {
-        system: ROLE_SYSTEM,
-        user: roleUser(member, tier, evidence, correction),
-        schema: ROLE_SCHEMA,
-        label: `role: ${member.name}`,
-        maxOutputTokens: 420,
-        timeoutMs: 600_000,
-        keepAlive: "10m",
-      });
+  // Tier order keeps the long static prompt identical across consecutive calls.
+  const tierRank: Record<V2Tier, number> = { LEAD: 0, SUPPORTING: 1, "DAY PLAYER": 2 };
+  const order = members
+    .map((m, i) => ({ m, i, tier: tiers.get(m.key) ?? ("DAY PLAYER" as V2Tier) }))
+    .sort((a, b) => tierRank[a.tier] - tierRank[b.tier] || a.i - b.i);
+  const byIndex: (Role | undefined)[] = new Array(members.length);
 
-    let reply: RoleReply | null = null;
+  for (const [n, { m: member, i: index, tier }] of order.entries()) {
+    onProgress({ phase: "roles", message: `Describing ${member.name}`, done: n, total: members.length });
+    const stated = statedAge(member);
+    const evidence = buildEvidence(member, stated);
+    const byPronoun = pronounGender(member);
+
+    let similarEntries: { id: number; text: string; prose?: string }[] = [];
+    if (bank) {
+      similarEntries = retrieve(bank, { text: evidence.query, tier, gender: byPronoun, age: stated }, 6);
+    }
+    const proseOfEntry = (e: { text: string; prose?: string }) => e.prose ?? e.text;
+    const similarTexts = similarEntries.map((e) => {
+      const t = proseOfEntry(e);
+      return t.length > 260 ? `${t.slice(0, 260).replace(/\s+\S*$/, "")}…` : t;
+    });
+    const examples = [...PAIR_ANSWER_TEXTS, ...similarEntries.map(proseOfEntry)];
+
+    let fields: RoleFields | null = null;
+    let problems: Problem[] = [];
     let why = "";
-    for (let attempt = 1; attempt <= 2 && !reply; attempt++) {
+    let promptTokens = 0;
+    let outTokens = 0;
+    let ms = 0;
+    for (let attempt = 1; attempt <= 2 && !fields; attempt++) {
+      const correction =
+        attempt === 1
+          ? ""
+          : `\n\nYour previous answer was rejected: ${why}. Answer again, following the field rules exactly, and use fewer words.`;
       try {
-        const raw = await ask(
-          attempt === 1
-            ? ""
-            : `\n\nYour previous answer was rejected: ${why}. Answer again, following the field rules exactly.`,
-        );
+        const { data, stats } = await chatRole<unknown>(cfg, {
+          system: ROLE_SYSTEM,
+          user: roleUser({ name: member.name, aliases: member.aliases, speaking: member.speaking, tier, evidence: evidence.text, similar: similarTexts, correction }),
+          schema: ROLE_SCHEMA,
+          label: `role: ${member.name}`,
+          maxOutputTokens: 460,
+          keepAlive: "10m",
+        });
         modelCalls++;
-        const checked = validateReply(raw);
-        if (checked.ok) reply = checked.reply;
-        else why = checked.why;
+        promptTokens = Math.max(promptTokens, stats.promptEval);
+        outTokens += stats.evalCount;
+        ms += stats.ms;
+        const checked = validateFields(data);
+        if (!checked.ok) {
+          why = checked.why;
+        } else {
+          const found = checkFields(checked.fields, {
+            tier,
+            identity: evidence.identity,
+            scene: evidence.scene,
+            traitUse,
+            otherNames: castNames.filter((c) => c !== member.name),
+            examples,
+          });
+          const fatal = found.filter((p) => p.field === "occupation");
+          if (fatal.length && attempt === 1) {
+            why = fatal.map((p) => `${p.field} "${p.text}": ${p.why}`).join("; ");
+            for (const p of fatal) rejects.push({ role: member.name, field: p.field, why: p.why, text: p.text });
+          } else {
+            const soft = found.filter((p) => p.field !== "occupation");
+            const others = found.filter((p) => p.field !== "occupation" && p.index === -1 && p.field !== "traits");
+            // One retry only when most of the form is wrong; otherwise drop what failed and keep the rest.
+            const tooMuch = soft.length >= 6 || others.length >= 4;
+            if (attempt === 1 && tooMuch) {
+              why = soft.map((p) => `${p.field} "${p.text}": ${p.why}`).slice(0, 4).join("; ");
+              for (const p of soft) rejects.push({ role: member.name, field: p.field, why: p.why, text: p.text });
+            } else {
+              const applied = applyProblems(checked.fields, found);
+              for (const p of found) {
+                if (!(attempt === 1 && tooMuch)) rejects.push({ role: member.name, field: p.field, why: p.why, text: p.text });
+              }
+              dropped += found.length;
+              if (applied.usable) fields = applied.fields;
+              else why = "occupation was not usable";
+            }
+          }
+        }
       } catch (error) {
         modelCalls++;
         if (!firstFailure) firstFailure = error;
@@ -404,78 +385,101 @@ export async function analyzeLocallyV2(
         // Ollama itself being gone is not worth a second call per role.
         if (error instanceof LocalAnalysisError && error.status === 503) break;
       }
-      if (!reply && attempt === 1) retried.push(member.name);
+      if (!fields && attempt === 1) {
+        retried.push(member.name);
+        retries.push(`${member.name}: ${why}`);
+      }
     }
-    if (!reply) {
+    const jobNamed = /\b(?:officer|soldier|seaman|sailor|highlander|lieutenant|private|corporal|nurse|engineer|man|boy|civilian|survivor|editor|pilot|leader|admiral|colonel|commander|captain|sergeant|guard|stewardess|bearer|medic|driver)\b/i.test(member.name);
+    if (fields && jobNamed && occupationUngrounded(fields.occupation, member.name, evidence.scene)) {
+      const plain = member.name.replace(/\s*\d+$/, "").replace(/\s*\([^)]*\)/g, "").trim();
+      occupationsReplaced.push(`${member.name}: "${fields.occupation}" -> "${plain}"`);
+      fields = { ...fields, occupation: plain };
+    }
+    if (fields) {
+      for (const t of fields.traits) {
+        const k = t.toLowerCase().split(/[^a-z]+/)[0];
+        traitUse.set(k, (traitUse.get(k) ?? 0) + 1);
+      }
+      if (fields.type) traitUse.set(`type:${fields.type.toLowerCase()}`, (traitUse.get(`type:${fields.type.toLowerCase()}`) ?? 0) + 1);
+    }
+    if (!fields) {
       fallback.push(member.name);
       log("v2: role fell back", { role: member.name, why });
     }
+    perRole.push({ role: member.name, tier, promptTokens, outTokens, ms, retrieved: similarEntries.length });
 
-    // Age: script first, then the model, then an estimate. Never blank.
-    const stated = statedAge(member);
+    // Age: script first (an exact age, then a decade), then the model, then an estimate. Never blank.
+    const decade = stated === null ? statedDecade([member.name, ...member.aliases, member.name.split(/\s+/).pop() ?? ""], member.sentences.map((x) => x.text)) : null;
     let ageMin: number;
     let ageMax: number;
     if (stated !== null) {
       const pad = stated < 20 ? 1 : 2;
       ageMin = Math.max(1, stated - pad);
       ageMax = stated + pad;
-      if (reply && reply.ageMin <= stated && reply.ageMax >= stated && reply.ageMax - reply.ageMin <= 10) {
-        ageMin = reply.ageMin;
-        ageMax = reply.ageMax;
+      if (fields && fields.ageMin <= stated && fields.ageMax >= stated && fields.ageMax - fields.ageMin <= 8 && fields.ageMax - fields.ageMin >= 2 * pad) {
+        ageMin = fields.ageMin;
+        ageMax = fields.ageMax;
       }
       agesFromScript.push(`${member.name}: ${stated}`);
-    } else if (reply) {
-      ageMin = reply.ageMin;
-      ageMax = reply.ageMax;
+    } else if (decade) {
+      [ageMin, ageMax] = decade;
+      agesFromScript.push(`${member.name}: ${decade[0]}s`);
+    } else if (fields) {
+      [ageMin, ageMax] = narrowRange(fields.ageMin, fields.ageMax, 15);
+      [ageMin, ageMax] = clampByRank(member.name, fields.occupation, ageMin, ageMax);
       agesFromModel++;
     } else {
       [ageMin, ageMax] = estimateAge(member.name);
       agesEstimated.push(member.name);
     }
 
-    let gender = reply?.gender ?? "";
-    const byPronoun = pronounGender(member);
+    let gender = fields?.gender ?? "";
     if (byPronoun && gender !== byPronoun) gender = byPronoun;
+    // A model that says Female with no female cue anywhere in what it read is guessing.
+    if (!byPronoun && gender === "Female" && !evidence.femaleCue) {
+      gender = "Male";
+      gendersFlipped.push(member.name);
+    }
     if (!gender) gender = byPronoun ?? (/\b(nurse|stewardess|mrs|waitress|actress)\b/i.test(member.name) ? "Female" : "Male");
 
-    const ethnicity = reply ? ethnicityStated(reply.ethnicity, evidence.identity) : "";
+    // Ethnicity only when the script's own words say it; otherwise the trade's open value.
+    const stateEthnicity = fields ? ethnicityStated(fields.ethnicity, evidence.identity) : "";
+    const ethnicityShown = stateEthnicity || "all ethnicities";
 
-    const budget = DESCRIPTION_CHARS[tier];
-    let body = reply ? stripEssayClauses(reply.description) : fallbackBody(member);
-    body = tightenDescription(body, tier === "LEAD" ? 5 : tier === "SUPPORTING" ? 4 : 2, log, member.name);
+    let body = fields ? assembleBody(fields, tier, member.speaking) : fallbackBody(member);
     body = withoutOtherCharacters(body, member.name, castNames);
-    body = stripDemographicEcho(body);
     body = stripAgeClaims(body);
-    if (body.length > budget + 120) body = clip(body, budget + 120);
 
     const roleType = screenplay ? roleTypeLabel(tier, locale) : mode === "commercial" ? "PRINCIPAL" : "SUPPORTING";
     const ageRange = `${ageMin}-${ageMax}`;
     const lead = `${ageMin} to ${ageMax} years old`;
 
-    roles.push({
+    byIndex[index] = {
       name: member.name,
-      description: composeDescription({ gender, ageRange: lead, ethnicity, body, roleType }),
+      description: composeDescription({ gender, ageRange: lead, ethnicity: ethnicityShown, body, roleType }),
       ageRange,
       gender,
-      ethnicity: ethnicity || null,
+      ethnicity: stateEthnicity || null,
       roleType,
       speaking: member.speaking,
-      characteristics: reply?.traits ?? [],
+      characteristics: fields ? [...fields.traits, ...fields.skills].slice(0, 8) : [],
       contentAdvisories: [],
       submissionNotes: [],
       pageNumbers: member.pages,
-    });
+    };
 
-    onProgress({ phase: "roles", message: `Described ${member.name}`, done: index + 1, total: members.length });
-    if (index < 2 && fallback.length === index + 1) {
+    onProgress({ phase: "roles", message: `Described ${member.name}`, done: n + 1, total: members.length });
+    if (n < 2 && fallback.length === n + 1) {
       throw new LocalAnalysisError(
-        `Stopped after ${index + 1} role${index ? "s" : ""}: the local model gave no usable answer for ${member.name} twice` +
+        `Stopped after ${n + 1} role${n ? "s" : ""}: the local model gave no usable answer for ${member.name} twice` +
           `${why ? ` (${why})` : ""}. Nothing was sent anywhere; this ran entirely on this machine.`,
         502,
         firstFailure ? String(firstFailure) : why,
       );
     }
   }
+  for (const r of byIndex) if (r) roles.push(r);
 
   if (fallback.length === roles.length) {
     throw new LocalAnalysisError(
@@ -510,6 +514,19 @@ export async function analyzeLocallyV2(
       numCtx,
       model: cfg.model,
       elapsedMs: Date.now() - startedAt,
+      retrieval: {
+        enabled: wantRetrieval,
+        bank: bank ? "loaded (path not recorded)" : null,
+        entries: bank?.entries.length ?? 0,
+        note: bank ? null : (loaded.error ?? null),
+      },
+      promptTokens: promptStats(perRole.map((p) => p.promptTokens), ROLE_SYSTEM.length),
+      descriptionRejects: rejects,
+      descriptionDropped: dropped,
+      descriptionRetries: retries,
+      gendersDefaulted: gendersFlipped,
+      occupationsReplaced,
+      perRole,
     },
   };
 }
@@ -518,6 +535,11 @@ export async function analyzeLocallyV2(
 // Small text helpers
 // ---------------------------------------------------------------------------
 
+function promptStats(values: number[], systemChars: number): V2Diagnostics["promptTokens"] {
+  const v = values.filter((x) => x > 0).sort((a, b) => a - b);
+  return { min: v[0] ?? 0, median: v[v.length >> 1] ?? 0, max: v[v.length - 1] ?? 0, systemChars, roles: v.length };
+}
+
 function clip(text: string, max: number): string {
   if (text.length <= max) return text;
   const cut = text.slice(0, max);
@@ -525,11 +547,10 @@ function clip(text: string, max: number): string {
   return end > max * 0.5 ? cut.slice(0, end + 1) : cut.replace(/\s+\S*$/, "").replace(/[,;:]$/, "") + ".";
 }
 
-/** Last resort when the model gave nothing usable: the script's own introduction, trimmed. */
+/** Last resort when the model gave nothing usable: the role name and whether it speaks. Never a paraphrase of an action line. */
 function fallbackBody(member: CastMember): string {
-  const first = member.sentences.find((s) => carriesLook(s.text)) ?? member.sentences[0];
-  if (!first) return member.speaking ? `Speaking role in the script.` : `Non-speaking presence in the script.`;
-  return first.text.replace(/\s+/g, " ").slice(0, 240);
+  const plain = member.name.replace(/\s*\d+$/, "").replace(/\s*\([^)]*\)/g, "").trim();
+  return member.speaking ? `${plain}.` : `${plain}. Non-speaking.`;
 }
 
 /** Drop a sentence that recounts a moment with another named character. */

@@ -40,3 +40,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .secrets
+
+# Confidential few-shot bank (Breakdown Services text). Lives OUTSIDE the repo;
+# these patterns are a second lock in case a copy ever lands in the tree.
+*LOCAL-CONFIDENTIAL*
+fewshot-bank*
+*.confidential.json
