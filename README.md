@@ -142,6 +142,9 @@ Locally: `npm install`, then `npm run dev`.
 ```
 npm run check:local           # the private route end to end, against a stub Ollama
 npm run check:sides           # how audition scenes are chosen, and the marked-up PDF
+npm run bench:inspect -- --data <folder>   # how the reference breakdowns were read
+npm run bench:run     -- --data <folder>   # run real scripts through the private tool
+npm run bench:score   -- --data <folder>   # score the run against the real breakdowns
 npm run evidence:local -- f.pdf  # what the parser extracts from a script, no model needed
 npm run eval:local -- f.pdf   # score a real run against reference breakdown statistics
 ```
@@ -149,6 +152,13 @@ npm run eval:local -- f.pdf   # score a real run against reference breakdown sta
 `check:local` needs no model and runs the real route in a real dev server. Each
 check reproduces something that has gone wrong on a real script, and the new
 ones were each confirmed to fail with their fix removed.
+
+The benchmark compares the private tool's output with breakdowns casting
+directors actually wrote for the same scripts: cast found, gender, age, role
+size, contradictions, and coverage of what matters. The data folder must sit
+outside this repository, and the scripts are only ever sent to this machine.
+`scripts/bench/PROGRAM.md` describes running it as an unattended improvement
+loop.
 
 Where things live:
 

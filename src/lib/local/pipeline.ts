@@ -211,6 +211,8 @@ export interface LocalDiagnostics {
   rolesFailed: string[];
   /** Roles found but not described, because the run hit OLLAMA_MAX_ROLES. */
   rolesOmitted: number;
+  /** Every role found, described or not — what cast coverage is scored on. */
+  castFound: string[];
   /** Model calls made, for a sense of what a run costs locally. */
   modelCalls: number;
   /** Descriptions that still trip a style check after trimming. */
@@ -266,6 +268,7 @@ export async function analyzeLocally(
   log: Logger = () => {},
   onProgress: ProgressReporter = () => {},
   locale: Locale = "us",
+  options: { onlyRoles?: string[] } = {},
 ): Promise<LocalAnalysis> {
   const startedAt = Date.now();
   let modelCalls = 0;
@@ -379,7 +382,14 @@ export async function analyzeLocally(
     phase: "cast",
     message: `Found ${totalFound} character${totalFound === 1 ? "" : "s"} in the script`,
   });
-  const characters = allCharacters.slice(0, maxRoles);
+  // A benchmark describes a sample of roles to keep each experiment short.
+  // Matched loosely — "Dom Cobb" asks for COBB — and never used by the page.
+  const wanted = (options.onlyRoles ?? []).map((n) => n.toUpperCase().split(/\s+/).filter(Boolean));
+  const isWanted = (c: ParsedCharacter) => {
+    const words = c.name.toUpperCase().split(/\s+/);
+    return wanted.some((w) => w.every((x) => words.includes(x)) || words.every((x) => w.includes(x)));
+  };
+  const characters = (wanted.length ? allCharacters.filter(isWanted) : allCharacters).slice(0, maxRoles);
   if (totalFound > characters.length) {
     log("local: more roles found than described", { found: totalFound, described: characters.length });
   }
@@ -395,7 +405,8 @@ export async function analyzeLocally(
   }
 
   const isScreenplay = script.looksLikeScreenplay;
-  const tiers = assignTiers(characters);
+  // Sized against the whole cast, so a sampled run still grades a lead a lead.
+  const tiers = assignTiers(wanted.length ? allCharacters : characters);
 
   // --- The model reads the script. All of it. Once. ------------------------
   //
@@ -847,6 +858,7 @@ export async function analyzeLocally(
       rolesDescribed: roles.length - failed.length,
       rolesFailed: failed,
       rolesOmitted: omitted,
+      castFound: allCharacters.map((c) => displayName(c.name)),
       modelCalls,
       narrativeVoiceFlagged: flagged,
       repeatedPhrases,
