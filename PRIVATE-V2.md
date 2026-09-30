@@ -49,4 +49,36 @@ A scanned script (image only, often with a name stamped across every page as a g
 
 **Files.** Upload written once to a `0700` temp dir, each page deleted as soon as it is read, dir removed in `finally` (also on error). `execFile` with argument arrays. Error messages never carry script text; only counts and timings are logged (`meta.ocr`).
 
+**Decisions (boss, 30 Sep).** OCR is capped at **250 pages per script** (`MAX_PAGES` in `ocr.ts`; above it the run stops with "OCR is limited to 250 pages"). The **sides picker keeps OCR on scans**, only where it used to refuse (`select-sides` calls `extractDocument(..., { ocr: "empty" })`; a file with a text layer is never OCR'd there; off on Vercel). No cast-list confirmation step.
+
 Checks (no model): `npm run check:ocr`.
+
+
+## v2.2: the enlarged few-shot bank and real (script -> breakdown) pairs
+
+**Bank.** The retrieval bank is now the old 308 entries plus 109 roles from CN's Scripts + Breakdowns (given to CN by the casting director for training), 417 in all. Every entry carries `source` (`old-bank` or `cn-scripts-breakdowns`), and the new ones carry `script`, `project`, `tierAsWritten`, `ageAsWritten`, `seriesRegular`, `trimmed`. None of it is in the repo: the bank, the OCR text, the cached page lines and the ground truth live in `~/scripttocast-data/` (0700, files 0600) and the bank is loaded by `S2C_FEWSHOT_BANK`. `.gitignore` also blocks `*LOCAL-CONFIDENTIAL*` and `fewshot-bank*`, which the file names match.
+
+**How the 109 were turned into entries** (`~/scripttocast-tests/tools/bank/build-bank.py`, not in the repo):
+- Tier map: series regular and fractional series regular -> LEAD; recurring, guest star, one-day guest star, principal -> SUPPORTING; co-star, large co-star, actor, non-speaking -> DAY PLAYER. Untiered: "no lines" or under 10 lines -> DAY PLAYER, 10+ lines or several episodes -> SUPPORTING.
+- Ages: decades and OCR forms become ranges in the app's head, `Man; 30 to 39 years old; ...` ("30s" -> 30 to 39, "late 20s" -> 26 to 29, "30s - 50s" -> 30 to 59, "35" -> 33 to 37, "40ish" -> 37 to 43).
+- Text: production lines, tier tags and OCR debris removed; trimmed to the style guide (identity, look, type; no backstory, no outcome, no plot verbs). Series-regular entries are cut to their first two sentences and rank lower as examples (-0.6), so guest / co-star / principal are the preferred targets. Entries with under 4 words left after trimming are flagged `plotHeavy` and dropped by `buildBank` (22 of 109), leaving 87.
+
+**Real pairs (first choice).** For every role whose name is found in its script, `attach-evidence.mjs` runs the app's own `extractCast` + `buildEvidence` on the cached script and stores the evidence block on the entry (`evidence`). 50 of the 60 usable new entries in the dev bank have one. In the role prompt (`retrievePairs` in `retrieval.ts`, `pairExampleText` in `prompt.ts`) up to 2 pairs of the **same tier** with a BM25 score of 2.0 or more come first as "REAL PAIRS": the evidence (introduction, look, job; never dialogue, cut to about 700 characters) next to the written breakdown, with the age as a range and no ethnicity. Plain prose entries fill the rest of the 6 slots. Below the score floor there are no pairs and the prompt is the old one.
+
+**Cast fix.** Production drafts number their scenes ("12.1 INT. KITCHEN"), and the shared classifier saw no scenes and no cast (Ghosts 112/113 and Beyond the Gates gave 0 roles). `stripSceneNumbers` (`cast.ts`, v2 only) removes the number in front of INT/EXT/I/E. The shared classifier and v1 are untouched.
+
+**Eval hooks (loopback only, off by default).** `S2C_EVAL=1` on the server, and a request whose Host is loopback, lets a request carry `evalSkipScripts` (script slugs to leave out of retrieval) and `evalModel`. They can only remove examples or pick a local model. Without `S2C_EVAL=1` both fields are ignored.
+
+**Models.** `OLLAMA_V2_MODEL` (or `evalModel`). For the `qwen3` family the request now sends `think: false` (otherwise the reasoning eats the output budget and the JSON comes back empty); other models never get the field.
+
+**Eval.** `~/scripttocast-tests/tools/eval-breakdowns.mjs`: 20 scripts, 109 expected roles, 14 dev scripts (84 roles) and 6 held-out (25 roles, one per show, no show shared with dev). Leave-one-script-out: each call skips the script itself, the rest of its show, and all held-out scripts. Scores: recall (fuzzy name match), extra and junk roles, age-range overlap, gender agreement, tier agreement, description similarity to the written target, and style (word cap by tier, banned words, plot-recap wording, age in prose, head and tier tag). `--selftest` and `--plan` need no model. Held-out scripts need `--final`, once. `run-eval-overnight.sh` runs models one after another; it is not started by anything.
+
+Checks (no model): `node --no-warnings --experimental-transform-types scripts/check-local-v2.mjs` (now covers pairs, leave-one-out, series rank, scene numbers, qwen3 flag).
+
+### Could the public (Claude) path use the same bank? (proposal only; nothing changed)
+The public prompt is `src/lib/prompts.ts` on main (worked examples inline, about line 64 and 118). It could take the same real pairs as few-shot, but the bank must not sit in the repo or the bundle:
+1. Keep the bank as a private file outside git and outside `src/`/`public/`. Load it at request time on the server only: an encrypted object in private storage (a private Vercel Blob or an S3 bucket with no public access), or an encrypted env value for a small subset. Never import it in client code and never `NEXT_PUBLIC_`.
+2. A small `src/lib/fewshot-server.ts` (`import "server-only"`) would return at most 2 to 3 trimmed pairs per request, picked by the same BM25 code by tier and type, and `prompts.ts` would append them under "REAL PAIRS". Only trimmed text goes out, never the whole bank, never ethnicity/age heads.
+3. Use only the guest / co-star / principal pairs and only from scripts CN may use for training; drop the held-out scripts while measuring.
+4. Security: this text would go to Anthropic with each public request, so it needs the boss's sign-off that CN's training licence covers sending it to a third-party API (it is a different use from local training). Log ids only, never the text; keep the storage token server-side; rotate if leaked. The reverse never happens: uploaded scripts and their breakdowns go to Anthropic only through the existing public path, and never through the private path (`analyze-local-v2` has no Anthropic import and no fallback).
+5. Measure first: run the public path on the 14 dev scripts with and without the pairs and compare with `eval-breakdowns.mjs`-style scoring (it is model-agnostic once given a result JSON).

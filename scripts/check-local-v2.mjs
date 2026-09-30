@@ -3,11 +3,13 @@
  *   node --no-warnings --experimental-transform-types scripts/check-local-v2.mjs
  */
 import { registerHooks } from "node:module";
-registerHooks({ resolve(s, c, n) { if (s.startsWith(".") && !/\.[a-z]+$/.test(s)) { try { return n(`${s}.ts`, c); } catch {} } return n(s, c); } });
+registerHooks({ resolve(s, c, n) { if (s.startsWith(".") && !/\.[a-z]+$/.test(s)) { try { return n(`${s}.ts`, c); } catch {} } return n(s, c); }, load(u, c, n) { return u.endsWith(".json") ? n(u, { ...c, importAttributes: { type: "json" } }) : n(u, c); } });
 const { junkReason, baseCue, castKey, ageFromWords } = await import("../src/lib/local-v2/cast.ts");
 const { statedDecade, clampByRank, validateFields, checkFields, applyProblems, assembleBody, sharedRun, stripAgeClaims, estimateAge, narrowRange, wordCount } = await import("../src/lib/local-v2/helpers.ts");
-const { buildBank, retrieve, tokenize } = await import("../src/lib/local-v2/retrieval.ts");
-const { ROLE_SYSTEM, PAIRS, PAIR_ANSWER_TEXTS } = await import("../src/lib/local-v2/prompt.ts");
+const { buildBank, retrieve, retrievePairs, headOf, tokenize } = await import("../src/lib/local-v2/retrieval.ts");
+const { stripSceneNumbers } = await import("../src/lib/local-v2/cast.ts");
+const { thinkOff } = await import("../src/lib/local/ollama.ts");
+const { ROLE_SYSTEM, PAIRS, PAIR_ANSWER_TEXTS, pairExampleText } = await import("../src/lib/local-v2/prompt.ts");
 let failed = 0;
 const ok = (cond, what) => { if (!cond) { failed++; console.error("FAIL", what); } else console.log("ok  ", what); };
 const ctx = { titleKey: "DUNKIRK", headings: ["EXT. DUNKIRK BEACH - DAY"] };
@@ -103,6 +105,30 @@ for (const [inp, bad] of [
   const r = retrieve(bank, { text: "Farell drill sergeant Texan muscle shouting", tier: "SUPPORTING", gender: "Male", age: 44 }, 2);
   ok(r[0]?.id === 1 && !r.some((e) => e.id === 2 || e.id === 3), "retrieval finds the sergeant and respects gender");
   ok(tokenize("The Nurse's brisk").includes("nurse"), "tokenizer");
+}
+// Script-backed pairs, leave-one-script-out, series-regular rank, numbered scene headings, qwen3 think flag. Synthetic data only.
+{
+  const mk = (id, tier, text, extra = {}) => ({ id, name: "x", tier, text, words: text.split(" ").length + 12, headOk: true, ...extra });
+  const bank = buildBank([
+    mk(1, "SUPPORTING", "Man; 30 to 39 years old; all ethnicities. Baseball coach, hard-charging hollerer. Perpetually angry.", { source: "cn-scripts-breakdowns", script: "show-a-ep-1", project: "Show A", evidence: "INTRODUCTION\n(p3) COACH HALE (30s) hollers from the dugout." }),
+    mk(2, "SUPPORTING", "Man; 30 to 39 years old; all ethnicities. Baseball coach, loud and angry, chews gum.", { source: "cn-scripts-breakdowns", script: "show-b-ep-1", project: "Show B", evidence: "INTRODUCTION\n(p9) COACH DUNN hollers at the umpire." }),
+    mk(3, "SUPPORTING", "Man; 30 to 39 years old; all ethnicities. Baseball coach, gruff and loud.", { source: "old-bank" }),
+    mk(4, "LEAD", "Man; 30 to 39 years old; all ethnicities. Baseball coach, loud, angry, gruff, hollering.", { source: "cn-scripts-breakdowns", script: "show-c-ep-1", evidence: "INTRODUCTION\n(p1) COACH.", seriesRegular: true }),
+  ]);
+  const q = { text: "Coach Hale baseball coach hollers dugout", tier: "SUPPORTING", gender: "Male", age: 35 };
+  const pairs = retrievePairs(bank, q, 2);
+  ok(pairs.length === 2 && pairs.every((e) => e.evidence && e.tier === "SUPPORTING"), "pairs: only same-tier entries that have script evidence");
+  ok(!retrievePairs(bank, { ...q, tier: "DAY PLAYER" }, 2).length, "pairs: a different tier never becomes a pair");
+  const skip = retrievePairs(bank, q, 2, { skipScripts: new Set(["show-a-ep-1"]) });
+  ok(skip.length === 1 && skip[0].id === 2, "leave-one-script-out: the script's own entry is skipped");
+  ok(!retrieve(bank, q, 6, null, { skipScripts: new Set(["show-a-ep-1", "show-b-ep-1"]) }).some((e) => e.script === "show-a-ep-1" || e.script === "show-b-ep-1"), "leave-one-script-out applies to plain retrieval too");
+  const plain = retrieve(bank, { ...q, tier: "LEAD" }, 4);
+  ok(plain.findIndex((e) => e.id === 4) > plain.findIndex((e) => e.id === 3) || plain.every((e) => e.id !== 4), "series regular ranks below a comparable non-series entry");
+  const t = pairExampleText("INTRODUCTION\n(p3) COACH HALE hollers.\n\nLOOK AND AGE\n(p3) Tall.\n\nDIALOGUE\n(p3) Secret line here.", headOf(pairs[0].text), pairs[0].prose);
+  ok(/WRITTEN BREAKDOWN \(man, playing age 30 to 39\)/.test(t) && !/Secret line/.test(t) && !/all ethnicities/.test(t), "pair text: age as a range, no dialogue, no ethnicity copied");
+  ok(headOf("Woman; 8 to 10 years old; Black. x").ageMin === 8, "head parsed");
+  ok(stripSceneNumbers([[{ text: "12.1 INT. KITCHEN - DAY", indent: 0, y: 0 }, { text: "1-2 EXT. YARD - NIGHT", indent: 0, y: 0 }, { text: "A3 INT. HALL - DAY", indent: 0, y: 0 }, { text: "12 INTERESTING", indent: 0, y: 0 }, { text: "INT. PLAIN - DAY", indent: 0, y: 0 }]])[0].map((l) => l.text).join("|") === "INT. KITCHEN - DAY|EXT. YARD - NIGHT|INT. HALL - DAY|12 INTERESTING|INT. PLAIN - DAY", "numbered scene headings lose the number, nothing else changes");
+  ok(thinkOff("qwen3:8b").think === false && thinkOff("llama3.1:8b").think === undefined && thinkOff("gemma3:4b").think === undefined, "think:false only for the qwen3 family");
 }
 // Static prompt: size, 8 pairs, banned list, no Dunkirk, no Breakdown Services text.
 ok(PAIRS.length === 8, "eight worked pairs");

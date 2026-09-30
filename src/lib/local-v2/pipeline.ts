@@ -50,8 +50,8 @@ import {
   applyProblems, assembleBody, checkFields, clampByRank, estimateAge, narrowRange, occupationUngrounded, statedDecade, stripAgeClaims, TIER_RULES, validateFields,
   type Problem, type RoleFields,
 } from "./helpers";
-import { PAIR_ANSWER_TEXTS, ROLE_SCHEMA, ROLE_SYSTEM, roleUser } from "./prompt";
-import { loadBank, retrieve, retrievalEnabled } from "./retrieval";
+import { PAIR_ANSWER_TEXTS, ROLE_SCHEMA, ROLE_SYSTEM, pairExampleText, roleUser } from "./prompt";
+import { headOf, loadBank, retrieve, retrievePairs, retrievalEnabled } from "./retrieval";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -86,14 +86,14 @@ export interface V2Diagnostics {
   model: string;
   elapsedMs: number;
   /** v2.1: what the description step did. */
-  retrieval: { enabled: boolean; bank: string | null; entries: number; note: string | null };
+  retrieval: { enabled: boolean; bank: string | null; entries: number; note: string | null; pairEntries: number; skippedScripts: number };
   promptTokens: { min: number; median: number; max: number; systemChars: number; roles: number };
   descriptionRejects: { role: string; field: string; why: string; text: string }[];
   descriptionDropped: number;
   descriptionRetries: string[];
   gendersDefaulted: string[];
   occupationsReplaced: string[];
-  perRole: { role: string; tier: string; promptTokens: number; outTokens: number; ms: number; retrieved: number }[];
+  perRole: { role: string; tier: string; promptTokens: number; outTokens: number; ms: number; retrieved: number; pairs: number }[];
 }
 
 const PROJECT_SCHEMA = {
@@ -175,7 +175,7 @@ export async function analyzeLocallyV2(
   log: Logger = () => {},
   onProgress: (p: V2Progress) => void = () => {},
   locale: Locale = "us",
-  options: { onlyRoles?: string[] } = {},
+  options: { onlyRoles?: string[]; /** Eval only (see route.ts): script slugs whose bank entries must not be used. */ evalSkipScripts?: string[] } = {},
 ): Promise<{ result: AnalysisResult; diagnostics: V2Diagnostics }> {
   const startedAt = Date.now();
   let modelCalls = 0;
@@ -287,6 +287,7 @@ export async function analyzeLocallyV2(
   const loaded = wantRetrieval ? loadBank() : { bank: null, error: "retrieval switched off" };
   const bank = loaded.bank;
   if (wantRetrieval && !bank) log("v2: retrieval requested but no bank", { reason: loaded.error });
+  const skipScripts = options.evalSkipScripts?.length ? new Set(options.evalSkipScripts) : null;
   const traitUse = new Map<string, number>();
   const gendersFlipped: string[] = [];
   const occupationsReplaced: string[] = [];
@@ -309,15 +310,23 @@ export async function analyzeLocallyV2(
     const byPronoun = pronounGender(member);
 
     let similarEntries: { id: number; text: string; prose?: string }[] = [];
+    let pairEntries: { id: number; text: string; prose?: string; evidence?: string }[] = [];
     if (bank) {
-      similarEntries = retrieve(bank, { text: evidence.query, tier, gender: byPronoun, age: stated }, 6);
+      const q = { text: evidence.query, tier, gender: byPronoun, age: stated };
+      // First choice: real (script evidence -> breakdown) pairs of the same size of part. Then plain prose.
+      pairEntries = retrievePairs(bank, q, 2, { skipScripts });
+      const usedIds = new Set(pairEntries.map((e) => e.id));
+      similarEntries = retrieve(bank, q, 6, null, { skipScripts })
+        .filter((e) => !usedIds.has(e.id))
+        .slice(0, 6 - pairEntries.length);
     }
     const proseOfEntry = (e: { text: string; prose?: string }) => e.prose ?? e.text;
     const similarTexts = similarEntries.map((e) => {
       const t = proseOfEntry(e);
       return t.length > 260 ? `${t.slice(0, 260).replace(/\s+\S*$/, "")}…` : t;
     });
-    const examples = [...PAIR_ANSWER_TEXTS, ...similarEntries.map(proseOfEntry)];
+    const pairTexts = pairEntries.map((e) => pairExampleText(e.evidence ?? "", headOf(e.text), proseOfEntry(e)));
+    const examples = [...PAIR_ANSWER_TEXTS, ...similarEntries.map(proseOfEntry), ...pairEntries.map(proseOfEntry)];
 
     let fields: RoleFields | null = null;
     let problems: Problem[] = [];
@@ -333,7 +342,7 @@ export async function analyzeLocallyV2(
       try {
         const { data, stats } = await chatRole<unknown>(cfg, {
           system: ROLE_SYSTEM,
-          user: roleUser({ name: member.name, aliases: member.aliases, speaking: member.speaking, tier, evidence: evidence.text, similar: similarTexts, correction }),
+          user: roleUser({ name: member.name, aliases: member.aliases, speaking: member.speaking, tier, evidence: evidence.text, similar: similarTexts, pairs: pairTexts, correction }),
           schema: ROLE_SCHEMA,
           label: `role: ${member.name}`,
           maxOutputTokens: 460,
@@ -407,7 +416,7 @@ export async function analyzeLocallyV2(
       fallback.push(member.name);
       log("v2: role fell back", { role: member.name, why });
     }
-    perRole.push({ role: member.name, tier, promptTokens, outTokens, ms, retrieved: similarEntries.length });
+    perRole.push({ role: member.name, tier, promptTokens, outTokens, ms, retrieved: similarEntries.length + pairEntries.length, pairs: pairEntries.length });
 
     // Age: script first (an exact age, then a decade), then the model, then an estimate. Never blank.
     const decade = stated === null ? statedDecade([member.name, ...member.aliases, member.name.split(/\s+/).pop() ?? ""], member.sentences.map((x) => x.text)) : null;
@@ -519,6 +528,8 @@ export async function analyzeLocallyV2(
         bank: bank ? "loaded (path not recorded)" : null,
         entries: bank?.entries.length ?? 0,
         note: bank ? null : (loaded.error ?? null),
+        pairEntries: bank?.entries.filter((e) => e.evidence).length ?? 0,
+        skippedScripts: skipScripts?.size ?? 0,
       },
       promptTokens: promptStats(perRole.map((p) => p.promptTokens), ROLE_SYSTEM.length),
       descriptionRejects: rejects,

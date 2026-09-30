@@ -236,6 +236,23 @@ export const LENGTH_HINT: Record<V2Tier, string> = {
   "DAY PLAYER": `Day player: keep it to a few words. At most ${TIER_RULES["DAY PLAYER"].traits} traits, storyNote "".`,
 };
 
+/**
+ * One real pair: the evidence block the model would have been given for this person in their own
+ * script, and the breakdown a casting director wrote for them. Evidence is cut to its first blocks
+ * (introduction, look, job), never the dialogue, to keep the call small. The age is given as a range
+ * because that is how the output is written; a decade like "30s" was already turned into 30 to 39.
+ */
+export function pairExampleText(evidence: string, head: { gender: string; ageMin: number | null; ageMax: number | null }, prose: string): string {
+  const blocks = evidence.split(/\n\n+/).filter((b) => !/^DIALOGUE\b/.test(b));
+  let ev = "";
+  for (const b of blocks) {
+    if ((ev + b).length > 700 && ev) break;
+    ev += (ev ? "\n" : "") + (b.length > 700 ? `${b.slice(0, 700).replace(/\s+\S*$/, "")}…` : b);
+  }
+  const age = head.ageMin !== null ? `${head.ageMin} to ${head.ageMax}` : "open";
+  return `EVIDENCE\n${ev.replace(/\n{2,}/g, "\n")}\nWRITTEN BREAKDOWN (${head.gender.toLowerCase()}, playing age ${age}): ${prose}`;
+}
+
 export function roleUser(o: {
   name: string;
   aliases: string[];
@@ -243,18 +260,23 @@ export function roleUser(o: {
   tier: V2Tier;
   evidence: string;
   similar: string[];
+  /** Real evidence -> breakdown pairs, first choice over `similar`. */
+  pairs?: string[];
   correction?: string;
 }): string {
   const also = o.aliases.length ? ` (also written as ${o.aliases.join(", ")})` : "";
   const similar = o.similar.length
     ? `\n\nSIMILAR REAL BREAKDOWN DESCRIPTIONS (tone and shape only; other people, other scripts; never copy their words, facts or traits):\n${o.similar.map((t) => `- ${t}`).join("\n")}`
     : "";
+  const pairs = o.pairs?.length
+    ? `\n\nREAL PAIRS (a casting director's breakdown next to the script lines it was written from; other people, other scripts. Copy the way it is written: short, plain, what is seen. Never copy their words, facts or traits):\n${o.pairs.map((t, i) => `[${i + 1}] ${t}`).join("\n\n")}`
+    : "";
   return (
     `Character: ${o.name}${also}\n` +
     `Speaks in the script: ${o.speaking ? "yes" : "no, silent"}\n` +
     `Size of part: ${o.tier}\n` +
     `${LENGTH_HINT[o.tier]}\n\n` +
-    `EVIDENCE\n${o.evidence}${similar}\n\n` +
+    `EVIDENCE\n${o.evidence}${pairs}${similar}\n\n` +
     `Fill in the form for ${o.name} now. JSON only.${o.correction ?? ""}`
   );
 }

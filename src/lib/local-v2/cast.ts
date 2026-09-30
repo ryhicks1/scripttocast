@@ -297,9 +297,21 @@ export function ageFromWords(raw: string): number | null {
 const NUM_WORD_ALT = Object.keys(NUMBER_WORDS).join("|");
 
 /**
+ * Production drafts number their scenes ("12.1 INT. KITCHEN - DAY", "1-2 INT. ...", "A3 EXT. ..."),
+ * and the shared scene-heading test wants the line to start with INT/EXT, so a numbered
+ * script showed no scenes and no cast at all. Only the leading number is dropped, and only
+ * in front of a real INT/EXT/I/E heading. (v2 only: the shared classifier is untouched.)
+ */
+const NUMBERED_HEADING = /^\s*(?=\S*\d)\S{1,8}\s+(?:[.\-–]\s*)?(?=(?:INT|EXT|INT\.?\/EXT|I\/E|EST)\b)/;
+export function stripSceneNumbers(pageLines: Line[][]): Line[][] {
+  return pageLines.map((lines) => lines.map((l) => (NUMBERED_HEADING.test(l.text) ? { ...l, text: l.text.replace(NUMBERED_HEADING, "") } : l)));
+}
+
+/**
  * Cast from a screenplay. `pageLines` is what extract.ts produced.
  */
-export function extractCast(pageLines: Line[][]): CastResult {
+export function extractCast(rawPageLines: Line[][]): CastResult {
+  const pageLines = stripSceneNumbers(rawPageLines);
   const scenes = segmentScenes(pageLines);
   const headings = scenes.map((s) => s.heading);
   const titleKey = readTitle(pageLines);

@@ -49,11 +49,18 @@ export async function POST(request: Request) {
     const requestedLocale = formData.get("locale");
     const locale: Locale = isLocale(requestedLocale) ? requestedLocale : "us";
     const onlyRoles = String(formData.get("onlyRoles") ?? "").split(",").map((n) => n.trim()).filter(Boolean);
+    // Eval only (tools/eval-breakdowns.mjs): leave these scripts' bank entries out of retrieval, so a script
+    // is never scored with its own breakdown. Honoured only when S2C_EVAL=1 is set for this server and the
+    // request came in on loopback; otherwise the field is ignored. It never enables anything, it only removes examples.
+    const evalOn = process.env.S2C_EVAL === "1" && /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(request.headers.get("host") ?? "");
+    const evalSkipScripts = evalOn ? String(formData.get("evalSkipScripts") ?? "").split(",").map((n) => n.trim()).filter(Boolean) : [];
+    // Same gate: pick the Ollama model per request so a batch can run several models on one server.
+    const evalModel = evalOn ? String(formData.get("evalModel") ?? "").trim() : "";
     const requested = formData.get("mode");
     const mode: BreakdownMode = requested === "film_tv" || requested === "commercial" ? requested : "auto";
 
     const base = resolveConfig();
-    const forced = process.env.OLLAMA_V2_MODEL?.trim();
+    const forced = evalModel || process.env.OLLAMA_V2_MODEL?.trim();
     const model = forced || (await pickBestModel(base, totalmem())).model;
     const config = await preflight({ ...resolveConfig(model), model });
 
@@ -110,7 +117,7 @@ export async function POST(request: Request) {
               send({ progress });
             },
             locale,
-            { onlyRoles },
+            { onlyRoles, evalSkipScripts },
           );
           console.log("analyze_local_v2: done", {
             script_sha256: scriptSha,

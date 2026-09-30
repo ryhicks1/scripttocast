@@ -28,6 +28,19 @@ export interface BankEntry {
   plotHeavy?: boolean;
   garbled?: boolean;
   headOk?: boolean;
+  /** Where the entry came from: "old-bank" (the 308) or "cn-scripts-breakdowns" (CN's scripts with breakdowns). */
+  source?: string;
+  /** Slug of the script this breakdown was written for (script-backed entries only). */
+  script?: string;
+  /** The show, so a whole show can be left out when scoring one of its episodes. */
+  project?: string;
+  /** Series-regular entries are trimmed to the style guide and rank below guest/co-star/principal as targets. */
+  seriesRegular?: boolean;
+  /**
+   * Script-backed entries only: the evidence block the model would have been shown for this role in
+   * its own script (built by evidence.ts), so (evidence -> real breakdown) is a true pair.
+   */
+  evidence?: string;
 }
 
 export interface Bank {
@@ -128,7 +141,16 @@ function ageCovers(text: string, age: number): boolean {
   return !!m && age >= Number(m[1]) - 1 && age <= Number(m[2]) + 1;
 }
 
-export function retrieve(bank: Bank, q: Query, k: number, exclude: RegExp | null = null): BankEntry[] {
+export interface RetrieveOptions {
+  /** Regex over the prose: skip matching entries. */
+  exclude?: RegExp | null;
+  /** Leave-one-script-out: skip entries whose script slug is listed (eval only, never set in normal use). */
+  skipScripts?: ReadonlySet<string> | null;
+  /** Only entries with an evidence block. */
+  pairsOnly?: boolean;
+}
+
+function rank(bank: Bank, q: Query, opts: RetrieveOptions): { e: BankEntry; s: number }[] {
   const qt = tokenize(q.text);
   const tf = new Map<string, number>();
   for (const w of qt) tf.set(w, (tf.get(w) ?? 0) + 1);
@@ -136,9 +158,11 @@ export function retrieve(bank: Bank, q: Query, k: number, exclude: RegExp | null
   const B = 0.75;
   const scored: { e: BankEntry; s: number }[] = [];
   bank.entries.forEach((e, i) => {
+    if (opts.pairsOnly && !e.evidence) return;
+    if (opts.skipScripts && e.script && opts.skipScripts.has(e.script)) return;
     const head = /^(Man|Male|Men|Boy)\b/i.test(e.text) ? "Male" : /^(Woman|Female|Women|Girl)\b/i.test(e.text) ? "Female" : "Any";
     if (q.gender && head !== "Any" && head !== q.gender) return;
-    if (exclude && exclude.test(e.prose ?? e.text)) return;
+    if (opts.exclude && opts.exclude.test(e.prose ?? e.text)) return;
     const doc = bank.tokens[i];
     const counts = new Map<string, number>();
     for (const w of doc) counts.set(w, (counts.get(w) ?? 0) + 1);
@@ -153,9 +177,16 @@ export function retrieve(bank: Bank, q: Query, k: number, exclude: RegExp | null
     else if (e.tier === "NONE") s -= 0.2;
     else s -= 0.4;
     if (q.age !== null && ageCovers(e.text, q.age)) s += 0.8;
+    // Series regulars are written long, with backstory. Guest, co-star and principal are the style to copy.
+    if (e.seriesRegular) s -= 0.6;
     scored.push({ e, s });
   });
   scored.sort((a, b) => b.s - a.s || a.e.id - b.e.id);
+  return scored;
+}
+
+export function retrieve(bank: Bank, q: Query, k: number, exclude: RegExp | null = null, opts: RetrieveOptions = {}): BankEntry[] {
+  const scored = rank(bank, q, { ...opts, exclude: exclude ?? opts.exclude ?? null });
   // Spread: never two entries that begin with the same three words.
   const out: BankEntry[] = [];
   const seen = new Set<string>();
@@ -167,4 +198,31 @@ export function retrieve(bank: Bank, q: Query, k: number, exclude: RegExp | null
     if (out.length >= k) break;
   }
   return out;
+}
+
+/**
+ * First-choice examples: real (evidence -> breakdown) pairs, used only when the pair is for the same
+ * size of part and clearly similar (a score floor), so a mismatched pair never crowds out plain prose.
+ */
+export const PAIR_MIN_SCORE = 2.0;
+export function retrievePairs(bank: Bank, q: Query, n: number, opts: RetrieveOptions = {}): BankEntry[] {
+  const scored = rank(bank, q, { ...opts, pairsOnly: true });
+  const out: BankEntry[] = [];
+  const seen = new Set<string>();
+  for (const { e, s } of scored) {
+    if (e.tier !== q.tier || s < PAIR_MIN_SCORE) continue;
+    const key = (e.prose ?? e.text).split(/\s+/).slice(0, 6).join(" ").toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(e);
+    if (out.length >= n) break;
+  }
+  return out;
+}
+
+/** "Man; 30 to 39 years old; all ethnicities." -> { gender: "Man", ageMin: 30, ageMax: 39 } (ethnicity is never passed on). */
+export function headOf(text: string): { gender: string; ageMin: number | null; ageMax: number | null } {
+  const g = /^(Man|Woman|Boy|Girl|Any gender)/i.exec(text)?.[1] ?? "Any gender";
+  const m = /(\d{1,2}) to (\d{1,2}) years old/.exec(text);
+  return { gender: g, ageMin: m ? Number(m[1]) : null, ageMax: m ? Number(m[2]) : null };
 }

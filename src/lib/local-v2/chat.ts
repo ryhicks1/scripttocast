@@ -8,7 +8,7 @@
  * an estimate. Nothing here can reach anything but the local Ollama.
  */
 import { request as httpRequest } from "node:http";
-import { assertLocalOllama, OllamaError, type OllamaConfig } from "../local/ollama";
+import { assertLocalOllama, OllamaError, thinkOff, type OllamaConfig } from "../local/ollama";
 
 export interface ChatStats {
   /** Tokens Ollama evaluated for the prompt on this call (cached prefix tokens are not re-counted). */
@@ -74,6 +74,7 @@ export async function chatRole<T>(config: OllamaConfig, o: ChatOptions): Promise
         model: config.model,
         stream: true,
         format: o.schema,
+        ...thinkOff(config.model),
         keep_alive: o.keepAlive ?? "10m",
         options: { temperature: 0, num_ctx: config.numCtx, num_predict: o.maxOutputTokens ?? 500 },
         messages: [

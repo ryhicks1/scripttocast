@@ -494,6 +494,15 @@ export interface ChatJsonOptions {
  * partially-understood object, because a silently empty breakdown is worse
  * than an error the user can act on.
  */
+/**
+ * Qwen3 "thinks" before answering by default, which spends the small output budget on reasoning and
+ * leaves the JSON empty. Turn it off for that family only: other models (llama, gemma) reject the
+ * field, so it is never sent to them.
+ */
+export function thinkOff(model: string): { think?: false } {
+  return /^qwen3/i.test(model) ? { think: false } : {};
+}
+
 export async function chatJson<T>(
   config: OllamaConfig,
   {
@@ -531,6 +540,7 @@ export async function chatJson<T>(
       // "Cannot reach Ollama". Streaming sends headers at once.
       stream: true,
       format: schema,
+      ...thinkOff(config.model),
       keep_alive: keepAlive,
       options: {
         temperature: 0,
