@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { extractDocument } from "@/lib/local/extract";
+import { isVercelHosted } from "@/lib/runtime";
 import { segmentScenes } from "@/lib/local/screenplay";
 import { selectSides, sidesTierFor } from "@/lib/sides";
 
@@ -22,7 +23,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing script file or role name" }, { status: 400 });
     }
 
-    const doc = await extractDocument(script);
+    // A scanned script is read locally (only where it would otherwise be refused, so
+    // nothing that worked changes). Never on the hosted site, which has no such tools.
+    const doc = await extractDocument(script, { ocr: isVercelHosted() ? "off" : "empty" });
     const scenes = segmentScenes(doc.pageLines);
     if (!scenes.length) {
       return NextResponse.json(

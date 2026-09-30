@@ -11,6 +11,7 @@
     "bench:score": "node --no-warnings scripts/bench/bench.mjs score",
     "check:sides": "node --no-warnings --experimental-transform-types scripts/check-sides.mjs",
     "check:local": "node --no-warnings --experimental-transform-types scripts/check-local-pipeline.mjs",
+    "check:ocr": "node --no-warnings --experimental-transform-types scripts/check-ocr.mjs",
     "eval:local": "node --no-warnings scripts/eval-local.mjs",
     "evidence:local": "node --no-warnings --experimental-transform-types scripts/inspect-evidence.mjs",
     "corpus:metrics": "node --no-warnings scripts/corpus/parse-corpus.mjs"

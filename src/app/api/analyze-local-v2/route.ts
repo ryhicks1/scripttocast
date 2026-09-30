@@ -28,6 +28,10 @@ const HEARTBEAT_MS = 5000;
  * Model: OLLAMA_V2_MODEL if set, else the usual pick (OLLAMA_MODEL pins it,
  * default llama3.1:8b). Window: OLLAMA_NUM_CTX, capped at 16k by v2.
  * Nothing is persisted; the upload lives in memory for this request only.
+ *
+ * Scans: a PDF with no text layer (or a garbled one) is OCR'd locally with
+ * poppler + tesseract, watermark cleaned per page. LOCAL_OCR=0 turns it off.
+ * See PRIVATE-V2.md. The temp files used are deleted before the run continues.
  */
 export async function POST(request: Request) {
   if (isVercelHosted()) {
@@ -53,10 +57,6 @@ export async function POST(request: Request) {
     const model = forced || (await pickBestModel(base, totalmem())).model;
     const config = await preflight({ ...resolveConfig(model), model });
 
-    const documents: ExtractedDocument[] = [];
-    for (const file of files) documents.push(await extractDocument(file));
-    const scriptSha = createHash("sha256").update(documents.flatMap((d) => d.pages).join("\n")).digest("hex");
-
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
@@ -70,6 +70,36 @@ export async function POST(request: Request) {
         let latest: unknown = { phase: "project", message: "Starting" };
         const heartbeat = setInterval(() => send({ progress: latest }), HEARTBEAT_MS);
         try {
+          // Reading happens inside the stream because a scanned script is OCR'd
+          // locally, which takes about 30 seconds, and the page needs to say so.
+          const documents: ExtractedDocument[] = [];
+          const ocrNotes: unknown[] = [];
+          for (const file of files) {
+            const doc = await extractDocument(file, {
+              ocr: "auto",
+              onOcr: ({ stage, done, total }) => {
+                latest = {
+                  phase: "project",
+                  message:
+                    stage === "start"
+                      ? "This looks like a scan. Reading the pages on this Mac, which takes about 30 seconds"
+                      : `Reading scanned pages (${done} of ${total})`,
+                  done,
+                  total,
+                };
+                send({ progress: latest });
+              },
+            });
+            documents.push(doc);
+            if (doc.ocr) {
+              // Counts and timings only. Never the text.
+              const { perPage: _perPage, ...summary } = doc.ocr;
+              ocrNotes.push(summary);
+            }
+          }
+          const scriptSha = createHash("sha256").update(documents.flatMap((d) => d.pages).join("\n")).digest("hex");
+          if (ocrNotes.length) console.log("analyze_local_v2: ocr", ocrNotes);
+          latest = { phase: "project", message: "Reading the title page" };
           const { result, diagnostics } = await analyzeLocallyV2(
             documents,
             mode,
@@ -101,13 +131,15 @@ export async function POST(request: Request) {
                 third_party_ai: false,
                 script_sha256: scriptSha,
                 warning: config.warning,
+                ocr: ocrNotes.length ? ocrNotes : undefined,
                 diagnostics,
               },
             },
           });
         } catch (error) {
           const message = error instanceof Error ? error.message : "Local analysis failed";
-          console.error("analyze_local_v2: failed mid-run", error);
+          if (error instanceof LocalAnalysisError) console.error("analyze_local_v2:", error.message, error.detail ?? "");
+          else console.error("analyze_local_v2: failed mid-run", error);
           send({ error: message });
         } finally {
           clearInterval(heartbeat);

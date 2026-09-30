@@ -65,7 +65,7 @@ const MAX_DIALOGUE_CHARS = 400;
 // Margins in points, relative to the document's action margin. Standard
 // screenplay layout puts dialogue about an inch in and a cue about two.
 const DIALOGUE_INDENT = 40;
-const CUE_INDENT = 130;
+export const CUE_INDENT = 130;
 
 type Element = "scene" | "cue" | "dialogue" | "action";
 
@@ -74,7 +74,7 @@ function isUpperCase(line: string): boolean {
 }
 
 /** True for a line that reads like a character cue rather than action. */
-function looksLikeCue(line: string): boolean {
+export function looksLikeCue(line: string): boolean {
   const bare = line.replace(CUE_QUALIFIER, "").trim();
   if (!bare || bare.length > 40) return false;
   if (!isUpperCase(bare)) return false;
@@ -97,7 +97,7 @@ function looksLikeCue(line: string): boolean {
  * Every parenthetical is stripped now, wherever it sits, along with anything
  * after it. A character cue is a name; nothing in brackets is part of it.
  */
-function cueName(line: string): string {
+export function cueName(line: string): string {
   return line
     .replace(CUE_QUALIFIER, "")
     .replace(/\s*\([^)]*\)?.*$/, "")
